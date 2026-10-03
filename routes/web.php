@@ -2,13 +2,12 @@
 
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
+use App\Livewire\HomePage;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\InventoryController;
 
 // HOMEPAGE
-Route::get('/', function() {
-    return view('homepage');
-});
+Route::get('/', HomePage::class)->name('home');
 
 // LOGIN
 Route::get('/login', [LoginController::class, 'showLogin'])
