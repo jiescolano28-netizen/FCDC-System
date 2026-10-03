@@ -25,6 +25,8 @@ Route::middleware('auth')->group(function () {
         return view('dashboard');
     })->name('dashboard');
 
+    Route::get('/inventory/manage', \App\Livewire\InventoryManagement::class)->name('inventory.management');
+
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
     Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])->name('inventory.update');

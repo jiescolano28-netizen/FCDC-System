@@ -586,7 +586,7 @@
               <h1>Inventory</h1>
               <p class="subtitle" id="inventory-count"></p>
             </div>
-            <button class="btn btn-primary" onclick="openAddItemModal()">+ Add item</button>
+            <a class="btn btn-primary" href="{{ route('inventory.management') }}">Manage inventory</a>
           </div>
 
           <div class="toolbar">
@@ -603,7 +603,7 @@
               <thead>
                 <tr>
                   <th>Material</th><th>Category</th><th class="right">Qty</th><th class="right">Unit cost</th>
-                  <th class="right">Value</th><th>Status</th><th>Action</th>
+                  <th class="right">Selling price</th><th class="right">Value</th><th>Status</th><th>Action</th>
                 </tr>
               </thead>
               <tbody id="inventory-tbody"></tbody>

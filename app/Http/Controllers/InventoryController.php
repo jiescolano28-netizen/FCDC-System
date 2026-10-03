@@ -37,12 +37,13 @@ class InventoryController extends Controller
     */
     public function store(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
             'qty' => 'required|numeric|min:0',
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
             'reorder_level' => 'nullable|numeric|min:0',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
@@ -86,12 +87,9 @@ class InventoryController extends Controller
         */
 
         $item = Inventory::create([
-            'name' => $request->name,
-            'category' => $request->category,
-            'qty' => $request->qty,
-            'unit' => $request->unit,
-            'unit_cost' => $request->unit_cost,
-            'reorder_level' => $request->reorder_level ?? 10,
+            ...$validated,
+            'selling_price' => $validated['selling_price'] ?? null,
+            'reorder_level' => $validated['reorder_level'] ?? 10,
             'image' => $imagePath,
         ]);
 
@@ -125,6 +123,7 @@ class InventoryController extends Controller
             'qty' => 'required|numeric|min:0',
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
+            'selling_price' => 'nullable|numeric|min:0',
             'reorder_level' => 'nullable|numeric|min:0',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
@@ -141,6 +140,7 @@ class InventoryController extends Controller
         $inventory->qty = $validated['qty'];
         $inventory->unit = $validated['unit'];
         $inventory->unit_cost = $validated['unit_cost'];
+        $inventory->selling_price = $validated['selling_price'] ?? null;
         $inventory->reorder_level = $validated['reorder_level'] ?? 10;
 
 

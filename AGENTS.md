@@ -8,6 +8,11 @@ FCDC is a Laravel application for a construction company selling second-hand bui
 
 The backend follows Laravel's MVC/request flow: `public/index.php` boots `bootstrap/app.php`, which loads `routes/web.php`; routes return Blade views or dispatch to controllers. `LoginController` and `RegisterController` implement employee session authentication. `InventoryController` validates inventory requests, persists through Eloquent, and returns JSON; the dashboard's inline JavaScript calls those inventory endpoints. `Employee` and `Inventory` are the application models. Vite builds shared CSS/JS assets, while much of the dashboard UI, CSS, and JavaScript currently lives in `resources/views/dashboard.blade.php`.
 
+## Command Reference
+
+- Use `php artisan` for Laravel commands (e.g., `php artisan migrate`, `php artisan test`). 
+- When create `controller`, `model`, or `migration` use `php artisan make:controller`, `php artisan make:model`, or `php artisan make:migration` respectively.
+
 ## Key Directories
 
 - `app/Http/Controllers/` — HTTP request handling.
@@ -60,3 +65,17 @@ Pest 3 with the Laravel plugin runs through Laravel's Artisan test runner. PHPUn
 - Issues and feature specs belong under `.scratch/`; follow `docs/agents/issue-tracker.md` for file layout and status conventions.
 - Use the canonical triage labels in `docs/agents/triage-labels.md`.
 - Before domain-modeling work, consult `docs/agents/domain.md` for glossary and ADR lookup rules. If the referenced glossary or ADRs do not exist, proceed without creating them preemptively.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.
