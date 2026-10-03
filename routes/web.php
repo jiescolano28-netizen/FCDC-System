@@ -1,10 +1,9 @@
 <?php
 
+use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
-use App\Http\Controllers\RegisterController;
 use App\Livewire\HomePage;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\InventoryController;
 
 // HOMEPAGE
 Route::get('/', HomePage::class)->name('home');
@@ -16,28 +15,18 @@ Route::get('/login', [LoginController::class, 'showLogin'])
 Route::post('/login', [LoginController::class, 'login'])
     ->name('login.submit');
 
-
-// REGISTER
-Route::get('/register', [RegisterController::class, 'showRegister'])
-    ->name('register');
-
-Route::post('/register', [RegisterController::class, 'register'])
-    ->name('register.submit');
-
-
 // LOGOUT
 Route::post('/logout', [LoginController::class, 'logout'])
     ->name('logout');
 
+// Authenticated application
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    })->name('dashboard');
 
-// DASHBOARD
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware('auth')->name('dashboard');
-
-// INVENTORY 
-Route::get('/inventory', [InventoryController::class, 'index']);
-Route::post('/inventory', [InventoryController::class, 'store']);
-Route::put('/inventory/{inventory}', [InventoryController::class, 'update']);
-Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy']);
-
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
+    Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])->name('inventory.update');
+    Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
+});

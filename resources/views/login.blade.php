@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,16 +24,14 @@
 
             /* Green background */
             background:
-    linear-gradient(
-        rgba(20, 80, 35, 0.45),
-        rgba(20, 80, 35, 0.45)
-    ),
-    url("{{ asset('image/construction-bg.jpg') }}");
+                linear-gradient(rgba(20, 80, 35, 0.45),
+                    rgba(20, 80, 35, 0.45)),
+                url("{{ asset('image/construction-bg.jpg') }}");
 
 
-background-size: cover;
-background-position: center;
-background-repeat: no-repeat;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
 
 
             display: flex;
@@ -44,7 +43,10 @@ background-repeat: no-repeat;
         }
 
         @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
+
+            *,
+            *::before,
+            *::after {
                 animation-duration: 0.01ms !important;
                 transition-duration: 0.01ms !important;
             }
@@ -143,16 +145,38 @@ background-repeat: no-repeat;
         }
 
         @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            20% { transform: translateX(-6px); }
-            40% { transform: translateX(6px); }
-            60% { transform: translateX(-4px); }
-            80% { transform: translateX(4px); }
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-6px);
+            }
+
+            40% {
+                transform: translateX(6px);
+            }
+
+            60% {
+                transform: translateX(-4px);
+            }
+
+            80% {
+                transform: translateX(4px);
+            }
         }
 
 
         .error-message p {
             margin: 3px 0;
+        }
+
+        .field-error {
+            color: #b00020;
+            font-size: 12px;
+            margin-top: 5px;
         }
 
 
@@ -390,7 +414,9 @@ background-repeat: no-repeat;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
 
@@ -436,91 +462,91 @@ background-repeat: no-repeat;
    MOBILE RESPONSIVE SIDEBAR
    ================================= */
 
-@media (max-width: 768px) {
+        @media (max-width: 768px) {
 
-    .sidebar {
-        width: 72px !important;
-        min-width: 72px !important;
-        max-width: 72px !important;
-    }
+            .sidebar {
+                width: 72px !important;
+                min-width: 72px !important;
+                max-width: 72px !important;
+            }
 
-    .brand {
-        justify-content: center;
-        padding: 14px 8px;
-    }
+            .brand {
+                justify-content: center;
+                padding: 14px 8px;
+            }
 
-    .brand-text {
-        display: none !important;
-    }
+            .brand-text {
+                display: none !important;
+            }
 
-    .company-logo {
-        width: 42px;
-        height: 42px;
-    }
+            .company-logo {
+                width: 42px;
+                height: 42px;
+            }
 
-    .sidebar-toggle {
-        display: none;
-    }
+            .sidebar-toggle {
+                display: none;
+            }
 
-    .nav {
-        padding: 12px 8px;
-    }
+            .nav {
+                padding: 12px 8px;
+            }
 
-    .nav-item {
-        justify-content: center;
-        padding: 10px 8px;
-    }
+            .nav-item {
+                justify-content: center;
+                padding: 10px 8px;
+            }
 
-    .nav-label,
-    .nav-arrow {
-        display: none !important;
-    }
+            .nav-label,
+            .nav-arrow {
+                display: none !important;
+            }
 
-    .nav-icon {
-        width: auto;
-        font-size: 17px;
-    }
+            .nav-icon {
+                width: auto;
+                font-size: 17px;
+            }
 
-    .nav-dropdown {
-        padding-left: 0;
-    }
+            .nav-dropdown {
+                padding-left: 0;
+            }
 
-    .nav-child {
-        justify-content: center;
-    }
+            .nav-child {
+                justify-content: center;
+            }
 
-    .sidebar-footer {
-        padding: 12px 6px;
-        text-align: center;
-    }
+            .sidebar-footer {
+                padding: 12px 6px;
+                text-align: center;
+            }
 
-    .sidebar-footer {
-        font-size: 0;
-    }
+            .sidebar-footer {
+                font-size: 0;
+            }
 
-    .sidebar-footer strong {
-        display: none;
-    }
+            .sidebar-footer strong {
+                display: none;
+            }
 
-    main {
-        flex: 1 1 0% !important;
-        width: auto !important;
-        min-width: 0 !important;
-        max-width: none !important;
-        padding: 16px !important;
-    }
+            main {
+                flex: 1 1 0% !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                padding: 16px !important;
+            }
 
-    .grid.grid-2,
-    .grid.grid-3 {
-        grid-template-columns: 1fr !important;
-        width: 100% !important;
-    }
+            .grid.grid-2,
+            .grid.grid-3 {
+                grid-template-columns: 1fr !important;
+                width: 100% !important;
+            }
 
-    .card {
-        width: 100% !important;
-        min-width: 0 !important;
-    }
-}
+            .card {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+        }
     </style>
 </head>
 
@@ -533,11 +559,8 @@ background-repeat: no-repeat;
 
         <!-- COMPANY LOGO -->
         <div class="logo-container">
-            <img
-                src="{{ asset('image/company-logo.png') }}"
-                class="company-logo"
-                alt="Fabellon Construction and Development Corporation Logo"
-            >
+            <img src="{{ asset('image/company-logo.png') }}" class="company-logo"
+                alt="Fabellon Construction and Development Corporation Logo">
         </div>
 
 
@@ -588,15 +611,12 @@ background-repeat: no-repeat;
                 </label>
 
 
-                <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    placeholder="Enter your email"
-                    value="{{ old('email') }}"
-                    required
-                    autocomplete="email"
-                >
+                <input type="email" id="email" name="email" placeholder="Enter your email"
+                    value="{{ old('email') }}" required autocomplete="email"
+                    @error('email') aria-invalid="true" aria-describedby="email-error" @enderror>
+                @error('email')
+                    <p class="field-error" id="email-error">{{ $message }}</p>
+                @enderror
 
 
             </div>
@@ -616,32 +636,25 @@ background-repeat: no-repeat;
                 <div class="input-wrapper">
 
 
-                    <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        class="password-input"
-                        placeholder="Enter your password"
-                        required
-                        autocomplete="current-password"
-                    >
+                    <input type="password" id="password" name="password" class="password-input"
+                        placeholder="Enter your password" required autocomplete="current-password">
 
 
-                    <button
-                        type="button"
-                        class="show-password"
-                        aria-pressed="false"
-                        aria-label="Show password"
-                        onclick="togglePassword(this)"
-                    >
-                        <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" stroke-linecap="round" stroke-linejoin="round"/>
-                            <circle cx="12" cy="12" r="3"/>
+                    <button type="button" class="show-password" aria-pressed="false" aria-label="Show password"
+                        onclick="togglePassword(this)">
+                        <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            aria-hidden="true">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <circle cx="12" cy="12" r="3" />
                         </svg>
-                        <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-3.15 4.44" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" stroke-linecap="round" stroke-linejoin="round"/>
-                            <line x1="1" y1="1" x2="23" y2="23" stroke-linecap="round"/>
+                        <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            aria-hidden="true">
+                            <path
+                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-3.15 4.44"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" stroke-linecap="round" stroke-linejoin="round" />
+                            <line x1="1" y1="1" x2="23" y2="23" stroke-linecap="round" />
                         </svg>
                     </button>
 
@@ -654,48 +667,27 @@ background-repeat: no-repeat;
 
 
 
-            <!-- REMEMBER + REGISTER -->
+            <!-- REMEMBER ME -->
             <div class="form-options">
 
 
                 <label class="remember-me">
 
 
-                    <input
-                        type="checkbox"
-                        name="remember"
-                        value="1"
-                        {{ old('remember') ? 'checked' : '' }}
-                    >
+                    <input type="checkbox" name="remember" value="1" {{ old('remember') ? 'checked' : '' }}>
 
 
                     <span>Remember Me</span>
 
 
                 </label>
-
-
-
-
-                <a
-                    href="{{ route('register') }}"
-                    class="forgot-link"
-                >
-                    Register Account
-                </a>
-
-
             </div>
 
 
 
 
             <!-- LOGIN BUTTON -->
-            <button
-                type="submit"
-                class="btn-submit"
-                id="submitBtn"
-            >
+            <button type="submit" class="btn-submit" id="submitBtn">
                 <span class="btn-spinner" aria-hidden="true"></span>
                 <span class="btn-label">LOGIN</span>
             </button>
@@ -724,8 +716,6 @@ background-repeat: no-repeat;
 
     <!-- PASSWORD SHOW/HIDE + SUBMIT FEEDBACK -->
     <script>
-
-
         function togglePassword(btn) {
 
 
@@ -756,22 +746,21 @@ background-repeat: no-repeat;
 
         // Show a loading state on the button while the form submits,
         // so a slow connection still gives clear feedback.
-        (function () {
+        (function() {
             var form = document.getElementById('loginForm');
             var submitBtn = document.getElementById('submitBtn');
             var label = submitBtn.querySelector('.btn-label');
 
-            form.addEventListener('submit', function () {
+            form.addEventListener('submit', function() {
                 if (submitBtn.disabled) return;
                 submitBtn.disabled = true;
                 submitBtn.classList.add('is-loading');
                 label.textContent = 'SIGNING IN...';
             });
         })();
-
-
     </script>
 
 
 </body>
+
 </html>

@@ -73,6 +73,19 @@
 
       .sidebar-footer { padding:16px 20px; border-top:1px solid var(--emerald-800); font-size:11px; color:var(--emerald-200); }
       .sidebar-footer strong { color:#fff; display:block; font-size:13px; margin-top:2px; }
+      .logout-form { margin-top:12px; }
+      .logout-button {
+        width:100%;
+        padding:7px 10px;
+        border:1px solid var(--gold);
+        border-radius:6px;
+        background:transparent;
+        color:#fff;
+        font-size:12px;
+        cursor:pointer;
+      }
+      .logout-button:hover { background:var(--gold-dark); }
+      .sidebar.collapsed .logout-form { display:none; }
 
       /* Collapsed sidebar state */
       .sidebar.collapsed { width:68px; }
@@ -399,6 +412,76 @@
         .print-summary { width:100%; }
       }
 
+      @media (max-width: 800px) {
+        .app {
+          height:auto;
+          min-height:100vh;
+          flex-direction:column;
+        }
+        .sidebar,
+        .sidebar.collapsed {
+          width:100%;
+          flex-shrink:0;
+        }
+        .sidebar-toggle,
+        .sidebar.collapsed .brand-text,
+        .sidebar.collapsed .nav-label,
+        .sidebar.collapsed .nav-arrow,
+        .sidebar.collapsed .nav-dropdown,
+        .sidebar.collapsed .sidebar-footer-text,
+        .sidebar.collapsed .logout-form {
+          display:none;
+        }
+        .brand,
+        .sidebar.collapsed .brand {
+          padding:8px 16px;
+          justify-content:flex-start;
+        }
+        .company-logo,
+        .sidebar.collapsed .company-logo {
+          width:44px;
+          height:44px;
+        }
+        .nav {
+          flex-direction:row;
+          overflow-x:auto;
+          padding:8px;
+        }
+        .nav-group { width:auto; flex-shrink:0; }
+        .nav-item { width:auto; flex-shrink:0; white-space:nowrap; }
+        .nav-dropdown.open {
+          position:absolute;
+          z-index:6;
+          min-width:200px;
+          background:var(--emerald-900);
+        }
+        .sidebar-footer {
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+          padding:10px 16px;
+        }
+        .logout-form { margin:0; }
+        .logout-button { width:auto; min-width:90px; }
+        main {
+          min-width:0;
+          overflow-x:hidden;
+          padding:16px;
+        }
+        .grid-4,
+        .grid-3 { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .grid-2 { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 520px) {
+        .grid-4,
+        .grid-3,
+        .grid-2 { grid-template-columns:minmax(0, 1fr); }
+        .col-span-2 { grid-column:auto; }
+        .toolbar { flex-wrap:wrap; }
+      }
+
       @media print {
         body.print-tax-report * {
           visibility:hidden !important;
@@ -456,8 +539,11 @@
         <nav class="nav" id="nav"></nav>
         <div class="sidebar-footer">
           <span class="sidebar-footer-text">Signed in as
-            <strong>J. Mapola, Site Manager</strong></span>
-
+            <strong>{{ auth()->user()->username }}</strong></span>
+          <form class="logout-form" action="{{ route('logout') }}" method="POST">
+            @csrf
+            <button class="logout-button" type="submit">Log out</button>
+          </form>
         </div>
 
       </aside>
