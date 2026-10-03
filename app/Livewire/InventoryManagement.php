@@ -111,6 +111,6 @@ class InventoryManagement extends Component
         return view('livewire.inventory-management', [
             'items' => $items,
             'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
-        ])->layout('layouts.inventory');
+        ])->layout('layouts.app', ['title' => 'Inventory Management']);
     }
 }

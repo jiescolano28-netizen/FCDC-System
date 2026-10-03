@@ -3,6 +3,7 @@
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\HomePage;
+use App\Livewire\Settings\SettingsPage;
 use Illuminate\Support\Facades\Route;
 
 // HOMEPAGE
@@ -24,6 +25,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
+    Route::get('/settings', SettingsPage::class)->name('settings');
 
     Route::get('/inventory/manage', \App\Livewire\InventoryManagement::class)->name('inventory.management');
 

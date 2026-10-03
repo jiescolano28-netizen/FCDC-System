@@ -1,6 +1,6 @@
 # Livewire Setup and Structure Proposal
 
-**Status:** Approved design; implementation not started. This document records the selected design and its known prerequisite.
+**Status:** Approved design; implementation in progress.
 
 ## Goal
 
@@ -53,3 +53,9 @@ Exact component boundaries and model names should follow existing Laravel conven
 ## Approval and prerequisite
 
 The design is approved. Implementation may proceed for the approved scope, but the application must not be released as the requested full application until the accounting rules are supplied and implemented. Until then, accounting remains deferred. Needed inputs include the chart of accounts, sales/payables/payment posting rules, payable and disbursement lifecycles, and report definitions.
+
+## Implemented authenticated shell and Settings slice
+
+Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The current shell links only to supported destinations: Dashboard, inventory management, and Settings.
+
+Settings values are temporary session state, not business settings. The session key `demo.settings.employee.{employee-id}` scopes values to both the authenticated employee and their session; logout invalidates the session. Later demo-only state should use the same `demo.{area}.employee.{employee-id}` ownership and session-lifetime convention. Do not add storage APIs or placeholder features for those future areas.
