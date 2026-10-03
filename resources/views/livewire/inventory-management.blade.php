@@ -1,4 +1,4 @@
-<section>
+<section class="inventory-page">
     <div class="columns" style="justify-content:space-between; margin-bottom:18px;">
         <div>
             <h1>Inventory management</h1>

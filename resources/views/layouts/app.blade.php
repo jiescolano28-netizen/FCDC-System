@@ -51,7 +51,7 @@
             </footer>
         </aside>
 
-        <main class="app-main">
+        <main @class(['app-main', 'inventory-main' => request()->routeIs('inventory.management')])>
             {{ $slot }}
         </main>
     </div>

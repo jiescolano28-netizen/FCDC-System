@@ -51,6 +51,29 @@
 .sidebar.collapsed .nav-item .nav-icon { width: auto; flex-basis: auto; }
 .sidebar.collapsed .sidebar-footer { display: flex; justify-content: center; padding: 16px 8px; }
 .app-main { min-width: 0; flex: 1; overflow: auto; padding: 24px 28px; }
+.app-main.inventory-main { padding: 0; }
+
+.inventory-page { width: 100%; max-width: 1280px; margin: 28px auto; padding: 0 24px; }
+.inventory-page h1 { margin-block: 0.67em; font-size: 2em; font-weight: bold; }
+.inventory-page h2 { margin-block: 0.83em; font-size: 1.5em; font-weight: bold; }
+.inventory-page .toolbar, .inventory-page .columns, .inventory-page .actions { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.inventory-page .panel { margin-bottom: 18px; padding: 18px; border: 1px solid #dce7dc; border-radius: 10px; background: #fff; }
+.inventory-page .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.inventory-page label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; }
+.inventory-page input, .inventory-page select { width: 100%; padding: 9px; border: 1px solid #cbd5cb; border-radius: 6px; }
+.inventory-page button.primary { padding: 10px 14px; border: 0; border-radius: 6px; color: #fff; background: #1f5b2c; cursor: pointer; }
+.inventory-page button.secondary, .inventory-page button.danger { padding: 7px 10px; border: 1px solid #d3dcd3; border-radius: 6px; background: #fff; cursor: pointer; }
+.inventory-page button.danger { color: #b91c1c; }
+.inventory-page .table-wrap { overflow-x: auto; }
+.inventory-page table { width: 100%; border-collapse: collapse; }
+.inventory-page th, .inventory-page td { padding: 11px 9px; border-bottom: 1px solid #edf1ed; text-align: left; white-space: nowrap; }
+.inventory-page th { color: #4d4d4d; font-size: 12px; }
+.inventory-page .status { display: inline-block; padding: 4px 8px; border-radius: 999px; color: #1f5b2c; background: #e3ede1; font-size: 12px; }
+.inventory-page .status.warning { color: #92400e; background: #fef3c7; }
+.inventory-page .status.empty { color: #b91c1c; background: #fee2e2; }
+.inventory-page .error { color: #b91c1c; font-size: 12px; }
+.inventory-page .muted { color: #666; }
+
 
 .settings-page { max-width: 900px; margin: 0 auto; }
 .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -84,6 +107,7 @@
     .logout-form { margin: 0; }
     .logout-button { width: auto; min-width: 90px; }
     .app-main { overflow-x: hidden; padding: 16px; }
+    .inventory-page { margin-top: 18px; padding: 0 12px; }
 }
 
 @media (max-width: 520px) {
