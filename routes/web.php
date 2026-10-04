@@ -9,6 +9,7 @@ use App\Livewire\Accounting\ChartOfAccounts;
 use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Accounting\FinancialStatements;
+use App\Livewire\Accounting\TrialBalance;
 use App\Livewire\Dashboard\DashboardPage;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
@@ -47,6 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/accounting/journal-entry', JournalEntry::class)->name('accounting.journal-entry');
     Route::get('/accounting/financial-statements', FinancialStatements::class)->name('accounting.financial-statements');
     Route::get('/accounting/general-ledger', GeneralLedger::class)->name('accounting.general-ledger');
+    Route::get('/accounting/trial-balance', TrialBalance::class)->name('accounting.trial-balance');
     Route::get('/settings', SettingsPage::class)->name('settings');
     Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
     Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');

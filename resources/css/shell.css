@@ -459,6 +459,36 @@
     .general-ledger-filters { grid-template-columns: minmax(0, 1fr); }
 }
 
+.trial-balance-page { max-width: 1440px; margin: 0 auto; }
+.trial-balance-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.trial-balance-heading { align-items: center; margin-bottom: 16px; }
+.trial-balance-period-controls { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.trial-balance-period-controls label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.trial-balance-period-controls input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.trial-balance-report { padding: 24px; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+.trial-balance-report-heading { padding-bottom: 16px; border-bottom: 2px solid var(--emerald-700); }
+.trial-balance-report-heading h2 { margin: 4px 0 12px; color: var(--emerald-900); font-size: 22px; }
+.trial-balance-report-heading p { margin: 4px 0; color: var(--slate-700); font-size: 13px; }
+.trial-balance-report-heading .trial-balance-report-eyebrow { color: var(--emerald-700); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.trial-balance-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
+.trial-balance-totals div { display: flex; min-width: 0; flex-direction: column; gap: 5px; padding: 12px; border: 1px solid var(--emerald-100); border-radius: 8px; }
+.trial-balance-totals span { color: var(--slate-500); font-size: 11px; }
+.trial-balance-totals strong { color: var(--slate-900); font-size: 16px; }
+.trial-balance-empty { padding: 20px 12px; border: 1px solid #e8d89e; border-radius: 7px; color: #684f0c; background: #fff9e5; text-align: center; }
+.trial-balance-empty p { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.trial-balance-empty span { font-size: 12px; line-height: 1.5; }
+@media (max-width: 600px) {
+    .trial-balance-period-controls, .trial-balance-totals { grid-template-columns: minmax(0, 1fr); }
+    .trial-balance-report { padding: 16px; }
+}
+@media print {
+    body:has(.trial-balance-page) * { visibility: hidden !important; }
+    body:has(.trial-balance-page) #trial-balance-report,
+    body:has(.trial-balance-page) #trial-balance-report * { visibility: visible !important; }
+    body:has(.trial-balance-page) #trial-balance-report { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+    body:has(.trial-balance-page) .trial-balance-empty { color: #333; background: #fff; }
+}
+
 .financial-statements-page { max-width: 1440px; margin: 0 auto; }
 .financial-statements-page h1 { margin: 0; font-size: 20px; }
 .financial-statements-heading { align-items: center; margin-bottom: 16px; }
