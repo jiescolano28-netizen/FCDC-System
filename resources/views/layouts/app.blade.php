@@ -46,32 +46,40 @@
                         </a>
                     </div>
                 </div>
-@php($taxNavigationActive = request()->routeIs('tax.*'))
-<div class="nav-group">
-    <button class="nav-item nav-parent {{ $taxNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="tax-menu" aria-controls="tax-menu" aria-expanded="{{ $taxNavigationActive ? 'true' : 'false' }}">
-        <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Tax Compliance demonstrations</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
-    </button>
-    <div class="nav-dropdown {{ $taxNavigationActive ? 'open' : '' }}" id="tax-menu">
-        <a class="nav-item nav-child {{ request()->routeIs('tax.vat-records') ? 'active' : '' }}" href="{{ route('tax.vat-records') }}" @if (request()->routeIs('tax.vat-records')) aria-current="page" @endif>
-            <span class="nav-label">VAT Records</span>
-        </a>
-    </div>
-</div>
 
-                <a class="nav-item {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}" @if (request()->routeIs('settings')) aria-current="page" @endif>
-                    <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span>
-                </a>
-                @can('employees.view')
-                    <a class="nav-item {{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}" @if (request()->routeIs('employees.*')) aria-current="page" @endif>
-                        <span class="nav-icon" aria-hidden="true">♙</span><span class="nav-label">Employees</span>
-                    </a>
-                @endcan
-
-                @can('roles.view')
-                    <a class="nav-item {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}" @if (request()->routeIs('roles.*')) aria-current="page" @endif>
-                        <span class="nav-icon" aria-hidden="true">⚿</span><span class="nav-label">Roles</span>
-                    </a>
-                @endcan
+                @php($taxNavigationActive = request()->routeIs('tax.*'))
+                <div class="nav-group">
+                    <button class="nav-item nav-parent {{ $taxNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="tax-menu" aria-controls="tax-menu" aria-expanded="{{ $taxNavigationActive ? 'true' : 'false' }}">
+                        <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Tax Compliance demonstrations</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
+                    </button>
+                    <div class="nav-dropdown {{ $taxNavigationActive ? 'open' : '' }}" id="tax-menu">
+                        <a class="nav-item nav-child {{ request()->routeIs('tax.vat-records') ? 'active' : '' }}" href="{{ route('tax.vat-records') }}" @if (request()->routeIs('tax.vat-records')) aria-current="page" @endif>
+                            <span class="nav-label">VAT Records</span>
+                        </a>
+                    </div>
+                </div>
+                @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
+                
+                <div class="nav-group">
+                    <button class="nav-item nav-parent {{ $settingsNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="settings-menu" aria-controls="settings-menu" aria-expanded="{{ $settingsNavigationActive ? 'true' : 'false' }}">
+                        <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
+                    </button>
+                    <div class="nav-dropdown {{ $settingsNavigationActive ? 'open' : '' }}" id="settings-menu">
+                        <a class="nav-item nav-child {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}" @if (request()->routeIs('settings')) aria-current="page" @endif>
+                            <span class="nav-label">Company settings</span>
+                        </a>
+                        @can('employees.view')
+                            <a class="nav-item nav-child {{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}" @if (request()->routeIs('employees.*')) aria-current="page" @endif>
+                                <span class="nav-icon" aria-hidden="true">♙</span><span class="nav-label">Employees</span>
+                            </a>
+                        @endcan
+                        @can('roles.view')
+                            <a class="nav-item nav-child {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}" @if (request()->routeIs('roles.*')) aria-current="page" @endif>
+                                <span class="nav-icon" aria-hidden="true">⚿</span><span class="nav-label">Roles</span>
+                            </a>
+                        @endcan
+                    </div>
+                </div>
             </nav>
 
             <footer class="sidebar-footer">

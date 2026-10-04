@@ -148,6 +148,9 @@ test('inventory management renders inside the authenticated application shell', 
 test('inventory JSON endpoints keep their existing authenticated response contracts', function () {
     $this->actingAs(createInventoryManager());
 
+    $csrfToken = 'inventory-json-test-token';
+    $this->withSession(['_token' => $csrfToken])
+        ->withHeader('X-CSRF-TOKEN', $csrfToken);
     $this->getJson(route('inventory.index'))
         ->assertOk()
         ->assertExactJson([]);

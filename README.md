@@ -65,6 +65,41 @@ volume.
 Do not use `docker compose down -v` unless you intentionally want to erase the
 local database.
 
+## Employee and role management
+
+The application authenticates `App\Models\Employee` with the `web` guard.
+Employees can have multiple Spatie roles. Run migrations and seed the fixed
+permission catalog, then provision the first administrator interactively:
+
+```shell
+php artisan migrate
+php artisan db:seed
+php artisan app:provision-administrator
+```
+
+The provisioning command prompts for a unique username, email, and password
+(minimum 12 characters). It creates a dedicated employee with the protected
+`System Administrator` role and refuses to run if an active administrator
+already exists. It does not use the demo `testuser` account or store a password
+in seed data. Keep the command available only to trusted deployment operators.
+
+The `employees` and `roles` pages require `employees.view` and `roles.view`.
+The fixed catalog grants per-action employee and role administration
+permissions; role assignment additionally requires `employees.assign-roles`.
+New employees receive no role automatically. Administrators assign one or
+more roles explicitly. The role manager can only assign catalog permissions;
+the protected administrator role cannot be edited or deleted.
+
+Employees are soft deleted and can be restored from the deleted-employees view.
+Their unique usernames and emails remain reserved, and their existing role
+assignments are retained. Assigned roles cannot be deleted, including roles
+held by soft-deleted employees. The last active administrator cannot be
+deleted or stripped of its administrator role through employee management.
+
+This permission catalog currently gates Employee and Role Management only.
+Inventory, POS, and Settings continue to use their existing authenticated access
+rules.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

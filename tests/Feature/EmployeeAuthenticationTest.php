@@ -4,6 +4,8 @@ use App\Models\Employee;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class)->beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
@@ -87,4 +89,22 @@ test('authenticated application shell identifies the employee and offers support
         ->assertSee('shell.employee')
         ->assertSee(route('logout'), false)
         ->assertSee('name="_token"', false);
+});
+
+test('employees can receive roles and inherit their permissions', function () {
+    $employee = createEmployeeForAuthentication();
+    $permission = Permission::create([
+        'name' => 'inventory.manage',
+        'guard_name' => 'web',
+    ]);
+    $role = Role::create([
+        'name' => 'inventory-manager',
+        'guard_name' => 'web',
+    ]);
+    $role->givePermissionTo($permission);
+
+    $employee->assignRole($role);
+
+    expect($employee->hasRole('inventory-manager'))->toBeTrue()
+        ->and($employee->can('inventory.manage'))->toBeTrue();
 });

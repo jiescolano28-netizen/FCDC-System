@@ -60,6 +60,10 @@ Migrated Livewire pages use `layouts.app` with the extracted shell assets in `re
 
 Settings values are temporary session state, not business settings. The session key `demo.settings.employee.{employee-id}` scopes values to both the authenticated employee and their session; logout invalidates the session. Later demo-only state should use the same `demo.{area}.employee.{employee-id}` ownership and session-lifetime convention. Do not add storage APIs or placeholder features for those future areas.
 
+## Employee management
+
+Employee create and update forms use a native dialog controlled by the Livewire employee component. Role assignment remains permission-gated and uses Choices.js for searchable multiselect input; SweetAlert2 handles deletion confirmation and save/delete feedback. Both frontend dependencies are installed through npm and bundled by Vite.
+
 ## Dashboard
 
 The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown as demonstrations, separate from the chart's illustrative fixed series.

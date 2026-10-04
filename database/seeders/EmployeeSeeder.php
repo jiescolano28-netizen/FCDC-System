@@ -2,9 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\Employee;
+use App\Support\RolePermissionCatalog;
+use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
 
 class EmployeeSeeder extends Seeder
 {
@@ -13,10 +14,21 @@ class EmployeeSeeder extends Seeder
      */
     public function run(): void
     {
-        Employee::create([
-            'username' => 'testuser',
-            'email' => 'testing@example.com',
-            'password' => bcrypt('password'),
+        $this->call(RolePermissionSeeder::class);
+
+        $role = Role::firstOrCreate([
+            'name' => RolePermissionCatalog::ADMIN_ROLE,
+            'guard_name' => 'web',
         ]);
+        $role->syncPermissions(RolePermissionCatalog::names());
+
+        $employee = Employee::firstOrCreate(
+            ['username' => 'admin'],
+            [
+                'email' => 'admin@admin.com',
+                'password' => bcrypt('password'),
+            ],
+        );
+        $employee->assignRole($role);
     }
 }

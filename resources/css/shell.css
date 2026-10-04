@@ -151,6 +151,19 @@
 .pos-image-viewer p { margin-bottom: 0; text-align: center; }
 .pos-image-close { float: right; margin-bottom: 8px; border: 0; color: white; background: none; font-size: 24px; cursor: pointer; }
 
+.employee-heading { align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.employee-modal { position: fixed; inset: 0; width: min(620px, calc(100vw - 32px)); max-height: min(90vh, 760px); margin: auto; overflow: auto; padding: 24px; border: 0; border-radius: 14px; color: var(--slate-900); box-shadow: 0 24px 80px rgb(15 23 42 / 28%); }
+.employee-modal::backdrop { background: rgb(15 23 42 / 55%); }
+.employee-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.employee-modal-header h2 { margin: 0 0 5px; font-size: 19px; }
+.employee-modal-header p { margin: 0; font-size: 13px; }
+.employee-modal-header > button { flex: 0 0 auto; font-size: 19px; line-height: 1; }
+.employee-roles { display: grid; gap: 7px; margin-top: 16px; }
+.employee-roles .choices { margin-bottom: 0; }
+.employee-roles .choices__inner { min-height: 42px; border-color: var(--slate-200); border-radius: 7px; background: #fff; }
+.employee-roles .choices__list--dropdown { z-index: 5; }
+.employee-modal-actions { justify-content: flex-end; margin-top: 22px; }
+
 @media print {
     body.printing-pos-receipt * { visibility: hidden !important; }
     body.printing-pos-receipt #pos-receipt-print, body.printing-pos-receipt #pos-receipt-print * { visibility: visible !important; }
@@ -230,6 +243,10 @@
     .dashboard-stats { grid-template-columns: minmax(0, 1fr); }
     .dashboard-card { padding: 14px; }
 }
+.reports-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.reports-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; margin-top: 16px; }
+.reports-chart-card { min-width: 0; }
+
 .vat-page { max-width: 1440px; margin: 0 auto; }
 .vat-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .vat-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
@@ -268,9 +285,6 @@
     .vat-record-card > header { align-items: flex-start; flex-direction: column; }
     .vat-page-heading { flex-direction: column; }
 }
-.reports-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.reports-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 16px; margin-top: 16px; }
-.reports-chart-card { min-width: 0; }
 .reports-category-chart { height: 260px; }
 .reports-category-quantities { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0 0; padding: 0; color: var(--slate-500); font-size: 11px; list-style: none; }
 .reports-sales-card { margin-top: 16px; }
