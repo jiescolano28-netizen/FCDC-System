@@ -260,6 +260,18 @@
 .vat-record-card h2 { margin: 0 0 5px; color: var(--slate-700); font-size: 14px; font-weight: 600; }
 .vat-record-card header p { margin: 0; color: var(--slate-500); font-size: 12px; line-height: 1.5; }
 .vat-record-count { color: var(--slate-500); font-size: 12px; white-space: nowrap; }
+.vat-summary-controls { display: grid; grid-template-columns: repeat(2, minmax(180px, 280px)); gap: 12px; margin-bottom: 16px; }
+.vat-summary-controls label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.vat-summary-controls select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.vat-summary-stats { margin-bottom: 16px; }
+.vat-summary-records h2 { margin: 0; color: var(--slate-700); font-size: 14px; font-weight: 600; }
+.vat-summary-totals { margin: 12px 0 0; }
+.vat-summary-totals div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--slate-100); font-size: 13px; }
+.vat-summary-totals dt { color: var(--slate-500); }
+.vat-summary-totals dd { margin: 0; font-weight: 600; text-align: right; }
+@media (max-width: 700px) {
+    .vat-summary-controls { grid-template-columns: minmax(0, 1fr); }
+}
 .vat-table-wrap { overflow-x: auto; }
 .vat-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .vat-table-wrap th, .vat-table-wrap td { padding: 11px 10px; border-top: 1px solid var(--slate-100); text-align: left; white-space: nowrap; }

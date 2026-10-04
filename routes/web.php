@@ -11,6 +11,7 @@ use App\Livewire\Roles\RoleManagement;
 use App\Livewire\TaxCompliance\VatRecords;
 use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\Settings\SettingsPage;
+use App\Livewire\TaxCompliance\VatSummary;
 use Illuminate\Support\Facades\Route;
 
 // HOMEPAGE
@@ -36,6 +37,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');
 
     Route::get('/inventory/manage', InventoryManagement::class)->name('inventory.management');
+    Route::get('/tax/vat-summary', VatSummary::class)->name('tax.vat-summary');
     Route::get('/inventory/overview', InventoryOverview::class)->name('inventory.overview');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');

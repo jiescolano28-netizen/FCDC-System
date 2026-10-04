@@ -69,3 +69,7 @@ Employee create and update forms use a native dialog controlled by the Livewire 
 The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown as demonstrations, separate from the chart's illustrative fixed series.
 
 The dashboard chart renderer is loaded through the shared Vite bundle but initializes only when the dashboard root is present. Livewire period selection sends updated fixture data to that page's sales chart; no chart values are presented as persisted sales.
+
+## VAT demonstration pages
+
+The authenticated `/tax/vat-summary` Livewire page selects monthly or quarterly periods from `VatDemonstrationData::summaries()`, displaying the existing fixture totals without persisting or calculating business activity. It links back to VAT Records, and both pages label their fixtures as illustrative and non-filing.
