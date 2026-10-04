@@ -331,7 +331,6 @@
 .vat-return-disclaimer { margin: 20px 0 0; padding: 12px; border: 1px solid #e8d89e; border-radius: 8px; color: #684f0c; background: #fff9e5; font-size: 12px; line-height: 1.5; }
 
 @media print {
-    @page { margin: 16mm; }
     body.printing-vat-return .app-shell * { visibility: hidden !important; }
     body.printing-vat-return #vat-return-print,
     body.printing-vat-return #vat-return-print * { visibility: visible !important; }
