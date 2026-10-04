@@ -82,6 +82,9 @@
                         <a class="nav-item nav-child {{ request()->routeIs('accounting.accounts-payable') ? 'active' : '' }}" href="{{ route('accounting.accounts-payable') }}" @if (request()->routeIs('accounting.accounts-payable')) aria-current="page" @endif>
                             <span class="nav-label">Accounts Payable</span>
                         </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.cash-disbursements') ? 'active' : '' }}" href="{{ route('accounting.cash-disbursements') }}" @if (request()->routeIs('accounting.cash-disbursements')) aria-current="page" @endif>
+                            <span class="nav-label">Cash Disbursements</span>
+                        </a>
                     </div>
                 </div>
                 @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))

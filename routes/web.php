@@ -4,6 +4,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\AccountsPayable;
+use App\Livewire\Accounting\CashDisbursements;
 use App\Livewire\Accounting\ChartOfAccounts;
 use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Dashboard\DashboardPage;
@@ -39,6 +40,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/reports', ReportsPage::class)->name('reports');
     Route::get('/accounting', AccountingOverview::class)->name('accounting.overview');
     Route::get('/accounting/chart-of-accounts', ChartOfAccounts::class)->name('accounting.chart-of-accounts');
+    Route::get('/accounting/cash-disbursements', CashDisbursements::class)->name('accounting.cash-disbursements');
     Route::get('/accounting/accounts-payable', AccountsPayable::class)->name('accounting.accounts-payable');
     Route::get('/accounting/journal-entry', JournalEntry::class)->name('accounting.journal-entry');
     Route::get('/settings', SettingsPage::class)->name('settings');

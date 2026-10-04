@@ -402,6 +402,14 @@
 }
 .payable-add-button { cursor: not-allowed; }
 .accounts-payable-page .accounting-balance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cash-disbursements-page .accounting-balance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cash-disbursement-add-button { cursor: not-allowed; }
+.cash-disbursement-filters { grid-template-columns: minmax(220px, 1fr) minmax(180px, .45fr); }
+@media (max-width: 600px) {
+    .cash-disbursement-filters { grid-template-columns: minmax(0, 1fr); }
+    .cash-disbursements-page .accounting-balance-grid { grid-template-columns: minmax(0, 1fr); }
+    .cash-disbursements-page .dashboard-heading { align-items: flex-start; flex-direction: column; }
+}
 .payable-action-note { margin: 8px 0 0; color: var(--slate-500); font-size: 12px; }
 .payable-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, .45fr); gap: 12px; margin-bottom: 16px; }
 .payable-filters label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }

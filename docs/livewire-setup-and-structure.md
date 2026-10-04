@@ -83,3 +83,7 @@ The authenticated `/tax/vat-summary` Livewire page selects monthly or quarterly 
 ## Accounting overview demonstration
 
 The authenticated `/accounting` route uses the Accounting-grouped `AccountingOverview` Livewire page and shared application shell. It labels revenue, expenses, net income, and payables as unavailable, and its recent-entry state does not treat session demo journals or POS sales as postings. Quick actions link only to registered destination routes; unavailable pages remain disabled until implemented. This page does not add accounting calculations or records and does not change the accounting release prerequisites above.
+
+## Cash Disbursements demonstration
+
+The authenticated `/accounting/cash-disbursements` Livewire page uses the shared application shell and keeps reference/payee search and payment-method selection interactive over an empty dataset. Payment totals and counts remain unavailable; disbursement maintenance, payment processing, cash movement, and accounting postings are not implemented.
