@@ -230,3 +230,41 @@
     .dashboard-stats { grid-template-columns: minmax(0, 1fr); }
     .dashboard-card { padding: 14px; }
 }
+.vat-page { max-width: 1440px; margin: 0 auto; }
+.vat-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.vat-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.vat-rate-badge, .vat-period-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; color: var(--emerald-800); background: var(--emerald-100); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.vat-record-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, .6fr) minmax(170px, .6fr); gap: 12px; margin-bottom: 16px; }
+.vat-record-filters label { min-width: 0; }
+.vat-record-filters label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.vat-record-filters input, .vat-record-filters select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.vat-record-card { overflow: hidden; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
+.vat-record-card > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 16px; }
+.vat-record-card h2 { margin: 0 0 5px; color: var(--slate-700); font-size: 14px; font-weight: 600; }
+.vat-record-card header p { margin: 0; color: var(--slate-500); font-size: 12px; line-height: 1.5; }
+.vat-record-count { color: var(--slate-500); font-size: 12px; white-space: nowrap; }
+.vat-table-wrap { overflow-x: auto; }
+.vat-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.vat-table-wrap th, .vat-table-wrap td { padding: 11px 10px; border-top: 1px solid var(--slate-100); text-align: left; white-space: nowrap; }
+.vat-table-wrap th { color: var(--emerald-800); background: var(--emerald-50); font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.vat-table-wrap .numeric { text-align: right; }
+.vat-detail-button { padding: 7px 10px; border: 0; border-radius: 6px; color: #fff; background: var(--emerald-700); font: inherit; font-size: 12px; cursor: pointer; }
+.vat-detail-button:hover { background: var(--emerald-800); }
+.vat-empty { padding: 24px !important; color: var(--slate-500); text-align: center !important; white-space: normal !important; }
+.vat-modal-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; overflow-y: auto; place-items: center; padding: 18px; background: rgb(0 0 0 / 45%); }
+.vat-detail-modal { width: min(100%, 520px); max-height: min(90vh, 700px); overflow-y: auto; padding: 20px; border: 0; border-radius: 12px; background: #fff; box-shadow: 0 16px 48px rgb(0 0 0 / 22%); }
+.vat-detail-modal > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.vat-detail-modal h2 { margin: 0; font-size: 17px; }
+.vat-modal-close { border: 0; color: var(--slate-500); background: transparent; font-size: 24px; cursor: pointer; }
+.vat-modal-note { color: var(--slate-500); font-size: 12px; line-height: 1.5; }
+.vat-detail-modal dl { margin: 12px 0; }
+.vat-detail-modal dl div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--slate-100); font-size: 13px; }
+.vat-detail-modal dt { color: var(--slate-500); }
+.vat-detail-modal dd { margin: 0; font-weight: 600; text-align: right; }
+.vat-detail-modal footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+@media (max-width: 700px) {
+    .vat-record-filters { grid-template-columns: minmax(0, 1fr); }
+    .vat-record-card > header { align-items: flex-start; flex-direction: column; }
+    .vat-page-heading { flex-direction: column; }
+}
