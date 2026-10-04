@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Settings and shared application shell.
 
-- **Status:** completed
+**Status:** completed
 - [x] VAT Records has its own authenticated named route and Tax Compliance-grouped Livewire page/template using the shared shell and current appearance.
 - [x] Existing illustrative references, dates, periods, taxable amounts, VAT amounts, and totals remain demonstrations; they are not imported into business tables or represented as actual sales.
 - [x] Livewire reference/period search, tax-period filtering, transaction-date filtering, combined filters, record details, and closing the detail modal select/show the expected fixture records. Preserve usable empty results and the existing count presentation without adding an unrelated paging workflow.
