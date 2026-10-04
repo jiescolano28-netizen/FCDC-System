@@ -30,7 +30,8 @@ test('chart of accounts is an authenticated named page in the accounting navigat
         ->assertSee('Accounting')
         ->assertSee('Add Account')
         ->assertSee('Edit', false)
-        ->assertSee('disabled', false)
+        ->assertSee('<button class="chart-account-action" type="button" disabled', false)
+        ->assertSee('<button class="chart-account-edit" type="button" disabled', false)
         ->assertDontSee('backend integration')
         ->assertDontSee('alert(');
 });
