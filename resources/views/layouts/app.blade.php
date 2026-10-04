@@ -23,7 +23,7 @@
 
             <nav class="nav" aria-label="Application navigation">
                 <a class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>
-                    <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard</span>
+                    <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboardssss</span>
                 </a>
                 <a class="nav-item {{ request()->routeIs('reports') ? 'active' : '' }}" href="{{ route('reports') }}" @if (request()->routeIs('reports')) aria-current="page" @endif>
                     <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Reports</span>
@@ -85,7 +85,7 @@
                     </div>
                 </div>
                 @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
-                
+
                 <div class="nav-group">
                     <button class="nav-item nav-parent {{ $settingsNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="settings-menu" aria-controls="settings-menu" aria-expanded="{{ $settingsNavigationActive ? 'true' : 'false' }}">
                         <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
