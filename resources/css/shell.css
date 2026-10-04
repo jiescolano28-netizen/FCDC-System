@@ -445,6 +445,19 @@
     .chart-account-filters { grid-template-columns: minmax(0, 1fr); }
     .chart-account-card > header { align-items: flex-start; flex-direction: column; }
 }
+
+.general-ledger-page { max-width: 1440px; margin: 0 auto; }
+.general-ledger-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.general-ledger-heading { align-items: center; margin-bottom: 16px; }
+.general-ledger-filters { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(160px, .45fr)); gap: 12px; margin-bottom: 16px; }
+.general-ledger-filters label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.general-ledger-filters input, .general-ledger-filters select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.general-ledger-empty { padding: 28px 16px; color: var(--slate-500); text-align: center; }
+.general-ledger-empty p { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.general-ledger-empty span { font-size: 12px; }
+@media (max-width: 700px) {
+    .general-ledger-filters { grid-template-columns: minmax(0, 1fr); }
+}
 .journal-entry-page { max-width: 1440px; margin: 0 auto; }
 .journal-entry-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .journal-entry-heading { margin-bottom: 16px; }

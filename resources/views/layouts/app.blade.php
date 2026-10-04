@@ -85,6 +85,9 @@
                         <a class="nav-item nav-child {{ request()->routeIs('accounting.cash-disbursements') ? 'active' : '' }}" href="{{ route('accounting.cash-disbursements') }}" @if (request()->routeIs('accounting.cash-disbursements')) aria-current="page" @endif>
                             <span class="nav-label">Cash Disbursements</span>
                         </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.general-ledger') ? 'active' : '' }}" href="{{ route('accounting.general-ledger') }}" @if (request()->routeIs('accounting.general-ledger')) aria-current="page" @endif>
+                            <span class="nav-label">General Ledger</span>
+                        </a>
                     </div>
                 </div>
                 @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
