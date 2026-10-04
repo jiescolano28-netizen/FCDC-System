@@ -28,6 +28,7 @@ Route::middleware('auth')->group(function () {
         return view('dashboard');
     })->name('dashboard');
     Route::get('/settings', SettingsPage::class)->name('settings');
+    Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
 
     Route::get('/inventory/manage', InventoryManagement::class)->name('inventory.management');
     Route::get('/inventory/overview', InventoryOverview::class)->name('inventory.overview');

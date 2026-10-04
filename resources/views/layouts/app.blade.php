@@ -26,6 +26,10 @@
                     <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard</span>
                 </a>
 
+                <a class="nav-item {{ request()->routeIs('pos') ? 'active' : '' }}" href="{{ route('pos') }}" @if (request()->routeIs('pos')) aria-current="page" @endif>
+                    <span class="nav-icon" aria-hidden="true">▣</span><span class="nav-label">Point of sale</span>
+                </a>
+
                 <div class="nav-group">
                     <button class="nav-item nav-parent {{ request()->routeIs('inventory.*') ? 'active' : '' }}" type="button" data-dropdown-toggle="inventory-menu" aria-controls="inventory-menu" aria-expanded="{{ request()->routeIs('inventory.*') ? 'true' : 'false' }}">
                         <span class="nav-icon" aria-hidden="true">▧</span><span class="nav-label">Inventory</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
@@ -43,6 +47,17 @@
                 <a class="nav-item {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}" @if (request()->routeIs('settings')) aria-current="page" @endif>
                     <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span>
                 </a>
+                @can('employees.view')
+                    <a class="nav-item {{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}" @if (request()->routeIs('employees.*')) aria-current="page" @endif>
+                        <span class="nav-icon" aria-hidden="true">♙</span><span class="nav-label">Employees</span>
+                    </a>
+                @endcan
+
+                @can('roles.view')
+                    <a class="nav-item {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}" @if (request()->routeIs('roles.*')) aria-current="page" @endif>
+                        <span class="nav-icon" aria-hidden="true">⚿</span><span class="nav-label">Roles</span>
+                    </a>
+                @endcan
             </nav>
 
             <footer class="sidebar-footer">

@@ -1,3 +1,5 @@
+@php($posDemoSales = session('demo.pos.employee.'.auth()->id().'.sales', []))
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -179,50 +181,6 @@
       .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
 
 
-      /* POS */
-      .pos-layout { display:grid; grid-template-columns: 2fr 1fr; gap:16px; align-items:start; }
-      .product-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; max-height:600px; overflow-y:auto; padding-right:4px; }
-      .product-card { text-align:left; background:#fff; border:1px solid var(--emerald-100); border-radius:12px; padding:12px; }
-      .product-card img {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-    border-radius: 8px;
-    display: block;
-    margin-bottom: 10px;
-}
-      .product-card:hover { border-color:var(--emerald-700); box-shadow:0 1px 3px rgba(0,0,0,0.06); }
-      .product-cat { font-size:11px; color: var(--emerald-700); font-weight:600; }
-      .product-name { font-size:13px; margin:6px 0; line-height:1.3; }
-      .product-footer { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
-      .product-price { font-weight:600; font-size:13px; }
-      .product-stock { font-size:11px; color: var(--slate-400); }
-      .add-to-sale-btn {
-        width: 100%;
-        margin-top: 12px;
-        padding: 9px 12px;
-        border: none;
-        border-radius: 6px;
-        background: #3F7D3A;
-        color: white;
-        font-family: inherit;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-      }
-
-      .cart-line { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; font-size:14px; padding:10px 0; border-bottom:1px solid var(--slate-50); }
-      .cart-line:last-child { border-bottom:none; }
-      .cart-line-name { flex:1; min-width:0; white-space:normal; word-break:break-word; line-height:1.35; }
-      .cart-line-sub { font-size:12px; color:var(--slate-400); margin-top:2px; }
-      .cart-lines-scroll { max-height:600px; overflow-y:auto; padding-right:4px; }
-      .pos-cart-card { display:block; }
-      .qty-controls { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-      .qty-btn { width:20px; height:20px; border-radius:4px; background:var(--slate-100); border:none; cursor:pointer; font-size:11px; }
-      .cart-summary-row { display:flex; justify-content:space-between; font-size:13px; color:var(--slate-500); padding:2px 0; }
-      .cart-total-row { display:flex; justify-content:space-between; font-weight:600; font-size:15px; padding-top:6px; }
-      .divider { border-top:1px solid var(--slate-100); margin-top:12px; padding-top:10px; }
-      .confirm-banner { margin-top:10px; background: var(--emerald-50); color: var(--emerald-700); font-size:13px; padding:8px 12px; border-radius:8px; display:flex; align-items:center; gap:6px; }
 
 
       .chart-wrap { position:relative; height:220px; }
@@ -298,29 +256,6 @@
         min-width: 180px;
       }
 
-      /* Receipt */
-      .receipt-modal { width: 320px; }
-      .receipt-body { font-size: 13px; }
-      .receipt-header { text-align: center; margin-bottom: 12px; }
-      .receipt-header .receipt-company { font-weight: 700; font-size: 15px; }
-      .receipt-header div { color: var(--slate-500); font-size: 11px; }
-      .receipt-meta { display:flex; justify-content:space-between; font-size:11px; color:var(--slate-500); margin-bottom:8px; }
-      .receipt-lines { width:100%; border-top:1px dashed var(--slate-200); border-bottom:1px dashed var(--slate-200); padding:8px 0; margin-bottom:8px; }
-      .receipt-lines td { padding:4px 0; font-size:12px; }
-      .receipt-line-name { color: var(--slate-900); }
-      .receipt-line-sub { font-size:10px; color:var(--slate-400); }
-      .receipt-totals-row { display:flex; justify-content:space-between; font-size:12px; padding:2px 0; }
-      .receipt-totals-row.grand { font-weight:700; font-size:14px; margin-top:4px; }
-      .receipt-footer { text-align:center; margin-top:14px; font-size:11px; color:var(--slate-400); }
-
-      @media print {
-        body * { visibility: hidden; }
-        #receipt-print, #receipt-print * { visibility: visible; }
-        #receipt-print {
-          position: absolute; left:0; top:0; width:100%;
-          padding: 20px;
-        }
-      }
       /* Tax Compliance frontend */
       .tax-page-toolbar {
         display:flex;
@@ -521,7 +456,6 @@
       }
 
 
-      #image-viewer-overlay { background: rgba(0,0,0,0.85); }
     </style>
   </head>
   <body>
@@ -576,36 +510,13 @@
             <p class="card-title">Inventory value by category</p>
             <div class="chart-wrap short"><canvas id="chart-category-value"></canvas></div>
           </div>
+          @include('partials.demo-sales', ['sales' => $posDemoSales])
         </section>
 
 
 
 
-        <!-- POS -->
-        <section class="view" id="view-pos">
-          <h1>Point of sale</h1>
-          <p class="subtitle">Ring up materials for a walk-in customer or job pickup.</p>
-          <div class="pos-layout">
-            <div>
-              <div class="search-box" style="max-width:none; margin-bottom:12px;">
-                <span class="search-icon">⌕</span>
-                <input type="text" id="pos-search" placeholder="Search materials to sell..." oninput="renderProductGrid()" />
-              </div>
-              <div class="product-grid" id="product-grid"></div>
-            </div>
-            <div class="card pos-cart-card">
-              <p class="card-title">Current Sale</p>
-              <div class="cart-lines-scroll"><div id="cart-lines"></div></div>
-              <div class="divider">
-                <div class="cart-summary-row"><span>Subtotal</span><span id="cart-subtotal">₱0.00</span></div>
-                <div class="cart-summary-row"><span>VAT (12%)</span><span id="cart-tax">₱0.00</span></div>
-                <div class="cart-total-row"><span>Total</span><span id="cart-total">₱0.00</span></div>
-              </div>
-              <button class="btn btn-primary" id="checkout-btn" style="width:100%; justify-content:center; margin-top:12px;" onclick="checkout()" disabled>Charge</button>
-              <div class="confirm-banner" id="confirm-banner" style="display:none;"></div>
-            </div>
-          </div>
-        </section>
+
 
 
         <!-- Tax Compliance -->
@@ -833,6 +744,7 @@
             <tbody id="sales-tbody"></tbody>
           </table>
         </div>
+        @include('partials.demo-sales', ['sales' => $posDemoSales])
       </section>
 
       <!-- Accounting -->
@@ -931,33 +843,6 @@
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="closeVatDetail()">Close</button>
     </div>
-  </div>
-</div>
-<!-- Receipt Modal -->
-<div class="modal-overlay" id="receipt-overlay">
-  <div class="modal receipt-modal">
-    <div class="modal-header">
-      <p>Sale receipt</p>
-      <button class="btn-icon" onclick="closeReceiptModal()">&times;</button>
-    </div>
-
-    <div id="receipt-print">
-      <div id="receipt-body" class="receipt-body"></div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeReceiptModal()">Close</button>
-      <button class="btn btn-primary" onclick="printReceipt()">Print receipt</button>
-    </div>
-
-  </div>
-</div>
-<!-- Image Viewer Modal -->
-<div class="modal-overlay" id="image-viewer-overlay" onclick="if(event.target===this) closeImageViewer()">
-  <div style="position:relative; max-width:90vw; max-height:90vh;">
-    <button class="btn-icon" onclick="closeImageViewer()" style="position:absolute; top:-36px; right:0; color:#fff; font-size:22px;">&times;</button>
-    <img id="image-viewer-img" src="" alt="" style="max-width:90vw; max-height:80vh; border-radius:12px; display:block; margin:0 auto;">
-    <p id="image-viewer-caption" style="text-align:center; color:#fff; margin-top:10px; font-size:14px;"></p>
   </div>
 </div>
 <script>
@@ -1179,7 +1064,7 @@
 
 
   let inventory = [];
-  let demoInventory = [];
+
 
 
   let sales = [
@@ -1235,7 +1120,6 @@
 
 
   const PIE_COLORS = ["#1F5B2C","#3F7D3A","#C9A227","#8c8c8c","#a3841e","#666666"];
-  let cart = [];
   let chartInstances = {};
 
 
@@ -1270,7 +1154,8 @@
   {
     id: "pos",
     label: "POS",
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M7 20h10"></path><path d="M7 8h10"></path><path d="M7 12h2"></path><path d="M11 12h2"></path><path d="M15 12h2"></path></svg>'
+    href: @json(route('pos')),
+    icon: "▣"
   },
 
   {
@@ -1359,6 +1244,14 @@
           `).join("")}
         </div>
         </div>
+        `;
+      }
+      if (item.href) {
+        return `
+        <a class="nav-item" href="${item.href}">
+          <span class="nav-icon">${item.icon}</span>
+          <span class="nav-label">${item.label}</span>
+        </a>
         `;
       }
 
@@ -1458,7 +1351,6 @@
 
 
   if (id === "dashboard") renderDashboard();
-  if (id === "pos") renderProductGrid();
   if (id === "vat-records") renderVatRecords();
   if (id === "vat-summary") {
     setVatSummaryPeriod(currentVatSummaryPeriod);
@@ -1576,23 +1468,9 @@
     qty: Number(item.qty),
     unit: item.unit,
     unitCost: Number(item.unit_cost),
-    sellingPrice: item.selling_price === null ? null : Number(item.selling_price),
     reorder: Number(item.reorder_level),
-    image: item.image
-      ? (
-        item.image.startsWith("http://") ||
-        item.image.startsWith("https://") ||
-        item.image.startsWith("/")
-          ? item.image
-          : "/" + item.image.replace(/^public\//, "")
-      )
-      : null,
   }));
-  demoInventory = inventory.map(item => ({ ...item }));
-
-
-  renderDashboard();
-  renderProductGrid();
+    renderDashboard();
 
   } catch (error) {
   console.error("Inventory loading error:", error);
@@ -1606,169 +1484,6 @@
 
 
 
-
-  /* ---------- POS ---------- */
-  function renderProductGrid() {
-    const query = (document.getElementById("pos-search").value || "").toLowerCase();
-    const items = demoInventory.filter(i =>
-      i.qty > 0 &&
-      i.sellingPrice !== null &&
-      i.name.toLowerCase().includes(query)
-    );
-    const grid = document.getElementById("product-grid");
-    grid.innerHTML = items.length === 0
-      ? `<p style="grid-column:span 3; text-align:center; color:var(--slate-400); padding:32px 0;">No matching in-stock materials.</p>`
-      : items.map(i => `
-        <div class="product-card">
-          ${i.image ? `<img src="${i.image}" alt="${i.name}" onclick="openImageViewer(this.src, this.alt)">` : ""}
-          <div class="product-cat">${i.category}</div>
-          <div class="product-name">${i.name}</div>
-          <div class="product-footer">
-            <span class="product-price">${money(i.sellingPrice)}</span>
-            <span class="product-stock">${i.qty} ${i.unit} left</span>
-          </div>
-          <button type="button" class="add-to-sale-btn" onclick="addToCart(${i.id})">Add to Sale</button>
-        </div>`).join("");
-  }
-
-
-  function addToCart(id) {
-    const item = demoInventory.find(i => i.id === id);
-    const existing = cart.find(c => c.id === id);
-    if (existing) {
-      if (existing.qty >= item.qty) return;
-      existing.qty++;
-    } else {
-    cart.push({ ...item, qty:1 });
-  }
-  renderCart();
-  }
-  function changeCartQty(id, delta) {
-    const line = cart.find(c => c.id === id);
-    if (!line) return;
-    line.qty += delta;
-    cart = cart.filter(c => c.qty > 0);
-    renderCart();
-  }
-  function removeFromCart(id) {
-    cart = cart.filter(c => c.id !== id);
-    renderCart();
-  }
-
-
-  function renderCart() {
-    const linesEl = document.getElementById("cart-lines");
-    linesEl.innerHTML = cart.length === 0
-    ? `<p style="font-size:13px; color:var(--slate-400);">Cart is empty. Tap a material to add it.</p>`
-    : cart.map(c => `
-    <div class="cart-line">
-    <div class="cart-line-name" title="${c.name}">${c.name}<div class="cart-line-sub">${money(c.sellingPrice)} / ${c.unit}</div></div>
-    <div class="qty-controls">
-    <button class="qty-btn" onclick="changeCartQty(${c.id}, -1)">-</button>
-    <span>${c.qty}</span>
-    <button class="qty-btn" onclick="changeCartQty(${c.id}, 1)">+</button>
-    <button class="btn-icon" onclick="removeFromCart(${c.id})">&#128465;</button>
-    </div>
-    </div>`).join("");
-
-
-    const subtotal = cart.reduce((s,c) => s + c.qty * c.sellingPrice, 0);
-    const tax = subtotal * 0.12;
-    const total = subtotal + tax;
-    document.getElementById("cart-subtotal").textContent = money(subtotal);
-    document.getElementById("cart-tax").textContent = money(tax);
-    document.getElementById("cart-total").textContent = money(total);
-    const btn = document.getElementById("checkout-btn");
-    btn.disabled = cart.length === 0;
-    btn.textContent = cart.length > 0 ? `Charge ${money(total)}` : "Charge";
-  }
-
-
-  function checkout() {
-    if (cart.length === 0) return;
-
-    const cartSnapshot = cart.map(c => ({ ...c }));
-
-    cart.forEach(c => {
-      const item = demoInventory.find(i => i.id === c.id);
-      if (item) item.qty -= c.qty;
-    });
-
-  const subtotal = cartSnapshot.reduce((s,c) => s + c.qty * c.sellingPrice, 0);
-  const tax = subtotal * 0.12;
-  const total = subtotal * 1.12;
-  const saleId = `S-${1043 + sales.length}`;
-  const saleRecord = { id:saleId, date:new Date().toISOString().slice(0,10), items: cartSnapshot.reduce((s,c)=>s+c.qty,0), total, method:"Card" };
-  sales.unshift(saleRecord);
-
-  cart = [];
-  renderCart();
-  renderProductGrid();
-
-  const banner = document.getElementById("confirm-banner");
-  banner.style.display = "flex";
-  banner.innerHTML = `&#10003; Sale ${saleId} completed`;
-  setTimeout(() => banner.style.display = "none", 3000);
-
-  showReceipt(saleRecord, cartSnapshot, subtotal, tax, total);
-  }
-
-  /* ---------- Receipt ---------- */
-  function showReceipt(sale, items, subtotal, tax, total) {
-    const companyName = document.getElementById("set-name")?.value || "SiteStock";
-    const companyAddress = document.getElementById("set-address")?.value || "";
-    const companyPhone = document.getElementById("set-phone")?.value || "";
-
-    const lineRows = items.map(c => `
-    <tr>
-    <td>
-    <div class="receipt-line-name">${c.name}</div>
-    <div class="receipt-line-sub">${c.qty} x ${money(c.sellingPrice)}</div>
-    </td>
-    <td class="right">${money(c.qty * c.sellingPrice)}</td>
-    </tr>
-    `).join("");
-
-    document.getElementById("receipt-body").innerHTML = `
-    <div class="receipt-header">
-    <div class="receipt-company">${companyName}</div>
-    <div>${companyAddress}</div>
-    <div>${companyPhone}</div>
-    </div>
-    <div class="receipt-meta">
-    <span>Receipt #${sale.id}</span>
-    <span>${sale.date}</span>
-    </div>
-    <table class="receipt-lines"><tbody>${lineRows}</tbody></table>
-    <div class="receipt-totals-row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
-    <div class="receipt-totals-row"><span>VAT (12%)</span><span>${money(tax)}</span></div>
-    <div class="receipt-totals-row grand"><span>Total</span><span>${money(total)}</span></div>
-    <div class="receipt-totals-row" style="margin-top:8px; color:var(--slate-500);"><span>Payment method</span><span>${sale.method}</span></div>
-    <div class="receipt-footer">Thank you for your purchase!</div>
-    `;
-
-    document.getElementById("receipt-overlay").classList.add("open");
-  }
-
-  function closeReceiptModal() {
-    document.getElementById("receipt-overlay").classList.remove("open");
-  }
-
-  function printReceipt() {
-    window.print();
-  }
-
-  /* ---------- Image viewer (lightbox) ---------- */
-  function openImageViewer(src, caption) {
-    document.getElementById("image-viewer-img").src = src;
-    document.getElementById("image-viewer-caption").textContent = caption || "";
-    document.getElementById("image-viewer-overlay").classList.add("open");
-  }
-
-  function closeImageViewer() {
-    document.getElementById("image-viewer-overlay").classList.remove("open");
-    document.getElementById("image-viewer-img").src = "";
-  }
 
 
   /* ---------- Tax Compliance ---------- */
@@ -1850,8 +1565,6 @@
   loadInventory();
 
   renderDashboard();
-  renderProductGrid();
-  renderCart();
 
   renderAccounting();
   // Journal Entry rows are created when the menu is opened.
