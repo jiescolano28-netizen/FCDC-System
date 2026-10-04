@@ -400,6 +400,18 @@
 @media (max-width: 520px) {
     .accounting-balance-grid, .accounting-action-grid { grid-template-columns: minmax(0, 1fr); }
 }
+.payable-add-button { cursor: not-allowed; }
+.accounts-payable-page .accounting-balance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.payable-action-note { margin: 8px 0 0; color: var(--slate-500); font-size: 12px; }
+.payable-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(180px, .45fr); gap: 12px; margin-bottom: 16px; }
+.payable-filters label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.payable-filters input, .payable-filters select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
+.payable-empty { white-space: normal !important; }
+@media (max-width: 600px) {
+    .payable-filters { grid-template-columns: minmax(0, 1fr); }
+    .accounts-payable-page .accounting-balance-grid { grid-template-columns: minmax(0, 1fr); }
+    .accounts-payable-page .dashboard-heading { align-items: flex-start; flex-direction: column; }
+}
 
 .chart-of-accounts-page { max-width: 1440px; margin: 0 auto; }
 .chart-of-accounts-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
