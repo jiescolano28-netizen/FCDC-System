@@ -49,3 +49,5 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:roles.view')
         ->name('roles.index');
 });
+use App\Livewire\TaxCompliance\VatReturnPreparation;
+    Route::get('/tax/vat-return-preparation', VatReturnPreparation::class)->name('tax.vat-return-preparation');

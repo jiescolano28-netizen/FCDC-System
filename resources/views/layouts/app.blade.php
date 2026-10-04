@@ -98,3 +98,6 @@
     @livewireScripts
 </body>
 </html>
+                        <a class="nav-item nav-child {{ request()->routeIs('tax.vat-return-preparation') ? 'active' : '' }}" href="{{ route('tax.vat-return-preparation') }}" @if (request()->routeIs('tax.vat-return-preparation')) aria-current="page" @endif>
+                            <span class="nav-label">VAT Return Preparation</span>
+                        </a>
