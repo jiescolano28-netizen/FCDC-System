@@ -1,0 +1,64 @@
+# Laravel Sail development services for this repository.
+# The MySQL volume is intentionally project-specific and is not published to the host.
+services:
+    laravel.test:
+        build:
+            context: ./vendor/laravel/sail/runtimes/8.4
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP:-1337}'
+                NODE_VERSION: '${NODE_VERSION:-22}'
+        image: sail-8.4/fcdc-app
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '127.0.0.1:${APP_PORT:-8080}:80'
+            - '127.0.0.1:${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+        environment:
+            WWWUSER: '${WWWUSER:-1337}'
+            LARAVEL_SAIL: '1'
+            SUPERVISOR_PHP_USER: sail
+            # Trust only this bind-mounted working copy, whose WSL owner differs from sail.
+            GIT_CONFIG_COUNT: '1'
+            GIT_CONFIG_KEY_0: safe.directory
+            GIT_CONFIG_VALUE_0: /var/www/html
+            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+            IGNITION_LOCAL_SITES_PATH: '${PWD}'
+            DOCKER_DEV: 'true'
+            VITE_HMR_HOST: '${VITE_HMR_HOST:-localhost}'
+            VITE_PORT: '${VITE_PORT:-5173}'
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            mysql:
+                condition: service_healthy
+
+    mysql:
+        image: 'mysql:8.4'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD:-password}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE:-fcdc}'
+            MYSQL_USER: '${DB_USERNAME:-sail}'
+            MYSQL_PASSWORD: '${DB_PASSWORD:-password}'
+        volumes:
+            - 'sail-mysql:/var/lib/mysql'
+            - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - sail
+        healthcheck:
+            test: ['CMD-SHELL', 'mysqladmin ping -h localhost -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent']
+            retries: 10
+            timeout: 5s
+            interval: 5s
+            start_period: 10s
+
+networks:
+    sail:
+        driver: bridge
+
+volumes:
+    sail-mysql:

@@ -579,37 +579,6 @@
         </section>
 
 
-        <!-- Inventory -->
-        <section class="view" id="view-inventory">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div>
-              <h1>Inventory</h1>
-              <p class="subtitle" id="inventory-count"></p>
-            </div>
-            <a class="btn btn-primary" href="{{ route('inventory.management') }}">Manage inventory</a>
-          </div>
-
-          <div class="toolbar">
-            <div class="search-box">
-              <span class="search-icon">⌕</span>
-              <input type="text" id="inventory-search" placeholder="Search materials..." oninput="renderInventoryTable()" />
-            </div>
-            <select id="inventory-category-filter" onchange="renderInventoryTable()">
-              <option>All</option>
-            </select>
-          </div>
-          <div class="card" style="padding:0; overflow:hidden;">
-            <table>
-              <thead>
-                <tr>
-                  <th>Material</th><th>Category</th><th class="right">Qty</th><th class="right">Unit cost</th>
-                  <th class="right">Selling price</th><th class="right">Value</th><th>Status</th><th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="inventory-tbody"></tbody>
-            </table>
-          </div>
-        </section>
 
 
         <!-- POS -->
@@ -951,121 +920,6 @@
 
     </main>
   </div>
-  <!-- Add Item Modal -->
-  <div class="modal-overlay" id="add-item-overlay">
-    <div class="modal">
-      <div class="modal-header">
-        <p>Add inventory item</p>
-        <button class="btn-icon" onclick="closeAddItemModal()">&times;</button>
-      </div>
-      <div class="form-field"><label>Material name</label><input type="text" id="new-item-name" /></div>
-      <div class="form-field"><label>Category</label><select id="new-item-category"></select></div>
-      <div class="form-row">
-        <div class="form-field"><label>Quantity</label><input type="number" id="new-item-qty" /></div>
-        <div class="form-field"><label>Unit (pc, bag...)</label><input type="text" id="new-item-unit" value="pc" /></div>
-      </div>
-      <div class="form-row">
-        <div class="form-field"><label>Unit cost</label><input type="number" id="new-item-cost" /></div>
-        <div class="form-field"><label>Reorder level</label><input type="number" id="new-item-reorder" /></div>
-      </div>
-      <div class="form-field">
-        <label>Product image (shown in POS only)</label>
-        <input type="file" id="new-item-image" accept="image/*" onchange="previewItemImage(this, 'new-item-image-preview')" />
-        <img id="new-item-image-preview" style="display:none; margin-top:8px; width:100%; max-height:120px; object-fit:cover; border-radius:8px; border:1px solid var(--slate-200);" />
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" onclick="closeAddItemModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="addInventoryItem()">Add item</button>
-      </div>
-    </div>
-  </div>
-  <!-- Edit Item Modal -->
-  <div class="modal-overlay" id="edit-item-overlay">
-    <div class="modal">
-
-      <div class="modal-header">
-        <p>Edit inventory item</p>
-
-        <button class="btn-icon"
-        onclick="closeEditItemModal()">
-        &times;
-      </button>
-    </div>
-
-
-    <input type="hidden" id="edit-item-id">
-
-    <div class="form-field">
-      <label>Material name</label>
-      <input type="text" id="edit-item-name">
-    </div>
-
-    <div class="form-field">
-      <label>Category</label>
-      <select id="edit-item-category"></select>
-    </div>
-
-    <div class="form-row">
-
-      <div class="form-field">
-        <label>Quantity</label>
-        <input type="number"
-        id="edit-item-qty"
-        min="0"
-        step="0.01">
-      </div>
-
-      <div class="form-field">
-        <label>Unit</label>
-        <input type="text"
-        id="edit-item-unit">
-      </div>
-
-    </div>
-
-    <div class="form-row">
-
-      <div class="form-field">
-        <label>Unit cost</label>
-        <input type="number"
-        id="edit-item-cost"
-        min="0"
-        step="0.01">
-      </div>
-
-      <div class="form-field">
-        <label>Reorder level</label>
-        <input type="number"
-        id="edit-item-reorder"
-        min="0"
-        step="0.01">
-      </div>
-
-    </div>
-
-    <div class="form-field">
-      <label>Product image (shown in POS only)</label>
-      <input type="file" id="edit-item-image" accept="image/*" onchange="previewItemImage(this, 'edit-item-image-preview')" />
-      <img id="edit-item-image-preview" style="display:none; margin-top:8px; width:100%; max-height:120px; object-fit:cover; border-radius:8px; border:1px solid var(--slate-200);" />
-    </div>
-
-    <div class="modal-actions">
-
-      <button class="btn btn-ghost"
-      onclick="closeEditItemModal()">
-      Cancel
-    </button>
-
-    <button class="btn btn-primary"
-    id="edit-item-save-btn"
-    onclick="updateInventoryItem()">
-    Save changes
-  </button>
-
-</div>
-
-</div>
-</div>
 <!-- VAT Record Details Modal -->
 <div class="modal-overlay" id="vat-detail-overlay" onclick="if(event.target===this) closeVatDetail()">
   <div class="modal">
@@ -1325,6 +1179,7 @@
 
 
   let inventory = [];
+  let demoInventory = [];
 
 
   let sales = [
@@ -1382,8 +1237,6 @@
   const PIE_COLORS = ["#1F5B2C","#3F7D3A","#C9A227","#8c8c8c","#a3841e","#666666"];
   let cart = [];
   let chartInstances = {};
-  let newItemImageData = null;   // base64 image for the Add item modal, shown only in POS
-  let editItemImageData = null;  // base64 image for the Edit item modal, shown only in POS
 
 
   /* ---------- Helpers ---------- */
@@ -1393,34 +1246,7 @@
   function badge(text, tone) {
     return `<span class="badge {text}</span>`;
   }
-  function formatLastEdited(i) {
-    if (!i.updatedAt) return `<span style="color:var(--slate-400);">&mdash;</span>`;
-    const when = new Date(i.updatedAt);
-    const whenText = isNaN(when) ? i.updatedAt : when.toLocaleString(undefined, { dateStyle:"medium", timeStyle:"short" });
-    return i.updatedBy
-    ? `${whenText}<div class="list-row-sub">by ${i.updatedBy}</div>`
-    : whenText;
-  }
 
-  /* ---------- Item image (POS only) ---------- */
-  function previewItemImage(input, previewId) {
-    const file = input.files && input.files[0];
-    const preview = document.getElementById(previewId);
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      if (previewId === "new-item-image-preview") {
-        newItemImageData = dataUrl;
-      } else if (previewId === "edit-item-image-preview") {
-      editItemImageData = dataUrl;
-    }
-  preview.src = dataUrl;
-  preview.style.display = "block";
-  };
-  reader.readAsDataURL(file);
-  }
 
   /* ---------- Sidebar collapse ---------- */
   function toggleSidebar() {
@@ -1440,11 +1266,6 @@
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>'
   },
 
-  {
-    id: "inventory",
-    label: "Inventory",
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>'
-  },
 
   {
     id: "pos",
@@ -1637,7 +1458,6 @@
 
 
   if (id === "dashboard") renderDashboard();
-  if (id === "inventory") renderInventoryTable();
   if (id === "pos") renderProductGrid();
   if (id === "vat-records") renderVatRecords();
   if (id === "vat-summary") {
@@ -1730,62 +1550,8 @@
   }
 
 
-  /* ---------- Inventory ---------- */
-  function populateCategorySelects() {
-    const filter = document.getElementById("inventory-category-filter");
-    filter.innerHTML = `<option>All</option>` + CATEGORIES.map(c=>`<option>${c}</option>`).join("");
-    const newItemCat = document.getElementById("new-item-category");
-    newItemCat.innerHTML = CATEGORIES.map(c=>`<option>${c}</option>`).join("");
-  }
 
 
-  function renderInventoryTable() {
-    document.getElementById("inventory-count").textContent = `${inventory.length} materials tracked across the yard.`;
-    const query = (document.getElementById("inventory-search").value || "").toLowerCase();
-    const cat = document.getElementById("inventory-category-filter").value;
-    const filtered = inventory.filter(i => {
-      return (cat === "All" || i.category === cat)
-      && i.name.toLowerCase().includes(query);
-    });
-  const tbody = document.getElementById("inventory-tbody");
-  tbody.innerHTML = filtered.length === 0
-  ? `<tr><td colspan="7" style="text-align:center; padding:32px; color:var(--slate-400);">No materials match your search.</td></tr>`
-  : filtered.map(i => `
-  <tr>
-  <td>${i.name}</td>
-  <td style="color:var(--slate-500);">${i.category}</td>
-  <td class="right">${i.qty} ${i.unit}</td>
-  <td class="right">${money(i.unitCost)}</td>
-  <td class="right">${money(i.qty * i.unitCost)}</td>
-  <td>${i.qty <= 0 ? badge("Out of stock","red") : (i.qty <= i.reorder ? badge("Reorder","amber") : badge("In stock","emerald"))}</td>
-  <td class="right">
-  <button class="btn-icon edit-btn"
-  onclick="openEditItemModal(${i.id})"
-  title="Edit item">
-  &#9998;
-  </button>
-
-  <button class="btn-icon delete-btn"
-  onclick="removeInventoryItem(${i.id})"
-  title="Delete item">
-  &#128465;
-  </button>
-  </td>
-  </tr>`).join("");
-  }
-
-
-  function openAddItemModal() { document.getElementById("add-item-overlay").classList.add("open"); }
-  function closeAddItemModal() {
-    document.getElementById("add-item-overlay").classList.remove("open");
-    ["new-item-name","new-item-qty","new-item-cost","new-item-reorder"].forEach(id => document.getElementById(id).value = "");
-    document.getElementById("new-item-unit").value = "pc";
-    document.getElementById("new-item-image").value = "";
-    const preview = document.getElementById("new-item-image-preview");
-    preview.style.display = "none";
-    preview.src = "";
-    newItemImageData = null;
-  }
 
   async function loadInventory() {
     try {
@@ -1802,7 +1568,6 @@
 
   const data = await response.json();
 
-  console.log("Inventory from database:", data);
 
   inventory = data.map(item => ({
     id: Number(item.id),
@@ -1811,29 +1576,22 @@
     qty: Number(item.qty),
     unit: item.unit,
     unitCost: Number(item.unit_cost),
+    sellingPrice: item.selling_price === null ? null : Number(item.selling_price),
     reorder: Number(item.reorder_level),
-
-    // IMAGE
     image: item.image
-    ? (
-    item.image.startsWith("http://") ||
-    item.image.startsWith("https://") ||
-    item.image.startsWith("/")
-    ? item.image
-    : "/" + item.image.replace(/^public\//, "")
-    )
-    : null,
-
-    updatedAt: item.updated_at || null,
-    updatedBy: item.updated_by_name || item.updated_by || null
+      ? (
+        item.image.startsWith("http://") ||
+        item.image.startsWith("https://") ||
+        item.image.startsWith("/")
+          ? item.image
+          : "/" + item.image.replace(/^public\//, "")
+      )
+      : null,
   }));
+  demoInventory = inventory.map(item => ({ ...item }));
 
-  console.log("Inventory used by POS:", inventory);
 
-  populateCategorySelects();
-
-  renderInventoryTable();
-
+  renderDashboard();
   renderProductGrid();
 
   } catch (error) {
@@ -1843,446 +1601,39 @@
   }
   }
 
-  async function addInventoryItem() {
 
-    const name = document
-    .getElementById("new-item-name")
-    .value
-    .trim();
 
-    const category = document
-    .getElementById("new-item-category")
-    .value;
 
-    const qty = Number(
-    document.getElementById("new-item-qty").value
-    );
-
-    const unit = document
-    .getElementById("new-item-unit")
-    .value
-    .trim();
-
-    const unitCost = Number(
-    document.getElementById("new-item-cost").value
-    );
-
-    const reorderLevel = Number(
-    document.getElementById("new-item-reorder").value
-    );
-
-    // Validation
-    if (!name) {
-      alert("Please enter the material name.");
-      return;
-    }
-
-  if (!category) {
-    alert("Please select a category.");
-    return;
-  }
-
-  if (qty < 0 || unitCost < 0 || reorderLevel < 0) {
-    alert("Quantity, cost, and reorder level cannot be negative.");
-    return;
-  }
-
-  try {
-
-    const csrfToken = document
-    .querySelector('meta[name="csrf-token"]')
-    .getAttribute("content");
-
-    const formData = new FormData();
-
-    formData.append("name", name);
-    formData.append("category", category);
-    formData.append("qty", qty);
-    formData.append("unit", unit || "pc");
-    formData.append("unit_cost", unitCost);
-    formData.append("reorder_level", reorderLevel || 10);
-
-    const imageFile = document.getElementById("new-item-image").files[0];
-
-    if (imageFile) {
-      formData.append("image", imageFile);
-    }
-
-  const response = await fetch("/inventory", {
-    method: "POST",
-
-    headers: {
-      "Accept": "application/json",
-      "X-CSRF-TOKEN": csrfToken
-    },
-
-  body: formData
-  });
-
-  const data = await response.json();
-
-  console.log("Server response:", data);
-
-  if (!response.ok) {
-
-    console.error("Validation/server error:", data);
-
-    if (data.errors) {
-      alert(
-      Object.values(data.errors)
-      .flat()
-      .join("\n")
-      );
-    } else {
-    alert(
-    data.message ||
-    "Failed to save inventory item."
-    );
-  }
-
-  return;
-  }
-
-  alert("Inventory item saved successfully!");
-
-  closeAddItemModal();
-
-  // Reload data from MySQL
-  await loadInventory();
-
-  // Refresh dashboard
-  renderDashboard();
-
-  // Refresh POS
-  renderProductGrid();
-
-  } catch (error) {
-
-  console.error("Fetch error:", error);
-
-  alert(
-  "Unable to connect to Laravel/MySQL.\n\n" +
-  "Check the browser console for the error."
-  );
-  }
-  }
-
-  function openEditItemModal(id) {
-
-    const item = inventory.find(i => i.id === id);
-
-    if (!item) return;
-
-    document.getElementById("edit-item-id").value = item.id;
-    document.getElementById("edit-item-name").value = item.name;
-    document.getElementById("edit-item-qty").value = item.qty;
-    document.getElementById("edit-item-unit").value = item.unit;
-    document.getElementById("edit-item-cost").value = item.unitCost;
-    document.getElementById("edit-item-reorder").value = item.reorder;
-
-
-    const categorySelect =
-    document.getElementById("edit-item-category");
-
-    categorySelect.innerHTML =
-    CATEGORIES.map(category =>
-    `<option value="${category}" {category}</option>`
-    ).join("");
-
-    document.getElementById("edit-item-image").value = "";
-    const editPreview = document.getElementById("edit-item-image-preview");
-    if (item.image) {
-      editPreview.src = item.image;
-      editPreview.style.display = "block";
-    } else {
-    editPreview.src = "";
-    editPreview.style.display = "none";
-  }
-  editItemImageData = item.image || null;
-
-  document
-  .getElementById("edit-item-overlay")
-  .classList.add("open");
-
-  // Put the cursor straight into the first field and let people
-  // hit Enter to save or Escape to back out, so editing an item
-  // doesn't require reaching for the mouse at all.
-  const nameField = document.getElementById("edit-item-name");
-  nameField.focus();
-  nameField.select();
-  }
-
-
-  function closeEditItemModal() {
-
-    document
-    .getElementById("edit-item-overlay")
-    .classList.remove("open");
-  }
-
-  // Enter-to-save / Escape-to-close / click-outside-to-close, scoped to
-  // the edit modal so editing feels like a normal form rather than
-  // requiring a precise click on "Save changes" every time.
-  document.getElementById("edit-item-overlay").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && e.target.tagName !== "SELECT") {
-      e.preventDefault();
-      updateInventoryItem();
-    } else if (e.key === "Escape") {
-    closeEditItemModal();
-  }
-  });
-  document.getElementById("edit-item-overlay").addEventListener("mousedown", (e) => {
-    if (e.target.id === "edit-item-overlay") closeEditItemModal();
-  });
-
-
-  async function updateInventoryItem() {
-
-    const id = Number(
-    document.getElementById("edit-item-id").value
-    );
-
-    const name = document
-    .getElementById("edit-item-name")
-    .value
-    .trim();
-
-    const category = document
-    .getElementById("edit-item-category")
-    .value;
-
-    const qty = Number(
-    document.getElementById("edit-item-qty").value
-    );
-
-    const unit = document
-    .getElementById("edit-item-unit")
-    .value
-    .trim();
-
-    const unitCost = Number(
-    document.getElementById("edit-item-cost").value
-    );
-
-    const reorderLevel = Number(
-    document.getElementById("edit-item-reorder").value
-    );
-
-    // Validation
-    if (!name) {
-      alert("Please enter the material name.");
-      return;
-    }
-
-  if (qty < 0 || unitCost < 0 || reorderLevel < 0) {
-    alert("Quantity, cost, and reorder level cannot be negative.");
-    return;
-  }
-
-  const saveBtn = document.getElementById("edit-item-save-btn");
-  const originalLabel = saveBtn.textContent;
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Saving…";
-
-  try {
-
-    const csrfToken = document
-    .querySelector('meta[name="csrf-token"]')
-    .getAttribute("content");
-
-    // Use multipart FormData (same as adding an item) so a newly
-    // chosen image file actually reaches the backend as a real
-    // file upload instead of a JSON string. Laravel needs the
-    // \_method override since browsers can't send a real PUT
-    // request body as multipart/form-data.
-    const formData = new FormData();
-
-    formData.append("\_method", "PUT");
-    formData.append("name", name);
-    formData.append("category", category);
-    formData.append("qty", qty);
-    formData.append("unit", unit || "pc");
-    formData.append("unit_cost", unitCost);
-    formData.append("reorder_level", reorderLevel);
-
-    const imageFile = document.getElementById("edit-item-image").files[0];
-    if (imageFile) {
-      formData.append("image", imageFile);
-    }
-
-  const response = await fetch(`/inventory/${id}`, {
-
-    method: "POST",
-
-    headers: {
-      "Accept": "application/json",
-      "X-CSRF-TOKEN": csrfToken
-    },
-
-  body: formData
-  });
-
-  // Laravel error pages (404, 419, 500) often come back as HTML,
-  // not JSON — parsing those with response.json() throws and used
-  // to get swallowed into a generic "unable to connect" message.
-  // Read as text first so we can always show something useful.
-  const raw = await response.text();
-  let data = {};
-  try { data = raw ? JSON.parse(raw) : {}; } catch { /* not JSON */ }
-
-  console.log("Update response:", response.status, data, raw);
-
-  if (!response.ok) {
-
-    console.error(data);
-
-    if (data.errors) {
-      alert(
-      Object.values(data.errors)
-      .flat()
-      .join("\n")
-      );
-    } else if (data.message) {
-    alert(`Failed to update inventory item (HTTP ${response.status}): ${data.message}`);
-  } else if (response.status === 404) {
-  alert(
-  `Failed to update inventory item (HTTP 404).\n\n` +
-  `No route matched PUT /inventory/${id}. Check that a route like ` +
-  `Route::put('/inventory/{id}', [InventoryController::class, 'update']) exists.`
-  );
-  } else if (response.status === 419) {
-  alert(
-  `Failed to update inventory item (HTTP 419: page expired).\n\n` +
-  `The CSRF token is missing or stale — refresh the page and try again.`
-  );
-  } else {
-  alert(`Failed to update inventory item (HTTP ${response.status}).`);
-  }
-
-  return;
-  }
-
-  closeEditItemModal();
-
-  // Reload straight from the database so the table, dashboard,
-  // and POS grid all reflect the saved change — including who
-  // made it and when, if the backend returns updated_by/updated_at.
-  await loadInventory();
-
-  renderDashboard();
-  renderProductGrid();
-
-  alert("Inventory item updated successfully!");
-
-  } catch (error) {
-
-  console.error(error);
-
-  alert("Unable to reach the server. Check your connection and the browser console for details.");
-
-  } finally {
-
-  saveBtn.disabled = false;
-  saveBtn.textContent = originalLabel;
-  }
-  }
-  async function removeInventoryItem(id) {
-
-    const item = inventory.find(i => i.id === id);
-
-    if (!item) {
-      return;
-    }
-
-  const confirmed = confirm(
-  `Are you sure you want to delete "${item.name}"?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-
-    const csrfToken = document
-    .querySelector('meta[name="csrf-token"]')
-    .getAttribute("content");
-
-    const response = await fetch(`/inventory/${id}`, {
-
-      method: "DELETE",
-
-      headers: {
-        "Accept": "application/json",
-        "X-CSRF-TOKEN": csrfToken
-      }
-  });
-
-  const data = await response.json();
-
-  console.log("Delete response:", data);
-
-  if (!response.ok) {
-
-    console.error(data);
-
-    alert(
-    data.message ||
-    "Failed to delete inventory item."
-    );
-
-    return;
-  }
-
-  alert("Inventory item deleted successfully!");
-
-  await loadInventory();
-
-  renderDashboard();
-  renderProductGrid();
-
-  } catch (error) {
-
-  console.error(error);
-
-  alert("Unable to connect to the database.");
-  }
-  }
-
-  // EDIT BUTTON
 
 
 
   /* ---------- POS ---------- */
   function renderProductGrid() {
     const query = (document.getElementById("pos-search").value || "").toLowerCase();
-    const items = inventory.filter(i => i.qty > 0 && i.name.toLowerCase().includes(query));
+    const items = demoInventory.filter(i =>
+      i.qty > 0 &&
+      i.sellingPrice !== null &&
+      i.name.toLowerCase().includes(query)
+    );
     const grid = document.getElementById("product-grid");
     grid.innerHTML = items.length === 0
-    ? `<p style="grid-column:span 3; text-align:center; color:var(--slate-400); padding:32px 0;">No matching in-stock materials.</p>`
-    : items.map(i => `
-    <div class="product-card">
-    ${i.image ? `<img src="${i.image}" alt="{i.image}', '${i.name.replace(/'/g, "\\\\'")}')">` : ''}
-    <div class="product-cat">${i.category}</div>
-
-    <div class="product-name">${i.name}</div>
-
-    <div class="product-footer">
-    <span class="product-price">${money(i.unitCost)}</span>
-    <span class="product-stock">${i.qty} ${i.unit} left</span>
-    </div>
-
-    <button type="button"
-    class="add-to-sale-btn"
-    onclick="addToCart(${i.id})">
-    Add to Sale
-    </button>
-    </div>`).join("");
+      ? `<p style="grid-column:span 3; text-align:center; color:var(--slate-400); padding:32px 0;">No matching in-stock materials.</p>`
+      : items.map(i => `
+        <div class="product-card">
+          ${i.image ? `<img src="${i.image}" alt="${i.name}" onclick="openImageViewer(this.src, this.alt)">` : ""}
+          <div class="product-cat">${i.category}</div>
+          <div class="product-name">${i.name}</div>
+          <div class="product-footer">
+            <span class="product-price">${money(i.sellingPrice)}</span>
+            <span class="product-stock">${i.qty} ${i.unit} left</span>
+          </div>
+          <button type="button" class="add-to-sale-btn" onclick="addToCart(${i.id})">Add to Sale</button>
+        </div>`).join("");
   }
 
 
   function addToCart(id) {
-    const item = inventory.find(i => i.id === id);
+    const item = demoInventory.find(i => i.id === id);
     const existing = cart.find(c => c.id === id);
     if (existing) {
       if (existing.qty >= item.qty) return;
@@ -2311,7 +1662,7 @@
     ? `<p style="font-size:13px; color:var(--slate-400);">Cart is empty. Tap a material to add it.</p>`
     : cart.map(c => `
     <div class="cart-line">
-    <div class="cart-line-name" title="{c.name}<div class="cart-line-sub">${money(c.unitCost)} / ${c.unit}</div></div>
+    <div class="cart-line-name" title="${c.name}">${c.name}<div class="cart-line-sub">${money(c.sellingPrice)} / ${c.unit}</div></div>
     <div class="qty-controls">
     <button class="qty-btn" onclick="changeCartQty(${c.id}, -1)">-</button>
     <span>${c.qty}</span>
@@ -2321,7 +1672,7 @@
     </div>`).join("");
 
 
-    const subtotal = cart.reduce((s,c) => s + c.qty * c.unitCost, 0);
+    const subtotal = cart.reduce((s,c) => s + c.qty * c.sellingPrice, 0);
     const tax = subtotal * 0.12;
     const total = subtotal + tax;
     document.getElementById("cart-subtotal").textContent = money(subtotal);
@@ -2339,11 +1690,11 @@
     const cartSnapshot = cart.map(c => ({ ...c }));
 
     cart.forEach(c => {
-      const item = inventory.find(i => i.id === c.id);
+      const item = demoInventory.find(i => i.id === c.id);
       if (item) item.qty -= c.qty;
     });
 
-  const subtotal = cartSnapshot.reduce((s,c) => s + c.qty * c.unitCost, 0);
+  const subtotal = cartSnapshot.reduce((s,c) => s + c.qty * c.sellingPrice, 0);
   const tax = subtotal * 0.12;
   const total = subtotal * 1.12;
   const saleId = `S-${1043 + sales.length}`;
@@ -2372,9 +1723,9 @@
     <tr>
     <td>
     <div class="receipt-line-name">${c.name}</div>
-    <div class="receipt-line-sub">${c.qty} x ${money(c.unitCost)}</div>
+    <div class="receipt-line-sub">${c.qty} x ${money(c.sellingPrice)}</div>
     </td>
-    <td class="right">${money(c.qty * c.unitCost)}</td>
+    <td class="right">${money(c.qty * c.sellingPrice)}</td>
     </tr>
     `).join("");
 
@@ -2495,12 +1846,10 @@
 
   /* ---------- Init ---------- */
   renderNav();
-  populateCategorySelects();
 
   loadInventory();
 
   renderDashboard();
-  renderInventoryTable();
   renderProductGrid();
   renderCart();
 

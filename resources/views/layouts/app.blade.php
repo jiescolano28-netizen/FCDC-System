@@ -31,6 +31,9 @@
                         <span class="nav-icon" aria-hidden="true">▧</span><span class="nav-label">Inventory</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
                     </button>
                     <div class="nav-dropdown {{ request()->routeIs('inventory.*') ? 'open' : '' }}" id="inventory-menu">
+                        <a class="nav-item nav-child {{ request()->routeIs('inventory.overview') ? 'active' : '' }}" href="{{ route('inventory.overview') }}" @if (request()->routeIs('inventory.overview')) aria-current="page" @endif>
+                            <span class="nav-label">Inventory overview</span>
+                        </a>
                         <a class="nav-item nav-child {{ request()->routeIs('inventory.management') ? 'active' : '' }}" href="{{ route('inventory.management') }}" @if (request()->routeIs('inventory.management')) aria-current="page" @endif>
                             <span class="nav-label">Manage inventory</span>
                         </a>
@@ -51,7 +54,7 @@
             </footer>
         </aside>
 
-        <main @class(['app-main', 'inventory-main' => request()->routeIs('inventory.management')])>
+        <main @class(['app-main', 'inventory-main' => request()->routeIs('inventory.management', 'inventory.overview')])>
             {{ $slot }}
         </main>
     </div>

@@ -7,6 +7,64 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Local development with Laravel Sail
+
+This repository's local environment uses Laravel Sail with PHP 8.4, Node 22, and
+MySQL 8.4. The application is available at
+[http://localhost:8080](http://localhost:8080), Vite at
+[http://localhost:5173](http://localhost:5173), and MySQL is private to the
+Compose network (it is not published on the host).
+
+Before the first run, ensure Docker Desktop is running and Ubuntu is enabled
+under Docker Desktop's WSL integration settings. Then run these commands from
+an Ubuntu WSL shell in the existing working copy:
+
+```shell
+cd /mnt/c/Users/Admin/.others/fcdc
+
+# The first command only needs to be run when vendor/ is not present.
+docker run --rm \
+    -u "$(id -u):$(id -g)" \
+    -e COMPOSER_PROCESS_TIMEOUT=1200 \
+    -v "$(pwd):/var/www/html" \
+    -w /var/www/html \
+    laravelsail/php84-composer:latest \
+    composer install --ignore-platform-reqs
+
+test -f .env || cp .env.example .env
+./vendor/bin/sail build
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate
+./vendor/bin/sail npm ci
+```
+
+The committed `.env.example` contains disposable local-development MySQL
+credentials (`sail` / `password`) and fixed container IDs so these commands
+also work from a root WSL shell. Replace them in your uncommitted `.env` when
+needed; never copy production credentials into `.env.example`.
+
+The bootstrap timeout allows Composer archive extraction on the slower
+Windows-mounted filesystem. If an install is interrupted, rerun the bootstrap
+command; `composer install` resumes the locked dependencies without updating them.
+
+For a normal work session, start the containers and run Vite and the queue
+listener in separate WSL terminals:
+
+```shell
+./vendor/bin/sail up -d
+./vendor/bin/sail npm run dev
+./vendor/bin/sail artisan queue:work --tries=1
+```
+
+Run the test suite in another terminal with
+`./vendor/bin/sail test`. Stop the services with
+`./vendor/bin/sail stop`; this preserves the project-scoped `fcdc_sail-mysql`
+volume.
+
+Do not use `docker compose down -v` unless you intentionally want to erase the
+local database.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

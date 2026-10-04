@@ -3,6 +3,8 @@
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\HomePage;
+use App\Livewire\Inventory\InventoryManagement;
+use App\Livewire\Inventory\InventoryOverview;
 use App\Livewire\Settings\SettingsPage;
 use Illuminate\Support\Facades\Route;
 
@@ -27,7 +29,8 @@ Route::middleware('auth')->group(function () {
     })->name('dashboard');
     Route::get('/settings', SettingsPage::class)->name('settings');
 
-    Route::get('/inventory/manage', \App\Livewire\InventoryManagement::class)->name('inventory.management');
+    Route::get('/inventory/manage', InventoryManagement::class)->name('inventory.management');
+    Route::get('/inventory/overview', InventoryOverview::class)->name('inventory.overview');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');

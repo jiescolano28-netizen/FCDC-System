@@ -1,9 +1,8 @@
 <?php
 
-namespace App\Livewire;
+namespace App\Livewire\Inventory;
 
 use App\Models\Inventory;
-use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -48,7 +47,7 @@ class InventoryManagement extends Component
 
         $item = $this->editingId
             ? Inventory::findOrFail($this->editingId)
-            : new Inventory();
+            : new Inventory;
 
         $item->fill([
             'name' => $validated['name'],
@@ -100,15 +99,15 @@ class InventoryManagement extends Component
         $items = Inventory::query()
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
-                    $query->where('name', 'like', '%' . $this->search . '%')
-                        ->orWhere('category', 'like', '%' . $this->search . '%');
+                    $query->where('name', 'like', '%'.$this->search.'%')
+                        ->orWhere('category', 'like', '%'.$this->search.'%');
                 });
             })
             ->when($this->categoryFilter !== '', fn ($query) => $query->where('category', $this->categoryFilter))
             ->orderByDesc('id')
             ->get();
 
-        return view('livewire.inventory-management', [
+        return view('livewire.inventory.management', [
             'items' => $items,
             'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
         ])->layout('layouts.app', ['title' => 'Inventory Management']);

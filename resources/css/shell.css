@@ -62,6 +62,9 @@
 .inventory-page label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; }
 .inventory-page input, .inventory-page select { width: 100%; padding: 9px; border: 1px solid #cbd5cb; border-radius: 6px; }
 .inventory-page button.primary { padding: 10px 14px; border: 0; border-radius: 6px; color: #fff; background: #1f5b2c; cursor: pointer; }
+.inventory-page a.primary-link { display: inline-block; padding: 10px 14px; border-radius: 6px; color: #fff; background: #1f5b2c; text-decoration: none; }
+.inventory-page a.primary-link:hover { background: #245332; }
+.inventory-page a.primary-link:focus-visible { outline: 2px solid #1f5b2c; outline-offset: 3px; }
 .inventory-page button.secondary, .inventory-page button.danger { padding: 7px 10px; border: 1px solid #d3dcd3; border-radius: 6px; background: #fff; cursor: pointer; }
 .inventory-page button.danger { color: #b91c1c; }
 .inventory-page .table-wrap { overflow-x: auto; }
