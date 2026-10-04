@@ -52,11 +52,17 @@ Exact component boundaries and model names should follow existing Laravel conven
 
 ## Approval and prerequisite
 
-The design is approved. Implementation may proceed for the approved scope, but the application must not be released as the requested full application until the accounting rules are supplied and implemented. Until then, accounting remains deferred. Needed inputs include the chart of accounts, sales/payables/payment posting rules, payable and disbursement lifecycles, and report definitions.
+The design is approved. Implementation may proceed for the approved demonstration scope, but the application must not be released as the requested full application until the accounting rules are supplied and implemented. Production accounting remains deferred pending an approved chart, sales/payables/payment posting rules, payable and disbursement lifecycles, and report definitions.
+
+## Accounting demonstration pages
+
+Production accounting remains deferred: no posting rules, durable account records, payables/disbursements, ledger calculations, or real financial reports are implemented. The authenticated Chart of Accounts page uses `ReferenceAccounts::all()` as illustrative fixtures for chart filters and journal account selection; those fixtures are neither approved production accounts nor persisted records.
+
+The authenticated Journal Entry page keeps its draft and balanced demonstration history under `demo.journals.employee.{employee-id}` in the signed-in session. Saving reports that the entry is not posted; the session history is not included in Accounting Overview balances or postings. Logout invalidates this temporary state with the rest of the session.
 
 ## Implemented authenticated shell and Settings slice
 
-Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The authenticated shell links to supported destinations: Dashboard, POS, inventory overview and management, and Settings.
+Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The authenticated shell links to Dashboard, POS, Inventory, Tax Compliance, Accounting Overview, Chart of Accounts, Journal Entry, and Settings destinations.
 
 Settings values are temporary session state, not business settings. The session key `demo.settings.employee.{employee-id}` scopes values to both the authenticated employee and their session; logout invalidates the session. Later demo-only state should use the same `demo.{area}.employee.{employee-id}` ownership and session-lifetime convention. Do not add storage APIs or placeholder features for those future areas.
 

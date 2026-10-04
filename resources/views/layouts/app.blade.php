@@ -64,7 +64,6 @@
                         </a>
                     </div>
                 </div>
-                @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
                 @php($accountingNavigationActive = request()->routeIs('accounting.*'))
                 <div class="nav-group">
                     <button class="nav-item nav-parent {{ $accountingNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="accounting-menu" aria-controls="accounting-menu" aria-expanded="{{ $accountingNavigationActive ? 'true' : 'false' }}">
@@ -77,8 +76,12 @@
                         <a class="nav-item nav-child {{ request()->routeIs('accounting.chart-of-accounts') ? 'active' : '' }}" href="{{ route('accounting.chart-of-accounts') }}" @if (request()->routeIs('accounting.chart-of-accounts')) aria-current="page" @endif>
                             <span class="nav-label">Chart of Accounts</span>
                         </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.journal-entry') ? 'active' : '' }}" href="{{ route('accounting.journal-entry') }}" @if (request()->routeIs('accounting.journal-entry')) aria-current="page" @endif>
+                            <span class="nav-label">Journal Entry</span>
+                        </a>
                     </div>
                 </div>
+                @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
                 
                 <div class="nav-group">
                     <button class="nav-item nav-parent {{ $settingsNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="settings-menu" aria-controls="settings-menu" aria-expanded="{{ $settingsNavigationActive ? 'true' : 'false' }}">

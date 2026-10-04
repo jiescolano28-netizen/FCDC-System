@@ -4,6 +4,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\ChartOfAccounts;
+use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Dashboard\DashboardPage;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
@@ -37,6 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/reports', ReportsPage::class)->name('reports');
     Route::get('/accounting', AccountingOverview::class)->name('accounting.overview');
     Route::get('/accounting/chart-of-accounts', ChartOfAccounts::class)->name('accounting.chart-of-accounts');
+    Route::get('/accounting/journal-entry', JournalEntry::class)->name('accounting.journal-entry');
     Route::get('/settings', SettingsPage::class)->name('settings');
     Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
     Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');
