@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\TaxCompliance\TaxReport;
 use App\Livewire\TaxCompliance\VatRecords;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -82,4 +83,35 @@ test('unknown reference values do not open a demonstration record', function () 
         ->call('viewRecord', 'VAT-UNKNOWN')
         ->assertSet('selectedRecord', null)
         ->assertDontSee('VAT Record Details');
+});
+
+test('tax report filters the illustrative records and totals by reporting period', function () {
+    $this->actingAs(createVatRecordsEmployee());
+
+    Livewire::test(TaxReport::class)
+        ->assertSee('Q3 2026')
+        ->assertSee('₱54,800.00')
+        ->assertSee('₱6,576.00')
+        ->assertSee('₱61,376.00')
+        ->assertSee('VAT-2026-08-001')
+        ->set('period', 'Q2 2026')
+        ->assertSee('VAT-2026-06-001')
+        ->assertSee('VAT-2026-05-001')
+        ->assertDontSee('VAT-2026-08-001')
+        ->assertSee('₱22,000.00')
+        ->assertSee('₱2,640.00')
+        ->assertSee('₱24,640.00');
+});
+
+test('tax report has a separate authenticated named route and isolated print document', function () {
+    $this->get(route('tax.report'))->assertRedirect(route('login'));
+
+    $this->actingAs(createVatRecordsEmployee())
+        ->get(route('tax.report'))
+        ->assertOk()
+        ->assertSee('Tax Report')
+        ->assertSee('Tax Compliance demonstrations')
+        ->assertSee('tax-report-document', false)
+        ->assertSee('not filed with a tax authority', false)
+        ->assertSee(route('tax.report'), false);
 });
