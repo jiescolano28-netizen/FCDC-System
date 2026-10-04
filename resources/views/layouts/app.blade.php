@@ -65,6 +65,17 @@
                     </div>
                 </div>
                 @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
+                @php($accountingNavigationActive = request()->routeIs('accounting.*'))
+                <div class="nav-group">
+                    <button class="nav-item nav-parent {{ $accountingNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="accounting-menu" aria-controls="accounting-menu" aria-expanded="{{ $accountingNavigationActive ? 'true' : 'false' }}">
+                        <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Accounting</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
+                    </button>
+                    <div class="nav-dropdown {{ $accountingNavigationActive ? 'open' : '' }}" id="accounting-menu">
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.overview') ? 'active' : '' }}" href="{{ route('accounting.overview') }}" @if (request()->routeIs('accounting.overview')) aria-current="page" @endif>
+                            <span class="nav-label">Accounting Overview</span>
+                        </a>
+                    </div>
+                </div>
                 
                 <div class="nav-group">
                     <button class="nav-item nav-parent {{ $settingsNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="settings-menu" aria-controls="settings-menu" aria-expanded="{{ $settingsNavigationActive ? 'true' : 'false' }}">

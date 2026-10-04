@@ -383,3 +383,20 @@
     body.tax-report-body .tax-report-table-wrap th,
     body.tax-report-body .tax-report-table-wrap td { padding: 6px 4px; white-space: normal; }
 }
+.accounting-page { max-width: 1440px; margin: 0 auto; }
+.accounting-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.accounting-balance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.accounting-unavailable { margin: 5px 0 2px; color: var(--slate-700); font-size: 18px; font-weight: 600; }
+.accounting-activity, .accounting-actions { margin-top: 16px; }
+.accounting-action-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.accounting-action { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--slate-200); border-radius: 8px; color: var(--slate-700); background: var(--slate-50); font: inherit; text-align: left; }
+.accounting-action:disabled { cursor: not-allowed; opacity: .8; }
+.accounting-action[href] { color: var(--slate-700); text-decoration: none; cursor: pointer; }
+.accounting-action[href]:hover { border-color: var(--emerald-700); color: var(--emerald-800); }
+.accounting-action-status { color: var(--slate-500); font-size: 12px; }
+@media (max-width: 900px) {
+    .accounting-balance-grid, .accounting-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+    .accounting-balance-grid, .accounting-action-grid { grid-template-columns: minmax(0, 1fr); }
+}

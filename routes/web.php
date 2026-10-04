@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
+use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Dashboard\DashboardPage;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
@@ -33,6 +34,7 @@ Route::post('/logout', [LoginController::class, 'logout'])
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardPage::class)->name('dashboard');
     Route::get('/dashboard/reports', ReportsPage::class)->name('reports');
+    Route::get('/accounting', AccountingOverview::class)->name('accounting.overview');
     Route::get('/settings', SettingsPage::class)->name('settings');
     Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
     Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');

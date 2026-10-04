@@ -73,3 +73,7 @@ The dashboard chart renderer is loaded through the shared Vite bundle but initia
 ## VAT demonstration pages
 
 The authenticated `/tax/vat-summary` Livewire page selects monthly or quarterly periods from `VatDemonstrationData::summaries()`, displaying the existing fixture totals without persisting or calculating business activity. It links back to VAT Records, and both pages label their fixtures as illustrative and non-filing.
+
+## Accounting overview demonstration
+
+The authenticated `/accounting` route uses the Accounting-grouped `AccountingOverview` Livewire page and shared application shell. It labels revenue, expenses, net income, and payables as unavailable, and its recent-entry state does not treat session demo journals or POS sales as postings. Quick actions link only to registered destination routes; unavailable pages remain disabled until implemented. This page does not add accounting calculations or records and does not change the accounting release prerequisites above.
