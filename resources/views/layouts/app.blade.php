@@ -74,6 +74,9 @@
                         <a class="nav-item nav-child {{ request()->routeIs('accounting.overview') ? 'active' : '' }}" href="{{ route('accounting.overview') }}" @if (request()->routeIs('accounting.overview')) aria-current="page" @endif>
                             <span class="nav-label">Accounting Overview</span>
                         </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.chart-of-accounts') ? 'active' : '' }}" href="{{ route('accounting.chart-of-accounts') }}" @if (request()->routeIs('accounting.chart-of-accounts')) aria-current="page" @endif>
+                            <span class="nav-label">Chart of Accounts</span>
+                        </a>
                     </div>
                 </div>
                 
