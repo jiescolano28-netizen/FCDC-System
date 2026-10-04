@@ -56,6 +56,12 @@ The design is approved. Implementation may proceed for the approved scope, but t
 
 ## Implemented authenticated shell and Settings slice
 
-Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The current shell links only to supported destinations: Dashboard, inventory management, and Settings.
+Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The authenticated shell links to supported destinations: Dashboard, POS, inventory overview and management, and Settings.
 
 Settings values are temporary session state, not business settings. The session key `demo.settings.employee.{employee-id}` scopes values to both the authenticated employee and their session; logout invalidates the session. Later demo-only state should use the same `demo.{area}.employee.{employee-id}` ownership and session-lifetime convention. Do not add storage APIs or placeholder features for those future areas.
+
+## Dashboard
+
+The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown as demonstrations, separate from the chart's illustrative fixed series.
+
+The dashboard chart renderer is loaded through the shared Vite bundle but initializes only when the dashboard root is present. Livewire period selection sends updated fixture data to that page's sales chart; no chart values are presented as persisted sales.

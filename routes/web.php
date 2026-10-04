@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
+use App\Livewire\Dashboard\DashboardPage;
 use App\Livewire\HomePage;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
@@ -24,9 +25,7 @@ Route::post('/logout', [LoginController::class, 'logout'])
 
 // Authenticated application
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', DashboardPage::class)->name('dashboard');
     Route::get('/settings', SettingsPage::class)->name('settings');
     Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
 

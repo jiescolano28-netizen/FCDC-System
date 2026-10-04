@@ -1,3 +1,4 @@
+import './dashboard.js';
 const sidebar = document.querySelector('#app-sidebar');
 
 if (sidebar) {

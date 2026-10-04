@@ -47,7 +47,7 @@ test('POS is an authenticated named Livewire page in the shared shell', function
         ->assertSee(route('pos'), false);
 
     $this->get(route('dashboard'))->assertOk()
-        ->assertSee('\\/pos', false)
+        ->assertSee(route('pos'), false)
         ->assertDontSee('id="view-pos"', false);
 });
 
@@ -125,7 +125,9 @@ test('demo checkout preserves sale details in session without changing persisted
     $this->get(route('dashboard'))->assertOk()
         ->assertSee('Completed demonstration sales')
         ->assertSee('S-1050')
-        ->assertSee('2 × Pine board');
+        ->assertSee('2 × Pine board')
+        ->assertSee('₱50.00')
+        ->assertSee('"label":"Lumber","total":50', false);
 });
 
 test('checkout cannot exceed simulated stock and logout clears POS state for the next employee', function () {
