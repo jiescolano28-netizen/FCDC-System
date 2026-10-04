@@ -88,7 +88,7 @@ function drawHorizontalBars(context, data, width, height) {
     });
 }
 
-function initializeDashboard(page) {
+function initializeChartPage(page, updateEvent) {
     if (initializedPages.has(page)) return;
     initializedPages.add(page);
 
@@ -103,7 +103,7 @@ function initializeDashboard(page) {
     }
 
     if (window.Livewire) {
-        window.Livewire.on('dashboard-chart-update', ({ sales }) => {
+        window.Livewire.on(updateEvent, ({ sales }) => {
             const chart = page.querySelector('[data-dashboard-chart="sales"]');
             if (!chart || !Array.isArray(sales)) return;
             chart.dataset.chart = JSON.stringify(sales);
@@ -112,14 +112,24 @@ function initializeDashboard(page) {
     }
 }
 
-function initializeDashboards() {
+function initializeDashboard(page) {
+    initializeChartPage(page, 'dashboard-chart-update');
+}
+
+function initializeReports(page) {
+    initializeChartPage(page, 'reports-chart-update');
+}
+
+function initializePages() {
     document.querySelectorAll('[data-dashboard-page]').forEach(initializeDashboard);
+    document.querySelectorAll('[data-reports-page]').forEach(initializeReports);
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeDashboards, { once: true });
+    document.addEventListener('DOMContentLoaded', initializePages, { once: true });
 } else {
-    initializeDashboards();
+    initializePages();
 }
 
-document.addEventListener('livewire:navigated', initializeDashboards);
+document.addEventListener('livewire:navigated', initializePages);
+
