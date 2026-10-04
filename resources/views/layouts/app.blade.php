@@ -8,7 +8,7 @@
     @vite(['resources/css/shell.css', 'resources/js/shell.js'])
     @livewireStyles
 </head>
-<body @class(['app-body', 'tax-report-body' => request()->routeIs('tax.report')])>
+<body @class(['app-body', 'tax-report-body' => request()->routeIs('tax.report'), 'financial-statements-body' => request()->routeIs('accounting.financial-statements')])>
     <div class="app-shell">
         <aside class="sidebar" id="app-sidebar">
             <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" title="Collapse sidebar" aria-label="Collapse sidebar">&#10094;</button>
@@ -87,6 +87,9 @@
                         </a>
                         <a class="nav-item nav-child {{ request()->routeIs('accounting.general-ledger') ? 'active' : '' }}" href="{{ route('accounting.general-ledger') }}" @if (request()->routeIs('accounting.general-ledger')) aria-current="page" @endif>
                             <span class="nav-label">General Ledger</span>
+                        </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('accounting.financial-statements') ? 'active' : '' }}" href="{{ route('accounting.financial-statements') }}" @if (request()->routeIs('accounting.financial-statements')) aria-current="page" @endif>
+                            <span class="nav-label">Financial Statements</span>
                         </a>
                     </div>
                 </div>

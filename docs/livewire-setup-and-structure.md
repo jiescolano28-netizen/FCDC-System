@@ -87,3 +87,7 @@ The authenticated `/accounting` route uses the Accounting-grouped `AccountingOve
 ## Cash Disbursements demonstration
 
 The authenticated `/accounting/cash-disbursements` Livewire page uses the shared application shell and keeps reference/payee search and payment-method selection interactive over an empty dataset. Payment totals and counts remain unavailable; disbursement maintenance, payment processing, cash movement, and accounting postings are not implemented.
+
+## Financial Statements demonstration
+
+The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; no account mapping, accounting policy, financial calculation, session journal, POS sale, or persisted business data is used. Print styles isolate the document from the application shell.
