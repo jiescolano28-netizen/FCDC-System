@@ -23,7 +23,7 @@
 
             <nav class="nav" aria-label="Application navigation">
                 <a class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>
-                    <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboardssss</span>
+                    <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard</span>
                 </a>
                 <a class="nav-item {{ request()->routeIs('reports') ? 'active' : '' }}" href="{{ route('reports') }}" @if (request()->routeIs('reports')) aria-current="page" @endif>
                     <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Reports</span>
