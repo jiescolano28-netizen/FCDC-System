@@ -26,6 +26,7 @@ test('VAT return preparation is available only through its authenticated named r
         ->assertSee('VAT Return Preparation')
         ->assertSee('Tax Compliance demonstrations', false)
         ->assertSee('VAT Summary')
+        ->assertSee('href="'.route('tax.vat-return-preparation').'"', false)
         ->assertSee('Illustrative preparation interface', false)
         ->assertSee('does not replace eFPS, eBIRForms', false);
 });

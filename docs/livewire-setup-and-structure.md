@@ -1,6 +1,6 @@
 # Livewire Setup and Structure Proposal
 
-**Status:** Approved design; implementation in progress.
+**Status:** Approved design; the 18-screen authenticated module-page migration is complete. Accounting and tax production-release restrictions remain.
 
 ## Goal
 
@@ -95,3 +95,15 @@ The authenticated `/accounting/financial-statements` Livewire page offers Income
 ## Trial Balance demonstration
 
 The authenticated `/accounting/trial-balance` Livewire page uses the shared shell and provides date controls over an explicitly empty report. Totals remain unavailable; the report states it is not a real trial balance and does not certify balanced company books. It does not read demo journals, calculate balances, apply accounting period or closing rules, or persist reports. Print styles isolate this page's report and retain the selected dates and non-operational explanation.
+
+## Completed module-page cutover
+
+The authenticated application has 18 individually named Livewire page routes under the shared `layouts.app` shell: Dashboard and Reports; Inventory Overview and Management; Point of Sale; VAT Records, VAT Summary, Tax Report, and VAT Return Preparation; Accounting Overview, Chart of Accounts, Journal Entry, Accounts Payable, Cash Disbursements, General Ledger, Trial Balance, and Financial Statements; and Settings. VAT Return Preparation is inside the authenticated route group and in the Tax Compliance navigation dropdown. The public homepage, login, logout, and Inventory JSON endpoints retain their existing route contracts.
+
+Navigation uses normal named-route links, route-derived active states, and route-derived parent dropdown expansion. There are no dashboard section switches or page mounts that include the other screens. The obsolete `resources/css/style.css` was removed after confirming it had no consumers; Vite's public and shared-shell entrypoints remain in use.
+
+Demo POS cart, sales, and simulated stock; journal drafts/history; and Settings values are scoped to the authenticated employee in the current session. Session-backed demonstrations are shared by tabs using the same authenticated session and are cleared when that session is invalidated at logout. POS stock changes never update persisted Inventory; Dashboard and Reports identify demo sales separately, and VAT summaries use separate illustrative fixtures.
+
+Inventory and POS remain demonstration boundaries, not substitutes for approved financial or statutory behavior. Accounting selectors, journals, ledgers, statements, and VAT Return Preparation remain explicitly non-operational/non-filing where applicable. Do not interpret completion of the page migration as approval to release production accounting or tax functionality; retain the prerequisites above.
+
+Verification for this cutover: the authenticated browser smoke reached each of the 18 direct URLs and found the shared shell and one active navigation link on every page. Browser checks also confirmed Back/Forward, the active/expanded VAT Return Preparation navigation, mobile navigation without document overflow, and logout followed by guest redirection. `APP_ENV=testing SESSION_DRIVER=array DB_CONNECTION=sqlite DB_DATABASE=:memory: DB_URL= php artisan test` passed all 80 tests (680 assertions). `npm run build` completed; Vite noted that `/image/construction-bg.jpg` remains a runtime URL, served from `public/image/`.

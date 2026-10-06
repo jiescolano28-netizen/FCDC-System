@@ -62,6 +62,9 @@
                         <a class="nav-item nav-child {{ request()->routeIs('tax.report') ? 'active' : '' }}" href="{{ route('tax.report') }}" @if (request()->routeIs('tax.report')) aria-current="page" @endif>
                             <span class="nav-label">Tax Report</span>
                         </a>
+                        <a class="nav-item nav-child {{ request()->routeIs('tax.vat-return-preparation') ? 'active' : '' }}" href="{{ route('tax.vat-return-preparation') }}" @if (request()->routeIs('tax.vat-return-preparation')) aria-current="page" @endif>
+                            <span class="nav-label">VAT Return Preparation</span>
+                        </a>
                     </div>
                 </div>
                 @php($accountingNavigationActive = request()->routeIs('accounting.*'))
@@ -136,6 +139,3 @@
     @livewireScripts
 </body>
 </html>
-                        <a class="nav-item nav-child {{ request()->routeIs('tax.vat-return-preparation') ? 'active' : '' }}" href="{{ route('tax.vat-return-preparation') }}" @if (request()->routeIs('tax.vat-return-preparation')) aria-current="page" @endif>
-                            <span class="nav-label">VAT Return Preparation</span>
-                        </a>

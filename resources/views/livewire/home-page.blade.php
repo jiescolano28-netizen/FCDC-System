@@ -15,13 +15,6 @@
             font-family: Arial, sans-serif;
             color: #333;
             background: #fff;
-            opacity: 1;
-            transition: opacity 0.35s ease;
-        }
-
-        body.page-leaving {
-            opacity: 0;
-        }
 
         /* =========================
            NAVIGATION
@@ -1008,7 +1001,7 @@
     <nav class="navbar">
 
         <div class="logo">
-            <img src="https://fcdcsystem.com/image/company-logo.png"
+            <img src="{{ asset('image/company-logo.png') }}"
                 alt="Fabellon Construction and Development Corporation">
 
             <span class="company-name">
@@ -1022,7 +1015,7 @@
             <a href="#materials">Features</a>
             <a href="#contact">Contact</a>
 
-            <a href="https://fcdcsystem.com/login" class="login-btn">
+            <a href="{{ route('login') }}" class="login-btn">
                 Login
             </a>
         </div>
@@ -1055,7 +1048,7 @@
 
             <div class="hero-buttons">
 
-                <a href="https://fcdcsystem.com/login" class="btn-primary">
+                <a href="{{ route('login') }}" class="btn-primary">
                     Get Started&nbsp; →
                 </a>
 
@@ -1183,25 +1176,6 @@
 
     </footer>
 
-    <script>
-        document.querySelectorAll('a[href="https://fcdcsystem.com/login"]').forEach(function(link) {
-            link.addEventListener('click', function(event) {
-                event.preventDefault();
-
-                const destination = this.href;
-
-                document.body.classList.add('page-leaving');
-
-                setTimeout(function() {
-                    window.location.href = destination;
-                }, 200);
-            });
-        });
-
-        window.addEventListener('pageshow', function() {
-            document.body.classList.remove('page-leaving');
-        });
-    </script>
 
 
 

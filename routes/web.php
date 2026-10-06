@@ -1,26 +1,27 @@
 <?php
-
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\AccountsPayable;
 use App\Livewire\Accounting\CashDisbursements;
 use App\Livewire\Accounting\ChartOfAccounts;
+use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
-use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\TrialBalance;
 use App\Livewire\Dashboard\DashboardPage;
+use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
+use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Roles\RoleManagement;
-use App\Livewire\TaxCompliance\VatRecords;
-use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\Settings\SettingsPage;
-use App\Livewire\TaxCompliance\VatSummary;
 use App\Livewire\TaxCompliance\TaxReport;
+use App\Livewire\TaxCompliance\VatRecords;
+use App\Livewire\TaxCompliance\VatReturnPreparation;
+use App\Livewire\TaxCompliance\VatSummary;
 use Illuminate\Support\Facades\Route;
 
 // HOMEPAGE
@@ -50,7 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/accounting/general-ledger', GeneralLedger::class)->name('accounting.general-ledger');
     Route::get('/accounting/trial-balance', TrialBalance::class)->name('accounting.trial-balance');
     Route::get('/settings', SettingsPage::class)->name('settings');
-    Route::get('/pos', \App\Livewire\Pos\PointOfSale::class)->name('pos');
+    Route::get('/pos', PointOfSale::class)->name('pos');
     Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');
 
     Route::get('/inventory/manage', InventoryManagement::class)->name('inventory.management');
@@ -68,6 +69,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/roles', RoleManagement::class)
         ->middleware('permission:roles.view')
         ->name('roles.index');
-});
-use App\Livewire\TaxCompliance\VatReturnPreparation;
     Route::get('/tax/vat-return-preparation', VatReturnPreparation::class)->name('tax.vat-return-preparation');
+});
