@@ -91,3 +91,7 @@ The authenticated `/accounting/cash-disbursements` Livewire page uses the shared
 ## Financial Statements demonstration
 
 The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; no account mapping, accounting policy, financial calculation, session journal, POS sale, or persisted business data is used. Print styles isolate the document from the application shell.
+
+## Trial Balance demonstration
+
+The authenticated `/accounting/trial-balance` Livewire page uses the shared shell and provides date controls over an explicitly empty report. Totals remain unavailable; the report states it is not a real trial balance and does not certify balanced company books. It does not read demo journals, calculate balances, apply accounting period or closing rules, or persist reports. Print styles isolate this page's report and retain the selected dates and non-operational explanation.

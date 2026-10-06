@@ -31,7 +31,8 @@ test('trial balance is an authenticated named page in accounting navigation', fu
         ->assertSee('Total credits')
         ->assertSee('No trial balance is available.')
         ->assertSee('This is not a real trial balance and does not certify that company books are balanced.')
-        ->assertSee(route('accounting.trial-balance'), false);
+        ->assertSee(route('accounting.trial-balance'), false)
+        ->assertSee('class="app-body trial-balance-body"', false);
 });
 
 test('period selections update the printable empty report without calculating demo journals', function () {

@@ -482,11 +482,11 @@
     .trial-balance-report { padding: 16px; }
 }
 @media print {
-    body:has(.trial-balance-page) * { visibility: hidden !important; }
-    body:has(.trial-balance-page) #trial-balance-report,
-    body:has(.trial-balance-page) #trial-balance-report * { visibility: visible !important; }
-    body:has(.trial-balance-page) #trial-balance-report { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
-    body:has(.trial-balance-page) .trial-balance-empty { color: #333; background: #fff; }
+    body.trial-balance-body * { visibility: hidden !important; }
+    body.trial-balance-body #trial-balance-report,
+    body.trial-balance-body #trial-balance-report * { visibility: visible !important; }
+    body.trial-balance-body #trial-balance-report { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
+    body.trial-balance-body .trial-balance-empty { color: #333; background: #fff; }
 }
 
 .financial-statements-page { max-width: 1440px; margin: 0 auto; }
