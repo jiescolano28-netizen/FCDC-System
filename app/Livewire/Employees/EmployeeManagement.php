@@ -3,6 +3,7 @@
 namespace App\Livewire\Employees;
 
 use App\Models\Employee;
+use App\Support\ActivityAudit;
 use App\Support\AdministratorAccess;
 use App\Support\EmployeeRoleAssignment;
 use App\Support\RolePermissionCatalog;
@@ -124,7 +125,18 @@ class EmployeeManagement extends Component
     {
         $this->authorizePermission('employees.delete');
 
-        Employee::onlyTrashed()->findOrFail($id)->restore();
+        DB::transaction(function () use ($id): void {
+            $employee = Employee::onlyTrashed()->findOrFail($id);
+            $deletedAt = $employee->deleted_at?->toISOString();
+            $employee->restore();
+
+            ActivityAudit::recordChange(
+                $employee,
+                'Employee restored',
+                ['deleted_at' => null],
+                ['deleted_at' => $deletedAt],
+            );
+        });
     }
 
     public function resetForm(): void

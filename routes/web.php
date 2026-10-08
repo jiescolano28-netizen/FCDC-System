@@ -22,6 +22,7 @@ use App\Livewire\TaxCompliance\TaxReport;
 use App\Livewire\TaxCompliance\VatRecords;
 use App\Livewire\TaxCompliance\VatReturnPreparation;
 use App\Livewire\TaxCompliance\VatSummary;
+use App\Livewire\ActivityLog\ActivityLogPage;
 use Illuminate\Support\Facades\Route;
 
 // HOMEPAGE
@@ -75,4 +76,7 @@ Route::middleware('auth')->group(function () {
         ->name('roles.index');
     Route::get('/tax/vat-return-preparation', VatReturnPreparation::class)
         ->middleware('permission:tax.view')->name('tax.vat-return-preparation');
+    Route::get('/activity-log', ActivityLogPage::class)
+        ->middleware('permission:activity-log.view')
+        ->name('activity-log');
 });

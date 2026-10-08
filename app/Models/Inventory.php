@@ -1,11 +1,13 @@
 <?php
 
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Inventory extends Model
 {
+    use LogsActivity;
     protected $fillable = [
         'name',
         'category',
@@ -16,6 +18,15 @@ class Inventory extends Model
         'reorder_level',
         'image',
     ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly($this->fillable)
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
 
     protected $casts = [
         'qty' => 'decimal:2',

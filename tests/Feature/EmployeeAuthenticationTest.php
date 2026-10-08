@@ -4,6 +4,7 @@ use App\Models\Employee;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -29,6 +30,11 @@ test('employees with provisioned accounts can sign in', function () {
     ])->assertRedirect(route('dashboard'));
 
     $this->assertAuthenticatedAs($employee);
+
+    $activity = Activity::where('description', 'User logged in')->firstOrFail();
+    expect($activity->causer)->toBeInstanceOf(Employee::class)
+        ->and($activity->causer->is($employee))->toBeTrue()
+        ->and($activity->subject->is($employee))->toBeTrue();
 });
 
 test('public employee registration is unavailable', function () {
@@ -70,6 +76,10 @@ test('logout invalidates the authenticated employee session', function () {
 
     $this->assertGuest();
     expect(session()->getId())->not->toBe($sessionId);
+
+    $activity = Activity::where('description', 'User logged out')->firstOrFail();
+    expect($activity->causer->is($employee))->toBeTrue()
+        ->and($activity->subject->is($employee))->toBeTrue();
 });
 
 test('application screens and inventory endpoints require authentication', function () {

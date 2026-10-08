@@ -33,7 +33,21 @@ class EmployeeRoleAssignment
                 'selectedRoleIds' => 'The last administrator cannot lose administrator access.',
             ]);
         }
+        $oldRoleNames = $employee->exists
+            ? $employee->roles()->orderBy('name')->pluck('name')->all()
+            : [];
 
         $employee->syncRoles($requestedRoleIds->all());
+
+        $newRoleNames = $employee->roles()->orderBy('name')->pluck('name')->all();
+
+        if ($oldRoleNames !== $newRoleNames) {
+            ActivityAudit::recordChange(
+                $employee,
+                'Employee roles updated',
+                ['roles' => $newRoleNames],
+                ['roles' => $oldRoleNames],
+            );
+        }
     }
 }

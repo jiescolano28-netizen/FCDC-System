@@ -121,9 +121,9 @@
                         </div>
                     </div>
                 @endcan
-                @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*'))
+                @php($settingsNavigationActive = request()->routeIs('settings', 'employees.*', 'roles.*', 'activity-log'))
 
-                @if (auth()->user()->can('settings.view') || auth()->user()->can('employees.view') || auth()->user()->can('roles.view'))
+                @if (auth()->user()->can('settings.view') || auth()->user()->can('employees.view') || auth()->user()->can('roles.view') || auth()->user()->can('activity-log.view'))
                     <div class="nav-group">
                         <button class="nav-item nav-parent {{ $settingsNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="settings-menu" aria-controls="settings-menu" aria-expanded="{{ $settingsNavigationActive ? 'true' : 'false' }}">
                             <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
@@ -142,6 +142,11 @@
                             @can('roles.view')
                                 <a class="nav-item nav-child {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}" @if (request()->routeIs('roles.*')) aria-current="page" @endif>
                                     <span class="nav-icon" aria-hidden="true">⚿</span><span class="nav-label">Roles</span>
+                                </a>
+                            @endcan
+                            @can('activity-log.view')
+                                <a class="nav-item nav-child {{ request()->routeIs('activity-log') ? 'active' : '' }}" href="{{ route('activity-log') }}" @if (request()->routeIs('activity-log')) aria-current="page" @endif>
+                                    <span class="nav-icon" aria-hidden="true">◷</span><span class="nav-label">Activity log</span>
                                 </a>
                             @endcan
                         </div>

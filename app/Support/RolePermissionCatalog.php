@@ -49,6 +49,9 @@ class RolePermissionCatalog
                 'roles.update' => 'Update roles and permissions',
                 'roles.delete' => 'Delete roles',
             ],
+            'Activity Log' => [
+                'activity-log.view' => 'View activity log',
+            ],
         ];
     }
 

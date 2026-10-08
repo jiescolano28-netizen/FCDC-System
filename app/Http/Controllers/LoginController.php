@@ -25,6 +25,12 @@ class LoginController extends Controller
             'email' => $credentials['email'],
             'password' => $credentials['password'],
         ], $remember)) {
+            $employee = Auth::user();
+
+            activity()
+                ->causedBy($employee)
+                ->performedOn($employee)
+                ->log('User logged in');
 
             $request->session()->regenerate();
 
@@ -40,6 +46,15 @@ class LoginController extends Controller
 
     public function logout(Request $request)
     {
+        $employee = Auth::user();
+
+        if ($employee) {
+            activity()
+                ->causedBy($employee)
+                ->performedOn($employee)
+                ->log('User logged out');
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();

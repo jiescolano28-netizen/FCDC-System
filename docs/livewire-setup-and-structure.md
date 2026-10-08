@@ -1,6 +1,6 @@
 # Livewire Setup and Structure Proposal
 
-**Status:** Approved design; the 18-screen authenticated module-page migration is complete. Accounting and tax production-release restrictions remain.
+**Status:** Approved design; the 19-screen authenticated module-page migration is complete. Accounting and tax production-release restrictions remain.
 
 ## Goal
 
@@ -70,6 +70,11 @@ Settings values are temporary session state, not business settings. The session 
 
 Employee create and update forms use a native dialog controlled by the Livewire employee component. Role assignment remains permission-gated and uses Choices.js for searchable multiselect input; SweetAlert2 handles deletion confirmation and save/delete feedback. Both frontend dependencies are installed through npm and bundled by Vite.
 
+## Activity log
+
+The authenticated `/activity-log` Livewire page is available only to employees with the `activity-log.view` permission; its sidebar link uses the same permission. It shows all employees' successful persisted Inventory, Employee, and Role changes newest-first, with paginated actor/action/record details and before/after values for changed fields. Passwords and tokens are never recorded. Session-only POS, Settings, and Journal Entry demonstrations and ordinary page views are excluded.
+
+
 ## Dashboard
 
 The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown separately from recorded business activity.
@@ -102,7 +107,7 @@ The authenticated `/accounting/trial-balance` Livewire page uses the shared shel
 
 ## Completed module-page cutover
 
-The authenticated application has 18 individually named Livewire page routes under the shared `layouts.app` shell: Dashboard and Reports; Inventory Overview and Management; Point of Sale; VAT Records, VAT Summary, Tax Report, and VAT Return Preparation; Accounting Overview, Chart of Accounts, Journal Entry, Accounts Payable, Cash Disbursements, General Ledger, Trial Balance, and Financial Statements; and Settings. VAT Return Preparation is inside the authenticated route group and in the Tax Compliance navigation dropdown. The public homepage, login, logout, and Inventory JSON endpoints retain their existing route contracts.
+The authenticated application has 19 individually named Livewire page routes under the shared `layouts.app` shell: Dashboard and Reports; Inventory Overview and Management; Point of Sale; VAT Records, VAT Summary, Tax Report, and VAT Return Preparation; Accounting Overview, Chart of Accounts, Journal Entry, Accounts Payable, Cash Disbursements, General Ledger, Trial Balance, and Financial Statements; Settings; and Activity Log. The public homepage, login, logout, and Inventory JSON endpoints retain their existing route contracts.
 
 Navigation uses normal named-route links, route-derived active states, and route-derived parent dropdown expansion. There are no dashboard section switches or page mounts that include the other screens. The obsolete `resources/css/style.css` was removed after confirming it had no consumers; Vite's public and shared-shell entrypoints remain in use.
 

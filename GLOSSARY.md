@@ -8,6 +8,10 @@ Business terminology for the construction-material inventory application. Illust
 A capability granted through an employee's assigned role that determines which business areas or actions the employee may use.
 
 
+**Audit activity**:
+A record of a successful change to persisted business or access-control data, identifying the actor, action, affected record, and changed fields. Illustrative and session-only interactions are not audit activity.
+_Avoid_: Demo activity when referring to an audit record
+
 **Role**:
 A named set of access permissions that an employee can hold.
 

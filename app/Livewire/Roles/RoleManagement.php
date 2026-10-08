@@ -3,6 +3,7 @@
 namespace App\Livewire\Roles;
 
 use App\Models\Employee;
+use App\Support\ActivityAudit;
 use App\Support\EmployeeRoleAssignment;
 use App\Support\RolePermissionCatalog;
 use Illuminate\Support\Facades\DB;
@@ -120,14 +121,47 @@ class RoleManagement extends Component
 
         $isNew = $role === null;
         $role ??= new Role(['guard_name' => 'web']);
-        $role->name = $validated['name'];
-        $role->guard_name = 'web';
-        $role->save();
-        $role->syncPermissions(
-            Permission::where('guard_name', 'web')
+        $oldName = $role->exists ? $role->name : null;
+        $oldPermissions = $role->exists
+            ? $role->permissions()->orderBy('name')->pluck('name')->all()
+            : [];
+
+        $role = DB::transaction(function () use ($role, $isNew, $oldName, $oldPermissions, $validated): Role {
+            $role->name = $validated['name'];
+            $role->guard_name = 'web';
+            $role->save();
+
+            $permissions = Permission::where('guard_name', 'web')
                 ->whereIn('name', $validated['selectedPermissionNames'] ?? [])
-                ->get()
-        );
+                ->get();
+            $role->syncPermissions($permissions);
+
+            $newPermissions = $role->permissions()->orderBy('name')->pluck('name')->all();
+            $attributes = $isNew ? [
+                'name' => $role->name,
+                'permissions' => $newPermissions,
+            ] : [];
+            $old = [];
+
+            if (! $isNew && $oldName !== $role->name) {
+                $attributes['name'] = $role->name;
+                $old['name'] = $oldName;
+            }
+
+            if (! $isNew && $oldPermissions !== $newPermissions) {
+                $attributes['permissions'] = $newPermissions;
+                $old['permissions'] = $oldPermissions;
+            }
+
+            ActivityAudit::recordChange(
+                $role,
+                $isNew ? 'Role created' : 'Role updated',
+                $attributes,
+                $old,
+            );
+
+            return $role;
+        });
 
         $this->selectedRoleId = $role->id;
         $this->editingId = $role->id;
@@ -164,6 +198,13 @@ class RoleManagement extends Component
         $copy = DB::transaction(function () use ($source, $name): Role {
             $copy = Role::create(['name' => $name, 'guard_name' => 'web']);
             $copy->syncPermissions($source->permissions);
+            $permissions = $copy->permissions()->orderBy('name')->pluck('name')->all();
+
+            ActivityAudit::recordChange(
+                $copy,
+                'Role duplicated',
+                ['name' => $copy->name, 'permissions' => $permissions],
+            );
 
             return $copy;
         });
@@ -273,7 +314,15 @@ class RoleManagement extends Component
                 ]);
             }
 
-            $role->delete();
+            DB::transaction(function () use ($role): void {
+                $old = [
+                    'name' => $role->name,
+                    'permissions' => $role->permissions()->orderBy('name')->pluck('name')->all(),
+                ];
+                $role->delete();
+
+                ActivityAudit::recordChange($role, 'Role deleted', [], $old);
+            });
         } catch (ValidationException $exception) {
             $message = collect($exception->errors())->flatten()->first() ?? 'Unable to delete this role.';
             $this->dispatch('role-error', message: $message);
