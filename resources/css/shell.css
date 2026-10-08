@@ -211,6 +211,9 @@
 .dashboard-stat-label { margin: 0; color: var(--slate-500); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
 .dashboard-stat-value { margin: 2px 0 0; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
 .dashboard-stat-note { margin: 2px 0 0; color: var(--slate-400); font-size: 12px; }
+.dashboard-stat-link { display: inline-block; margin-top: 6px; color: var(--emerald-700); font-size: 12px; font-weight: 600; text-decoration: none; }
+.dashboard-stat-link:hover { color: var(--emerald-800); text-decoration: underline; }
+.dashboard-stat-link:focus-visible { border-radius: 2px; outline: 2px solid var(--emerald-700); outline-offset: 2px; }
 .dashboard-chart-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); align-items: start; gap: 16px; margin-top: 16px; }
 .dashboard-card-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dashboard-card-heading h2, .dashboard-card-title { margin: 0 0 12px; color: var(--slate-700); font-size: 13px; font-weight: 600; }

@@ -39,8 +39,8 @@ test('dashboard route serves only the authenticated dashboard Livewire page', fu
         ->assertSee('Dashboard')
         ->assertSee('dashboard-page', false)
         ->assertSee(route('pos'), false)
-        ->assertDontSee('Cart is empty')
-        ->assertSee('All inventory items are above their reorder levels.')
+        ->assertSee('Nothing to show')
+        ->assertDontSee('View sale details')
         ->assertSee('No completed demo sales in this session.');
 });
 
@@ -67,27 +67,36 @@ test('dashboard metrics use persisted inventory and show session demo sales sepa
         ->assertSee('₱58.00')
         ->assertSee('2 tracked materials')
         ->assertSee('1 item needs reordering')
+        ->assertSee('₱44.80')
         ->assertSee('S-1050')
-        ->assertSee('Latest demo sale')
-        ->assertSee('These details are not recorded sales')
-        ->assertSee('Sales chart uses illustrative sample data');
+        ->assertSee('Latest inventory item')
+        ->assertSee('Cement bag')
+        ->assertSee('Masonry · 1.00 piece')
+        ->assertSee('Session-only demo checkouts, grouped by checkout date');
 });
 
-test('dashboard period changes update illustrative chart without treating demo sales as reporting totals', function () {
+test('dashboard chart aggregates current employee demo sales by selected period', function () {
     $employee = createDashboardEmployee();
-    $this->actingAs($employee);
+    $this->actingAs($employee)->travelTo(now()->setDate(2026, 10, 8)->startOfDay());
+    session()->put('demo.pos.employee.'.$employee->id.'.sales', [
+        ['id' => 'S-1052', 'date' => '2026-10-08', 'total' => 40.25, 'items' => 1, 'lines' => []],
+        ['id' => 'S-1051', 'date' => '2026-10-05', 'total' => 100.50, 'items' => 2, 'lines' => []],
+        ['id' => 'S-1050', 'date' => '2026-10-04', 'total' => 75.00, 'items' => 1, 'lines' => []],
+    ]);
 
     Livewire::test(DashboardPage::class)
-        ->assertSee('Sales this week')
-        ->assertSee('₱4,087.35')
+        ->assertSee('Demo sales this week')
+        ->assertSee('"label":"Mon","total":100.5', false)
+        ->assertSee('"label":"Thu","total":40.25', false)
+        ->assertDontSee('"label":"Sun","total":75', false)
         ->call('setSalesPeriod', 'month')
-        ->assertSee('Sales this month')
-        ->assertSee('Wk 1')
-        ->assertSee('₱13,660.65')
+        ->assertSee('Demo sales this month')
+        ->assertSee('"label":"Wk 1","total":175.5', false)
+        ->assertSee('"label":"Wk 2","total":40.25', false)
         ->call('setSalesPeriod', 'year')
-        ->assertSee('Sales this year')
-        ->assertSee('Jan')
-        ->assertSee('₱85,653.85')
+        ->assertSee('Demo sales this year')
+        ->assertSee('"label":"Oct","total":215.75', false)
         ->set('salesPeriod', 'unknown')
-        ->assertSee('Sales this week');
+        ->assertSee('Demo sales this week')
+        ->assertSee('"label":"Mon","total":100.5', false);
 });

@@ -72,9 +72,13 @@ Employee create and update forms use a native dialog controlled by the Livewire 
 
 ## Dashboard
 
-The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown as demonstrations, separate from the chart's illustrative fixed series.
+The authenticated `/dashboard` named route uses the `DashboardPage` Livewire component in `app/Livewire/Dashboard/`. Inventory count, value, category totals, and reorder alerts are calculated from persisted inventory. Demo sales remain employee-session data and are shown separately from recorded business activity.
 
-The dashboard chart renderer is loaded through the shared Vite bundle but initializes only when the dashboard root is present. Livewire period selection sends updated fixture data to that page's sales chart; no chart values are presented as persisted sales.
+The dashboard's sales chart and period total dynamically aggregate the signed-in employee's session-only demo checkouts by checkout date: daily for the current Monday–Sunday week, by day-of-month week for the current month, and by calendar month for the current year. Period selection refreshes both values and chart data. The chart is labeled as demonstration activity and never represents persisted sales.
+
+The Latest inventory item metric reads the newest persisted inventory record, ordered by creation time and then ID, and displays its name, category, and current quantity. It shows an empty state when no inventory records exist. Session-only demo sales remain confined to the chart and completed-sales list.
+
+The chart renderer is loaded through the shared Vite bundle and initializes only when the dashboard root is present. Livewire period selection sends the newly aggregated data to the chart.
 
 ## VAT demonstration pages
 

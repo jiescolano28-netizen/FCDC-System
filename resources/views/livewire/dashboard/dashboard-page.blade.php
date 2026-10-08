@@ -16,18 +16,20 @@
             <div><p class="dashboard-stat-label">Low stock items</p><p class="dashboard-stat-value">{{ $lowStockItems->count() }}</p><p class="dashboard-stat-note">{{ $lowStockItems->count() === 1 ? '1 item needs reordering' : 'Items at or below reorder level' }}</p></div>
         </article>
         <article class="dashboard-card dashboard-stat">
-            <span class="dashboard-stat-icon" aria-hidden="true">₱</span>
-            <div><p class="dashboard-stat-label">Latest demo sale</p>
-                @if (isset($sales[0]))
-                    <p class="dashboard-stat-value">{{ $sales[0]['id'] }}</p><p class="dashboard-stat-note">{{ $sales[0]['date'] }} · {{ $sales[0]['items'] }} item(s)</p>
+            <span class="dashboard-stat-icon" aria-hidden="true">▧</span>
+            <div><p class="dashboard-stat-label">Latest inventory item</p>
+                @if ($latestInventoryItem)
+                    <p class="dashboard-stat-value">{{ $latestInventoryItem->name }}</p>
+                    <p class="dashboard-stat-note">{{ $latestInventoryItem->category }} · {{ number_format((float) $latestInventoryItem->qty, 2) }} {{ $latestInventoryItem->unit }}</p>
                 @else
-                    <p class="dashboard-stat-value">No demo sales yet</p><p class="dashboard-stat-note">Session-only activity</p>
+                    <p class="dashboard-stat-value">Nothing to show</p>
+                    <p class="dashboard-stat-note">Add a material to inventory to see it here.</p>
                 @endif
             </div>
         </article>
         <article class="dashboard-card dashboard-stat">
             <span class="dashboard-stat-icon" aria-hidden="true">▥</span>
-            <div><p class="dashboard-stat-label">{{ $period['title'] }}</p><p class="dashboard-stat-value">₱{{ number_format($periodTotal, 2) }}</p><p class="dashboard-stat-note">Illustrative sample · {{ $period['subLabel'] }}</p></div>
+            <div><p class="dashboard-stat-label">{{ $period['title'] }}</p><p class="dashboard-stat-value">₱{{ number_format($periodTotal, 2) }}</p><p class="dashboard-stat-note">Session-only demonstration total · {{ $period['subLabel'] }}</p></div>
         </article>
     </div>
 
@@ -35,15 +37,15 @@
         <section class="dashboard-card dashboard-sales-card" aria-labelledby="sales-chart-title">
             <div class="dashboard-card-heading">
                 <h2 id="sales-chart-title">{{ $period['title'] }}</h2>
-                <div class="dashboard-period-toggle" role="group" aria-label="Illustrative sales chart period">
+                <div class="dashboard-period-toggle" role="group" aria-label="Demo sales chart period">
                     @foreach (['week' => 'Week', 'month' => 'Month', 'year' => 'Year'] as $key => $label)
                         <button type="button" wire:click="setSalesPeriod('{{ $key }}')" @class(['active' => $salesPeriod === $key]) @if ($salesPeriod === $key) aria-pressed="true" @else aria-pressed="false" @endif>{{ $label }}</button>
                     @endforeach
                 </div>
             </div>
-            <p class="dashboard-chart-note">Sales chart uses illustrative sample data; it is not session sales or persisted reporting.</p>
+            <p class="dashboard-chart-note">Session-only demo checkouts, grouped by checkout date; these are not recorded business sales.</p>
             <div class="dashboard-chart-wrap" data-dashboard-chart="sales" data-chart='@json($period['data'])'>
-                <canvas data-chart-canvas role="img" aria-label="Illustrative sales amounts for {{ strtolower($period['title']) }}"></canvas>
+                <canvas data-chart-canvas role="img" aria-label="Demo sales amounts for {{ strtolower($period['title']) }}"></canvas>
             </div>
         </section>
 

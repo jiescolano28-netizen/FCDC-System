@@ -1,6 +1,6 @@
-<section class="card" style="margin-top:16px;" aria-label="Completed demonstration sales">
+<section class="card" id="completed-demo-sales" style="margin-top:16px;" aria-label="Completed demonstration sales">
     <h2 class="card-title">Completed demonstration sales</h2>
-    <p class="print-note">Session-only demo activity. These details are not recorded sales and are separate from illustrative chart data.</p>
+    <p class="print-note">Session-only demo activity. These details are not recorded business sales; the chart above aggregates their totals.</p>
 
     @forelse ($sales as $sale)
         <article class="list-row" style="display:block;">
