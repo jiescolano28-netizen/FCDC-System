@@ -123,9 +123,10 @@ test('demo checkout preserves sale details in session without changing persisted
 
     $this->get(route('pos'))->assertOk()->assertSee('8.00 piece left')->assertSee('S-1050');
     $this->get(route('dashboard'))->assertOk()
-        ->assertSee('Completed demonstration sales')
-        ->assertSee('S-1050')
-        ->assertSee('2 × Pine board')
+        ->assertSee('Persisted inventory overview.')
+        ->assertDontSee('Completed demonstration sales')
+        ->assertDontSee('S-1050')
+        ->assertDontSee('₱44.80')
         ->assertSee('₱50.00')
         ->assertSee('"label":"Lumber","total":50', false);
 });

@@ -31,7 +31,8 @@ function createDashboardInventory(array $attributes = []): Inventory
     ], $attributes));
 }
 
-test('dashboard route serves only the authenticated dashboard Livewire page', function () {
+
+test('dashboard route serves only the authenticated inventory dashboard', function () {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 
     $employee = createDashboardEmployee();
@@ -39,22 +40,51 @@ test('dashboard route serves only the authenticated dashboard Livewire page', fu
         ->assertSee('Dashboard')
         ->assertSee('dashboard-page', false)
         ->assertSee(route('pos'), false)
-        ->assertSee('Nothing to show')
-        ->assertDontSee('View sale details')
-        ->assertSee('No completed demo sales in this session.');
+        ->assertSee('No inventory materials have been added yet.')
+        ->assertDontSee('Demo sales')
+        ->assertDontSee('VAT')
+        ->assertDontSee('Accounts payable');
 });
-
-test('dashboard metrics use persisted inventory and show session demo sales separately', function () {
+test('dashboard shows persisted inventory summaries, stock boundaries, and recent materials without demo business figures', function () {
     $employee = createDashboardEmployee();
     $this->actingAs($employee);
-    createDashboardInventory();
+
+    createDashboardInventory([
+        'name' => 'Pine board',
+        'category' => 'Lumber',
+        'qty' => 10,
+        'unit_cost' => 5,
+        'reorder_level' => 2,
+        'created_at' => now()->subDay(),
+    ]);
     createDashboardInventory([
         'name' => 'Cement bag',
         'category' => 'Masonry',
         'qty' => 1,
         'unit_cost' => 8,
         'reorder_level' => 1,
+        'created_at' => now(),
     ]);
+    createDashboardInventory([
+        'name' => 'Steel rod',
+        'category' => 'Metal',
+        'qty' => 0,
+        'unit_cost' => 12,
+        'reorder_level' => 5,
+        'created_at' => now()->subHours(2),
+    ]);
+    createDashboardInventory([
+        'name' => 'Tile',
+        'category' => 'Finishes',
+        'qty' => -2,
+        'unit_cost' => 3,
+        'reorder_level' => 0,
+        'created_at' => now()->subHours(3),
+    ]);
+    Inventory::where('name', 'Pine board')->update(['created_at' => now()->subDay()]);
+    Inventory::where('name', 'Cement bag')->update(['created_at' => now()]);
+    Inventory::where('name', 'Steel rod')->update(['created_at' => now()->subHours(2)]);
+    Inventory::where('name', 'Tile')->update(['created_at' => now()->subHours(3)]);
     session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
         'id' => 'S-1050',
         'date' => '2026-10-04',
@@ -64,39 +94,33 @@ test('dashboard metrics use persisted inventory and show session demo sales sepa
     ]]);
 
     Livewire::test(DashboardPage::class)
-        ->assertSee('₱58.00')
-        ->assertSee('2 tracked materials')
-        ->assertSee('1 item needs reordering')
-        ->assertSee('₱44.80')
-        ->assertSee('S-1050')
-        ->assertSee('Latest inventory item')
+        ->assertSee('4 tracked materials')
+        ->assertSeeInOrder(['Low stock items', '1', 'Available items at or below reorder level'])
+        ->assertSee('Low stock alerts')
         ->assertSee('Cement bag')
-        ->assertSee('Masonry · 1.00 piece')
-        ->assertSee('Session-only demo checkouts, grouped by checkout date');
+        ->assertSee('Steel rod')
+        ->assertSee('Tile')
+        ->assertSeeInOrder(['Out of stock items', '2', 'Items with zero or negative quantity'])
+        ->assertSee('Recently added materials')
+        ->assertSeeInOrder(['Cement bag', 'Steel rod', 'Tile', 'Pine board'])
+        ->assertSee('Inventory value by category')
+        ->assertSee('"label":"Lumber","total":50', false)
+        ->assertSee('"label":"Masonry","total":8', false)
+        ->assertDontSee('Demo sales')
+        ->assertDontSee('S-1050')
+        ->assertDontSee('₱44.80')
+        ->assertDontSee('VAT')
+        ->assertDontSee('Accounts payable');
 });
 
-test('dashboard chart aggregates current employee demo sales by selected period', function () {
-    $employee = createDashboardEmployee();
-    $this->actingAs($employee)->travelTo(now()->setDate(2026, 10, 8)->startOfDay());
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [
-        ['id' => 'S-1052', 'date' => '2026-10-08', 'total' => 40.25, 'items' => 1, 'lines' => []],
-        ['id' => 'S-1051', 'date' => '2026-10-05', 'total' => 100.50, 'items' => 2, 'lines' => []],
-        ['id' => 'S-1050', 'date' => '2026-10-04', 'total' => 75.00, 'items' => 1, 'lines' => []],
-    ]);
+test('dashboard shows useful empty states when inventory and low-stock matches are absent', function () {
+    $this->actingAs(createDashboardEmployee());
 
     Livewire::test(DashboardPage::class)
-        ->assertSee('Demo sales this week')
-        ->assertSee('"label":"Mon","total":100.5', false)
-        ->assertSee('"label":"Thu","total":40.25', false)
-        ->assertDontSee('"label":"Sun","total":75', false)
-        ->call('setSalesPeriod', 'month')
-        ->assertSee('Demo sales this month')
-        ->assertSee('"label":"Wk 1","total":175.5', false)
-        ->assertSee('"label":"Wk 2","total":40.25', false)
-        ->call('setSalesPeriod', 'year')
-        ->assertSee('Demo sales this year')
-        ->assertSee('"label":"Oct","total":215.75', false)
-        ->set('salesPeriod', 'unknown')
-        ->assertSee('Demo sales this week')
-        ->assertSee('"label":"Mon","total":100.5', false);
+        ->assertSee('0 tracked materials')
+        ->assertSee('₱0.00')
+        ->assertSee('No inventory materials have been added yet.')
+        ->assertSee('No low-stock items need reordering.')
+        ->assertSee('No inventory categories to chart yet.')
+        ->assertSee('0');
 });
