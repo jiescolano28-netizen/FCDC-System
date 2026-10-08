@@ -95,6 +95,7 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
 
     Livewire::test(DashboardPage::class)
         ->assertSee('4 tracked materials')
+        ->assertSee('₱52.00')
         ->assertSeeInOrder(['Low stock items', '1', 'Available items at or below reorder level'])
         ->assertSee('Low stock alerts')
         ->assertSee('Cement bag')
