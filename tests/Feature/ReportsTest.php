@@ -12,11 +12,11 @@ uses(RefreshDatabase::class);
 
 function createReportsEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'reports.manager',
         'email' => 'reports@example.com',
         'password' => Hash::make('reports-password'),
-    ]);
+    ]), ['reports.view', 'dashboard.view', 'pos.view', 'pos.checkout']);
 }
 
 function createReportsInventory(array $attributes = []): Inventory

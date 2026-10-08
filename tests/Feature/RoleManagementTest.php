@@ -95,3 +95,65 @@ test('employees without role view permission cannot open role management', funct
 
     $this->actingAs($employee)->get(route('roles.index'))->assertForbidden();
 });
+
+test('role manager persists permission presets and duplicates saved roles', function () {
+    app(\Database\Seeders\RolePermissionSeeder::class)->run();
+    $this->actingAs(roleManagementAdmin());
+    $role = Role::create(['name' => 'reviewer', 'guard_name' => 'web']);
+    $role->givePermissionTo(Permission::findOrCreate('employees.view', 'web'));
+
+    Livewire::test(RoleManagement::class)
+        ->call('edit', $role->id)
+        ->set('name', 'Read-only reviewer')
+        ->call('applyPreset', 'read')
+        ->call('saveSelected')
+        ->assertHasNoErrors();
+
+    $readPermissions = array_values(array_filter(
+        RolePermissionCatalog::names(),
+        fn (string $name) => str_ends_with($name, '.view'),
+    ));
+    $role->refresh();
+    expect($role->name)->toBe('Read-only reviewer')
+        ->and($role->permissions()->pluck('name')->all())->toEqualCanonicalizing($readPermissions);
+
+    Livewire::test(RoleManagement::class)
+        ->call('selectRole', $role->id)
+        ->call('duplicateRole')
+        ->assertHasNoErrors()
+        ->assertSee('Copy of Read-only reviewer');
+
+    $copy = Role::where('name', 'Copy of Read-only reviewer')->firstOrFail();
+    expect($copy->permissions()->pluck('name')->all())->toEqualCanonicalizing($readPermissions);
+});
+
+test('role manager persists multiple employee roles through role assignments', function () {
+    $admin = roleManagementAdmin();
+    $admin->roles()->firstOrFail()->givePermissionTo(Permission::findOrCreate('employees.assign-roles', 'web'));
+    $this->actingAs($admin);
+
+    $firstRole = Role::create(['name' => 'project-reader', 'guard_name' => 'web']);
+    $secondRole = Role::create(['name' => 'project-editor', 'guard_name' => 'web']);
+    $employee = Employee::create([
+        'username' => 'multi-role.staff',
+        'email' => 'multi-role.staff@example.com',
+        'password' => Hash::make('staff-password'),
+    ]);
+    $administratorRole = Role::create([
+        'name' => RolePermissionCatalog::ADMIN_ROLE,
+        'guard_name' => 'web',
+    ]);
+    $employee->assignRole($administratorRole);
+
+    Livewire::test(RoleManagement::class)
+        ->set('employeeRoleSelections.'.$employee->id, [(string) $firstRole->id, (string) $secondRole->id])
+        ->call('assignEmployeeRoles', $employee->id)
+        ->assertHasNoErrors();
+
+    expect($employee->fresh()->roles()->pluck('name')->all())
+        ->toEqualCanonicalizing([
+            RolePermissionCatalog::ADMIN_ROLE,
+            'project-reader',
+            'project-editor',
+        ]);
+});

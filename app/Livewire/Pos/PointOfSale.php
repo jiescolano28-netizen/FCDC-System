@@ -11,6 +11,7 @@ class PointOfSale extends Component
 
     public function addToCart(int $inventoryId): void
     {
+        $this->authorizePermission('pos.checkout');
         $item = Inventory::availableForSale()->findOrFail($inventoryId);
         $state = $this->state();
         $available = $this->availableQuantity($item, $state);
@@ -26,6 +27,7 @@ class PointOfSale extends Component
 
     public function changeQuantity(int $inventoryId, int $delta): void
     {
+        $this->authorizePermission('pos.checkout');
         $state = $this->state();
         $line = $state['cart'][$inventoryId] ?? null;
 
@@ -48,6 +50,7 @@ class PointOfSale extends Component
 
     public function removeFromCart(int $inventoryId): void
     {
+        $this->authorizePermission('pos.checkout');
         $state = $this->state();
         unset($state['cart'][$inventoryId]);
         $this->saveState($state);
@@ -55,6 +58,7 @@ class PointOfSale extends Component
 
     public function checkout(): void
     {
+        $this->authorizePermission('pos.checkout');
         $state = $this->state();
         $items = [];
 
@@ -111,6 +115,7 @@ class PointOfSale extends Component
 
     public function viewReceipt(string $saleId): void
     {
+        $this->authorizePermission('pos.checkout');
         $state = $this->state();
 
         if (collect($state['sales'])->contains('id', $saleId)) {
@@ -121,6 +126,7 @@ class PointOfSale extends Component
 
     public function closeReceipt(): void
     {
+        $this->authorizePermission('pos.checkout');
         $state = $this->state();
         $state['lastSaleId'] = null;
         $this->saveState($state);
@@ -204,8 +210,15 @@ class PointOfSale extends Component
     {
         return max(0, (int) floor((float) $item->qty - ($state['stock'][$item->id] ?? 0)));
     }
+
+
     private function taxFor(float $subtotal): float
     {
         return $subtotal * 0.12;
+    }
+
+    private function authorizePermission(string $permission): void
+    {
+        abort_unless(auth()->user()?->can($permission), 403);
     }
 }

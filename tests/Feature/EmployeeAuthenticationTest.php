@@ -81,7 +81,10 @@ test('application screens and inventory endpoints require authentication', funct
 });
 
 test('authenticated application shell identifies the employee and offers supported navigation', function () {
-    $employee = createEmployeeForAuthentication(['username' => 'shell.employee']);
+    $employee = grantEmployeeTestPermissions(
+        createEmployeeForAuthentication(['username' => 'shell.employee']),
+        ['dashboard.view', 'inventory.view'],
+    );
 
     $this->actingAs($employee)->get(route('dashboard'))->assertOk()
         ->assertSee('Dashboard')

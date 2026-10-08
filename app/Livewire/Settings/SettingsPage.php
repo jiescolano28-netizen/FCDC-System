@@ -39,6 +39,7 @@ class SettingsPage extends Component
             return;
         }
 
+        abort_unless(auth()->user()?->can('settings.update'), 403);
         $this->validate();
         session()->put($this->sessionKey(), $this->only(array_keys($this->rules())));
     }

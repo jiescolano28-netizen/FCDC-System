@@ -13,11 +13,11 @@ uses(RefreshDatabase::class)->beforeEach(function () {
 
 function createSettingsEmployee(array $attributes = []): Employee
 {
-    return Employee::create(array_merge([
+    return grantEmployeeTestPermissions(Employee::create(array_merge([
         'username' => 'settings.employee',
         'email' => 'settings@example.com',
         'password' => Hash::make('settings-password'),
-    ], $attributes));
+    ], $attributes)), ['settings.view', 'settings.update', 'dashboard.view', 'inventory.view']);
 }
 
 test('settings is an authenticated named page using the shared shell', function () {

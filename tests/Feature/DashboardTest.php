@@ -11,11 +11,11 @@ uses(RefreshDatabase::class);
 
 function createDashboardEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'dashboard.manager',
         'email' => 'dashboard@example.com',
         'password' => Hash::make('dashboard-password'),
-    ]);
+    ]), ['dashboard.view', 'pos.view']);
 }
 
 function createDashboardInventory(array $attributes = []): Inventory

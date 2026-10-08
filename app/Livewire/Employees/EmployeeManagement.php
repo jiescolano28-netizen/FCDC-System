@@ -4,6 +4,7 @@ namespace App\Livewire\Employees;
 
 use App\Models\Employee;
 use App\Support\AdministratorAccess;
+use App\Support\EmployeeRoleAssignment;
 use App\Support\RolePermissionCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -72,33 +73,9 @@ class EmployeeManagement extends Component
             ] : []),
         ]);
 
-        $requestedRoleIds = collect($validated['selectedRoleIds'] ?? [])->map(fn ($id) => (int) $id);
-        $adminRoleId = Role::where('name', RolePermissionCatalog::ADMIN_ROLE)
-            ->where('guard_name', 'web')
-            ->value('id');
-
-        DB::transaction(function () use (&$employee, $validated, $canAssignRoles, $requestedRoleIds, $adminRoleId): void {
+        DB::transaction(function () use (&$employee, $validated, $canAssignRoles): void {
             if ($employee->exists) {
                 $employee = Employee::findOrFail($employee->id);
-
-                if ($employee->hasRole(RolePermissionCatalog::ADMIN_ROLE)) {
-                    AdministratorAccess::lockRole();
-                }
-            }
-
-            if ($canAssignRoles && $requestedRoleIds->contains($adminRoleId)
-                && ! $employee->hasRole(RolePermissionCatalog::ADMIN_ROLE)) {
-                throw ValidationException::withMessages([
-                    'selectedRoleIds' => 'The protected administrator role can only be granted by the provisioning command.',
-                ]);
-            }
-
-            if ($canAssignRoles && $employee->exists && $employee->hasRole(RolePermissionCatalog::ADMIN_ROLE)
-                && ! $requestedRoleIds->contains($adminRoleId)
-                && AdministratorAccess::isLastAdministrator($employee)) {
-                throw ValidationException::withMessages([
-                    'selectedRoleIds' => 'The last administrator cannot lose administrator access.',
-                ]);
             }
 
             $employee->username = $validated['username'];
@@ -111,7 +88,7 @@ class EmployeeManagement extends Component
             $employee->save();
 
             if ($canAssignRoles) {
-                $employee->syncRoles($requestedRoleIds->all());
+                EmployeeRoleAssignment::sync($employee, $validated['selectedRoleIds'] ?? []);
             }
         });
 

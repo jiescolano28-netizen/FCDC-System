@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createTrialBalanceEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'trial.viewer',
         'email' => 'trial@example.com',
         'password' => Hash::make('trial-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('trial balance is an authenticated named page in accounting navigation', function () {

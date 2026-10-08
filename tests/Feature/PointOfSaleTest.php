@@ -15,11 +15,11 @@ uses(RefreshDatabase::class)->beforeEach(function () {
 
 function createPosEmployee(array $overrides = []): Employee
 {
-    return Employee::create(array_merge([
+    return grantEmployeeTestPermissions(Employee::create(array_merge([
         'username' => 'pos.cashier',
         'email' => 'pos@example.com',
         'password' => Hash::make('pos-password'),
-    ], $overrides));
+    ], $overrides)), ['pos.view', 'pos.checkout', 'settings.view', 'settings.update', 'dashboard.view']);
 }
 
 function createPosInventory(array $overrides = []): Inventory

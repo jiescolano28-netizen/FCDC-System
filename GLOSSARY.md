@@ -4,6 +4,16 @@ Business terminology for the construction-material inventory application. Illust
 
 ## Language
 
+**Access permission**:
+A capability granted through an employee's assigned role that determines which business areas or actions the employee may use.
+
+
+**Role**:
+A named set of access permissions that an employee can hold.
+
+**Employee role assignment**:
+The association of one or more roles with an employee; an employee may hold multiple roles at the same time.
+
 **Inventory item**:
 A construction material tracked by name, category, unit, quantity, cost, and stock-reorder threshold.
 _Avoid_: Product when referring to the tracked inventory record

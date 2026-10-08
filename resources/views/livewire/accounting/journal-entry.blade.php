@@ -17,22 +17,22 @@
         <div class="journal-entry-header-fields">
             <label>
                 <span>Date</span>
-                <input type="date" wire:model.live="date">
+                <input type="date" wire:model.live="date" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                 @error('date') <small class="settings-error">{{ $message }}</small> @enderror
             </label>
             <label>
                 <span>Reference</span>
-                <input type="text" wire:model.live="reference" maxlength="100">
+                <input type="text" wire:model.live="reference" maxlength="100" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                 @error('reference') <small class="settings-error">{{ $message }}</small> @enderror
             </label>
             <label>
                 <span>Source</span>
-                <input type="text" wire:model.live="source" maxlength="80">
+                <input type="text" wire:model.live="source" maxlength="80" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                 @error('source') <small class="settings-error">{{ $message }}</small> @enderror
             </label>
             <label class="journal-entry-description">
                 <span>Description</span>
-                <input type="text" wire:model.live="description" maxlength="255">
+                <input type="text" wire:model.live="description" maxlength="255" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                 @error('description') <small class="settings-error">{{ $message }}</small> @enderror
             </label>
         </div>
@@ -42,7 +42,9 @@
                 <h3>Entry lines</h3>
                 <p>Reference accounts are illustrative. Debit and credit values are demonstration amounts only.</p>
             </div>
-            <button class="journal-secondary-button" type="button" wire:click="addLine" @disabled(count($lines) >= 10)>Add line</button>
+            @can('accounting.create-journal-entry')
+                <button class="journal-secondary-button" type="button" wire:click="addLine" @disabled(count($lines) >= 10)>Add line</button>
+            @endcan
         </div>
 
         <div class="journal-line-list">
@@ -51,7 +53,7 @@
                     <legend>Line {{ $index + 1 }}</legend>
                     <label class="journal-line-account">
                         <span>Account</span>
-                        <select wire:model.live="lines.{{ $index }}.accountCode">
+                        <select wire:model.live="lines.{{ $index }}.accountCode" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                             <option value="">Select a sample account</option>
                             @foreach ($accounts as $account)
                                 <option value="{{ $account['code'] }}">{{ $account['code'] }} · {{ $account['name'] }}</option>
@@ -61,20 +63,22 @@
                     </label>
                     <label class="journal-line-description">
                         <span>Line description</span>
-                        <input type="text" wire:model.live="lines.{{ $index }}.description" maxlength="255">
+                        <input type="text" wire:model.live="lines.{{ $index }}.description" maxlength="255" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                         @error("lines.{$index}.description") <small class="settings-error">{{ $message }}</small> @enderror
                     </label>
                     <label>
                         <span>Debit</span>
-                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.debit">
+                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.debit" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                         @error("lines.{$index}.debit") <small class="settings-error">{{ $message }}</small> @enderror
                     </label>
                     <label>
                         <span>Credit</span>
-                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.credit">
+                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.credit" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
                         @error("lines.{$index}.credit") <small class="settings-error">{{ $message }}</small> @enderror
                     </label>
-                    <button class="journal-remove-button" type="button" wire:click="removeLine({{ $index }})" @disabled(count($lines) <= 2)>Remove line</button>
+                    @can('accounting.create-journal-entry')
+                        <button class="journal-remove-button" type="button" wire:click="removeLine({{ $index }})" @disabled(count($lines) <= 2)>Remove line</button>
+                    @endcan
                     @error("lines.{$index}") <small class="settings-error journal-line-error">{{ $message }}</small> @enderror
                 </fieldset>
             @endforeach
@@ -87,8 +91,10 @@
         </div>
 
         <footer class="journal-entry-actions">
-            <button class="journal-secondary-button" type="button" wire:click="clear">Clear</button>
-            <button class="journal-save-button" type="submit">Save demonstration entry</button>
+            @can('accounting.create-journal-entry')
+                <button class="journal-secondary-button" type="button" wire:click="clear">Clear</button>
+                <button class="journal-save-button" type="submit">Save demonstration entry</button>
+            @endcan
         </footer>
     </form>
 

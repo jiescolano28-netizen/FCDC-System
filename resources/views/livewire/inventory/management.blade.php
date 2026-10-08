@@ -7,27 +7,35 @@
         <span>{{ $items->count() }} matching item(s)</span>
     </div>
 
-    <div class="panel">
-        <h2>{{ $editingId ? 'Edit inventory item' : 'Add inventory item' }}</h2>
-        <form wire:submit="save">
-            <div class="fields">
-                <div><label for="name">Material name</label><input id="name" wire:model="name">@error('name') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="category">Category</label><input id="category" wire:model="category">@error('category') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="qty">Quantity</label><input id="qty" type="number" min="0" step="0.01" wire:model="qty">@error('qty') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="unit">Unit</label><input id="unit" wire:model="unit">@error('unit') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="unitCost">Unit cost</label><input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost">@error('unitCost') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="sellingPrice">Selling price (optional)</label><input id="sellingPrice" type="number" min="0" step="0.01" wire:model="sellingPrice">@error('sellingPrice') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="reorderLevel">Reorder level</label><input id="reorderLevel" type="number" min="0" step="0.01" wire:model="reorderLevel">@error('reorderLevel') <span class="error">{{ $message }}</span> @enderror</div>
-                <div><label for="image">Product image</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp" wire:model="image">@error('image') <span class="error">{{ $message }}</span> @enderror</div>
-            </div>
-            <div class="actions" style="margin-top:14px;">
-                <button class="primary" type="submit">{{ $editingId ? 'Save changes' : 'Add item' }}</button>
-                @if ($editingId)
-                    <button class="secondary" type="button" wire:click="resetForm">Cancel</button>
-                @endif
-            </div>
-        </form>
-    </div>
+    @if (auth()->user()->can('inventory.create') || auth()->user()->can('inventory.update'))
+        <div class="panel">
+            <h2>{{ $editingId ? 'Edit inventory item' : 'Add inventory item' }}</h2>
+            <form wire:submit="save">
+                <div class="fields">
+                    <div><label for="name">Material name</label><input id="name" wire:model="name">@error('name') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="category">Category</label><input id="category" wire:model="category">@error('category') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="qty">Quantity</label><input id="qty" type="number" min="0" step="0.01" wire:model="qty">@error('qty') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="unit">Unit</label><input id="unit" wire:model="unit">@error('unit') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="unitCost">Unit cost</label><input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost">@error('unitCost') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="sellingPrice">Selling price (optional)</label><input id="sellingPrice" type="number" min="0" step="0.01" wire:model="sellingPrice">@error('sellingPrice') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="reorderLevel">Reorder level</label><input id="reorderLevel" type="number" min="0" step="0.01" wire:model="reorderLevel">@error('reorderLevel') <span class="error">{{ $message }}</span> @enderror</div>
+                    <div><label for="image">Product image</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp" wire:model="image">@error('image') <span class="error">{{ $message }}</span> @enderror</div>
+                </div>
+                <div class="actions" style="margin-top:14px;">
+                    @if ($editingId)
+                        @can('inventory.update')
+                            <button class="primary" type="submit">Save changes</button>
+                            <button class="secondary" type="button" wire:click="resetForm">Cancel</button>
+                        @endcan
+                    @else
+                        @can('inventory.create')
+                            <button class="primary" type="submit">Add item</button>
+                        @endcan
+                    @endif
+                </div>
+            </form>
+        </div>
+    @endif
 
     <div class="toolbar panel">
         <div style="flex:1; min-width:220px;">
@@ -48,7 +56,18 @@
     <div class="panel table-wrap">
         <table>
             <thead>
-                <tr><th>Material</th><th>Category</th><th>Quantity</th><th>Unit cost</th><th>Selling price</th><th>Stock status</th><th>Sale status</th><th>Actions</th></tr>
+                <tr>
+                    <th>Material</th>
+                    <th>Category</th>
+                    <th>Quantity</th>
+                    <th>Unit cost</th>
+                    <th>Selling price</th>
+                    <th>Stock status</th>
+                    <th>Sale status</th>
+                    @if (auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete'))
+                        <th>Actions</th>
+                    @endif
+                </tr>
             </thead>
             <tbody>
                 @forelse ($items as $item)
@@ -74,17 +93,24 @@
                                 <span class="status">Sale price set</span>
                             @endif
                         </td>
-                        <td>
-                            <div class="actions">
-                                <button class="secondary" type="button" wire:click="edit({{ $item->id }})">Edit</button>
-                                <button class="danger" type="button" wire:click="delete({{ $item->id }})" wire:confirm="Delete {{ $item->name }}?">Delete</button>
-                            </div>
-                        </td>
+                        @if (auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete'))
+                            <td>
+                                <div class="actions">
+                                    @can('inventory.update')
+                                        <button class="secondary" type="button" wire:click="edit({{ $item->id }})">Edit</button>
+                                    @endcan
+                                    @can('inventory.delete')
+                                        <button class="danger" type="button" wire:click="delete({{ $item->id }})" wire:confirm="Delete {{ $item->name }}?">Delete</button>
+                                    @endcan
+                                </div>
+                            </td>
+                        @endif
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="muted">No inventory items match these filters.</td></tr>
+                    <tr><td colspan="{{ auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete') ? 8 : 7 }}" class="muted">No inventory items match these filters.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 </section>
+

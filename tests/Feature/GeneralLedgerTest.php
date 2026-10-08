@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createGeneralLedgerEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'ledger.viewer',
         'email' => 'ledger@example.com',
         'password' => Hash::make('ledger-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('general ledger is an authenticated named page in accounting navigation', function () {

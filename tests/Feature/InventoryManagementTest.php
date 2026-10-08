@@ -14,11 +14,11 @@ uses(RefreshDatabase::class);
 
 function createInventoryManager(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'inventory.manager',
         'email' => 'inventory@example.com',
         'password' => Hash::make('secret-password'),
-    ]);
+    ]), ['inventory.view', 'inventory.create', 'inventory.update', 'inventory.delete']);
 }
 
 function inventoryAttributes(array $overrides = []): array

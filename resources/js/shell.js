@@ -147,3 +147,50 @@ document.addEventListener('click', async (event) => {
     const componentId = button.closest('[wire\\:id]')?.getAttribute('wire:id');
     if (componentId) window.Livewire.find(componentId).call('delete', button.dataset.deleteEmployee);
 });
+const roleSetup = document.querySelector('[data-role-setup]');
+
+if (roleSetup) {
+    const toast = (message, type = 'success') => {
+        let element = document.querySelector('[data-role-toast]');
+        if (!element) {
+            element = document.createElement('div');
+            element.className = 'role-toast';
+            element.setAttribute('role', 'status');
+            element.dataset.roleToast = '';
+            document.body.append(element);
+        }
+        element.dataset.type = type;
+        element.textContent = message;
+        element.classList.add('visible');
+        clearTimeout(element.toastTimer);
+        element.toastTimer = setTimeout(() => element.classList.remove('visible'), 2800);
+    };
+    const registerRoleEvents = () => {
+        if (!window.Livewire) return;
+        window.Livewire.on('role-saved', (event) => toast(event.message));
+        window.Livewire.on('role-assignment-saved', (event) => toast(event.message));
+        window.Livewire.on('role-error', (event) => toast(event.message || 'The change could not be saved.', 'error'));
+    };
+
+    if (window.Livewire) registerRoleEvents();
+    else document.addEventListener('livewire:init', registerRoleEvents, { once: true });
+
+    roleSetup.addEventListener('input', (event) => {
+        if (!event.target.matches('[data-module-search]')) return;
+        const query = event.target.value.toLowerCase().trim();
+        const rows = roleSetup.querySelectorAll('[data-module-row]');
+        let visible = 0;
+        rows.forEach((row) => {
+            row.hidden = !row.dataset.moduleRow.toLowerCase().includes(query);
+            if (!row.hidden) visible++;
+        });
+        const empty = roleSetup.querySelector('[data-empty-filter]');
+        if (empty) empty.hidden = visible > 0;
+    });
+    roleSetup.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            roleSetup.querySelector('[data-module-search]')?.focus();
+        }
+    });
+}

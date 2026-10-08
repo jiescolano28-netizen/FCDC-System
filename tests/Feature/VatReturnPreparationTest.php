@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createVatReturnPreparationEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'vat.return.viewer',
         'email' => 'vat.return@example.com',
         'password' => Hash::make('vat-password'),
-    ]);
+    ]), ['tax.view']);
 }
 
 test('VAT return preparation is available only through its authenticated named route', function () {

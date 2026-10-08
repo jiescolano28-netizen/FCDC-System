@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createVatSummaryEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'vat.summary.viewer',
         'email' => 'vat.summary@example.com',
         'password' => Hash::make('vat-password'),
-    ]);
+    ]), ['tax.view']);
 }
 
 test('VAT summary is available only through its authenticated named Livewire route', function () {

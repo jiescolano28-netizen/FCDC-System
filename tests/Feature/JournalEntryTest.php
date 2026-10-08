@@ -13,11 +13,11 @@ uses(RefreshDatabase::class)->beforeEach(function () {
 
 function createJournalEntryEmployee(array $overrides = []): Employee
 {
-    return Employee::create(array_merge([
+    return grantEmployeeTestPermissions(Employee::create(array_merge([
         'username' => 'journal.employee',
         'email' => 'journal@example.com',
         'password' => Hash::make('journal-password'),
-    ], $overrides));
+    ], $overrides)), ['accounting.view', 'accounting.create-journal-entry']);
 }
 
 function validDemoJournal(): array

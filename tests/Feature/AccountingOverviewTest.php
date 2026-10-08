@@ -9,11 +9,11 @@ uses(RefreshDatabase::class);
 
 function createAccountingOverviewEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'accounting.viewer',
         'email' => 'accounting@example.com',
         'password' => Hash::make('accounting-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('accounting overview is an authenticated named page with non-operational financial states', function () {

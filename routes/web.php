@@ -40,34 +40,39 @@ Route::post('/logout', [LoginController::class, 'logout'])
 
 // Authenticated application
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', DashboardPage::class)->name('dashboard');
-    Route::get('/dashboard/reports', ReportsPage::class)->name('reports');
-    Route::get('/accounting', AccountingOverview::class)->name('accounting.overview');
-    Route::get('/accounting/chart-of-accounts', ChartOfAccounts::class)->name('accounting.chart-of-accounts');
-    Route::get('/accounting/accounts-payable', AccountsPayable::class)->name('accounting.accounts-payable');
-    Route::get('/accounting/cash-disbursements', CashDisbursements::class)->name('accounting.cash-disbursements');
-    Route::get('/accounting/journal-entry', JournalEntry::class)->name('accounting.journal-entry');
-    Route::get('/accounting/financial-statements', FinancialStatements::class)->name('accounting.financial-statements');
-    Route::get('/accounting/general-ledger', GeneralLedger::class)->name('accounting.general-ledger');
-    Route::get('/accounting/trial-balance', TrialBalance::class)->name('accounting.trial-balance');
-    Route::get('/settings', SettingsPage::class)->name('settings');
-    Route::get('/pos', PointOfSale::class)->name('pos');
-    Route::get('/tax/vat-records', VatRecords::class)->name('tax.vat-records');
+    Route::get('/dashboard', DashboardPage::class)->middleware('permission:dashboard.view')->name('dashboard');
+    Route::get('/dashboard/reports', ReportsPage::class)->middleware('permission:reports.view')->name('reports');
+    Route::get('/accounting', AccountingOverview::class)->middleware('permission:accounting.view')->name('accounting.overview');
+    Route::get('/accounting/chart-of-accounts', ChartOfAccounts::class)->middleware('permission:accounting.view')->name('accounting.chart-of-accounts');
+    Route::get('/accounting/accounts-payable', AccountsPayable::class)->middleware('permission:accounting.view')->name('accounting.accounts-payable');
+    Route::get('/accounting/cash-disbursements', CashDisbursements::class)->middleware('permission:accounting.view')->name('accounting.cash-disbursements');
+    Route::get('/accounting/journal-entry', JournalEntry::class)->middleware('permission:accounting.view')->name('accounting.journal-entry');
+    Route::get('/accounting/financial-statements', FinancialStatements::class)->middleware('permission:accounting.view')->name('accounting.financial-statements');
+    Route::get('/accounting/general-ledger', GeneralLedger::class)->middleware('permission:accounting.view')->name('accounting.general-ledger');
+    Route::get('/accounting/trial-balance', TrialBalance::class)->middleware('permission:accounting.view')->name('accounting.trial-balance');
+    Route::get('/settings', SettingsPage::class)->middleware('permission:settings.view')->name('settings');
+    Route::get('/pos', PointOfSale::class)->middleware('permission:pos.view')->name('pos');
+    Route::get('/tax/vat-records', VatRecords::class)->middleware('permission:tax.view')->name('tax.vat-records');
 
-    Route::get('/inventory/manage', InventoryManagement::class)->name('inventory.management');
-    Route::get('/tax/vat-summary', VatSummary::class)->name('tax.vat-summary');
-    Route::get('/tax/report', TaxReport::class)->name('tax.report');
-    Route::get('/inventory/overview', InventoryOverview::class)->name('inventory.overview');
+    Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
+    Route::get('/tax/vat-summary', VatSummary::class)->middleware('permission:tax.view')->name('tax.vat-summary');
+    Route::get('/tax/report', TaxReport::class)->middleware('permission:tax.view')->name('tax.report');
+    Route::get('/inventory/overview', InventoryOverview::class)->middleware('permission:inventory.view')->name('inventory.overview');
 
-    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
-    Route::post('/inventory', [InventoryController::class, 'store'])->name('inventory.store');
-    Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])->name('inventory.update');
-    Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
+    Route::get('/inventory', [InventoryController::class, 'index'])
+        ->middleware('permission:inventory.view')->name('inventory.index');
+    Route::post('/inventory', [InventoryController::class, 'store'])
+        ->middleware('permission:inventory.create')->name('inventory.store');
+    Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
+        ->middleware('permission:inventory.update')->name('inventory.update');
+    Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy'])
+        ->middleware('permission:inventory.delete')->name('inventory.destroy');
     Route::get('/employees', EmployeeManagement::class)
         ->middleware('permission:employees.view')
         ->name('employees.index');
     Route::get('/roles', RoleManagement::class)
         ->middleware('permission:roles.view')
         ->name('roles.index');
-    Route::get('/tax/vat-return-preparation', VatReturnPreparation::class)->name('tax.vat-return-preparation');
+    Route::get('/tax/vat-return-preparation', VatReturnPreparation::class)
+        ->middleware('permission:tax.view')->name('tax.vat-return-preparation');
 });

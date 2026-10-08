@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createAccountsPayableEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'payables.viewer',
         'email' => 'payables@example.com',
         'password' => Hash::make('payables-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('accounts payable is a separate authenticated accounting page with unavailable financial figures and actions', function () {

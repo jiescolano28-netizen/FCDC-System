@@ -12,31 +12,31 @@
         <div class="settings-grid">
             <div class="settings-field">
                 <label for="company-name">Company name</label>
-                <input id="company-name" type="text" wire:model.live.debounce.300ms="companyName" autocomplete="organization">
+                <input id="company-name" type="text" wire:model.live.debounce.300ms="companyName" autocomplete="organization" @disabled(auth()->user()->cannot('settings.update'))>
                 @error('companyName') <span class="settings-error">{{ $message }}</span> @enderror
             </div>
 
             <div class="settings-field">
                 <label for="company-address">Address</label>
-                <input id="company-address" type="text" wire:model.live.debounce.300ms="address" autocomplete="street-address">
+                <input id="company-address" type="text" wire:model.live.debounce.300ms="address" autocomplete="street-address" @disabled(auth()->user()->cannot('settings.update'))>
                 @error('address') <span class="settings-error">{{ $message }}</span> @enderror
             </div>
 
             <div class="settings-field">
                 <label for="company-phone">Phone</label>
-                <input id="company-phone" type="tel" wire:model.live.debounce.300ms="phone" autocomplete="tel">
+                <input id="company-phone" type="tel" wire:model.live.debounce.300ms="phone" autocomplete="tel" @disabled(auth()->user()->cannot('settings.update'))>
                 @error('phone') <span class="settings-error">{{ $message }}</span> @enderror
             </div>
 
             <div class="settings-field">
                 <label for="tax-rate">Tax rate (%)</label>
-                <input id="tax-rate" type="number" min="0" max="100" step="0.01" wire:model.live.debounce.300ms="taxRate">
+                <input id="tax-rate" type="number" min="0" max="100" step="0.01" wire:model.live.debounce.300ms="taxRate" @disabled(auth()->user()->cannot('settings.update'))>
                 @error('taxRate') <span class="settings-error">{{ $message }}</span> @enderror
             </div>
 
             <div class="settings-field">
                 <label for="currency">Currency</label>
-                <select id="currency" wire:model.live="currency">
+                <select id="currency" wire:model.live="currency" @disabled(auth()->user()->cannot('settings.update'))>
                     <option value="USD">USD</option>
                     <option value="CAD">CAD</option>
                     <option value="EUR">EUR</option>

@@ -34,6 +34,8 @@ class InventoryManagement extends Component
 
     public function save(): void
     {
+        $this->authorizePermission($this->editingId ? 'inventory.update' : 'inventory.create');
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', 'max:255'],
@@ -70,6 +72,8 @@ class InventoryManagement extends Component
 
     public function edit(int $id): void
     {
+        $this->authorizePermission('inventory.update');
+
         $item = Inventory::findOrFail($id);
         $this->editingId = $item->id;
         $this->name = $item->name;
@@ -84,6 +88,8 @@ class InventoryManagement extends Component
 
     public function delete(int $id): void
     {
+        $this->authorizePermission('inventory.delete');
+
         Inventory::findOrFail($id)->delete();
         $this->resetForm();
     }
@@ -111,5 +117,10 @@ class InventoryManagement extends Component
             'items' => $items,
             'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
         ])->layout('layouts.app', ['title' => 'Inventory Management']);
+    }
+
+    private function authorizePermission(string $permission): void
+    {
+        abort_unless(auth()->user()?->can($permission), 403);
     }
 }

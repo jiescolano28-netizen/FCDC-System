@@ -26,7 +26,9 @@
                             <strong>{{ $money((float) $item->selling_price) }}</strong>
                             <span>{{ number_format($item->simulated_qty, 2) }} {{ $item->unit }} left</span>
                         </div>
-                        <button class="pos-add-button" type="button" wire:click="addToCart({{ $item->id }})">Add to Sale</button>
+                        @can('pos.checkout')
+                            <button class="pos-add-button" type="button" wire:click="addToCart({{ $item->id }})">Add to Sale</button>
+                        @endcan
                     </article>
                 @empty
                     <p class="pos-empty-products">No matching in-stock materials.</p>
@@ -40,12 +42,14 @@
                 @forelse ($lines as $item)
                     <div class="pos-cart-line" wire:key="cart-line-{{ $item->id }}">
                         <div class="pos-cart-name">{{ $item->name }}<span>{{ $money((float) $item->selling_price) }} / {{ $item->unit }}</span></div>
-                        <div class="pos-quantity-controls">
-                            <button type="button" wire:click="changeQuantity({{ $item->id }}, -1)" aria-label="Decrease {{ $item->name }} quantity">−</button>
-                            <span>{{ $item->cart_quantity }}</span>
-                            <button type="button" wire:click="changeQuantity({{ $item->id }}, 1)" aria-label="Increase {{ $item->name }} quantity">+</button>
-                            <button class="pos-remove-button" type="button" wire:click="removeFromCart({{ $item->id }})" aria-label="Remove {{ $item->name }}">×</button>
-                        </div>
+                        @can('pos.checkout')
+                            <div class="pos-quantity-controls">
+                                <button type="button" wire:click="changeQuantity({{ $item->id }}, -1)" aria-label="Decrease {{ $item->name }} quantity">−</button>
+                                <span>{{ $item->cart_quantity }}</span>
+                                <button type="button" wire:click="changeQuantity({{ $item->id }}, 1)" aria-label="Increase {{ $item->name }} quantity">+</button>
+                                <button class="pos-remove-button" type="button" wire:click="removeFromCart({{ $item->id }})" aria-label="Remove {{ $item->name }}">×</button>
+                            </div>
+                        @endcan
                     </div>
                 @empty
                     <p class="pos-cart-empty">Cart is empty. Tap a material to add it.</p>
@@ -57,7 +61,9 @@
                 <div><span>VAT (12%)</span><span>{{ $money($tax) }}</span></div>
                 <strong><span>Total</span><span>{{ $money($subtotal + $tax) }}</span></strong>
             </div>
-            <button class="pos-checkout-button" type="button" wire:click="checkout" @disabled($lines->isEmpty())>Charge {{ $money($subtotal + $tax) }}</button>
+            @can('pos.checkout')
+                <button class="pos-checkout-button" type="button" wire:click="checkout" @disabled($lines->isEmpty())>Charge {{ $money($subtotal + $tax) }}</button>
+            @endcan
             <p class="pos-demo-note" role="note">Demonstration checkout only. No payment is processed and no sale or inventory record is created.</p>
 
             @if ($receipt)
@@ -72,7 +78,9 @@
             @foreach ($sales as $sale)
                 <div class="pos-sale-row" wire:key="demo-sale-{{ $sale['id'] }}">
                     <span>{{ $sale['id'] }} · {{ $sale['date'] }} · {{ $sale['items'] }} item(s) · {{ $money($sale['total']) }}</span>
-                    <button type="button" wire:click="viewReceipt('{{ $sale['id'] }}')">View demo receipt</button>
+                    @can('pos.checkout')
+                        <button type="button" wire:click="viewReceipt('{{ $sale['id'] }}')">View demo receipt</button>
+                    @endcan
                 </div>
             @endforeach
         </section>
@@ -101,7 +109,9 @@
                 <div class="pos-receipt-totals"><div><span>Subtotal</span><span>{{ $money($receipt['subtotal']) }}</span></div><div><span>VAT (12%)</span><span>{{ $money($receipt['tax']) }}</span></div><strong><span>Total</span><span>{{ $money($receipt['total']) }}</span></strong></div>
                 <p class="pos-receipt-disclaimer">For demonstration only. No payment was processed and this is not a recorded business sale.</p>
                 <footer class="pos-receipt-actions">
-                    <button type="button" wire:click="closeReceipt">Close</button>
+                    @can('pos.checkout')
+                        <button type="button" wire:click="closeReceipt">Close</button>
+                    @endcan
                     <button type="button" onclick="document.body.classList.add('printing-pos-receipt'); window.print(); setTimeout(() => document.body.classList.remove('printing-pos-receipt'), 100)">Print demonstration receipt</button>
                 </footer>
             </article>

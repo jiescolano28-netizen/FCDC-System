@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createFinancialStatementsEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'statements.viewer',
         'email' => 'statements@example.com',
         'password' => Hash::make('statements-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('financial statements is a separate authenticated accounting page', function () {

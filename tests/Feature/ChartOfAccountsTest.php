@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createChartOfAccountsEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'account.viewer',
         'email' => 'accounts@example.com',
         'password' => Hash::make('account-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('chart of accounts is an authenticated named page in the accounting navigation', function () {

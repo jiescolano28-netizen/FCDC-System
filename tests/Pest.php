@@ -41,6 +41,21 @@ expect()->extend('toBeOne', function () {
 |
 */
 
+function grantEmployeeTestPermissions(\App\Models\Employee $employee, array $permissions): \App\Models\Employee
+{
+    $role = \Spatie\Permission\Models\Role::create([
+        'name' => 'test-permissions-'.$employee->getKey(),
+        'guard_name' => 'web',
+    ]);
+    $role->syncPermissions(array_map(
+        fn (string $name) => \Spatie\Permission\Models\Permission::findOrCreate($name, 'web'),
+        $permissions,
+    ));
+    $employee->assignRole($role);
+
+    return $employee;
+}
+
 function something()
 {
     // ..

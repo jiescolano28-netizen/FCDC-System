@@ -34,11 +34,14 @@ class JournalEntry extends Component
 
     public function updated(): void
     {
+        $this->authorizePermission('accounting.create-journal-entry');
         session()->put($this->draftKey(), $this->draft());
     }
 
     public function addLine(): void
     {
+        $this->authorizePermission('accounting.create-journal-entry');
+
         if (count($this->lines) < 10) {
             $this->lines[] = $this->emptyLine();
             session()->put($this->draftKey(), $this->draft());
@@ -47,6 +50,8 @@ class JournalEntry extends Component
 
     public function removeLine(int $index): void
     {
+        $this->authorizePermission('accounting.create-journal-entry');
+
         if (count($this->lines) <= 2 || ! array_key_exists($index, $this->lines)) {
             return;
         }
@@ -57,6 +62,8 @@ class JournalEntry extends Component
 
     public function clear(): void
     {
+        $this->authorizePermission('accounting.create-journal-entry');
+
         session()->forget($this->draftKey());
         $this->resetValidation();
         $this->date = now()->toDateString();
@@ -68,6 +75,7 @@ class JournalEntry extends Component
 
     public function save(): void
     {
+        $this->authorizePermission('accounting.create-journal-entry');
         $codes = collect(ReferenceAccounts::all())->pluck('code')->all();
         $this->validate([
             'date' => ['required', 'date'],
@@ -164,5 +172,10 @@ class JournalEntry extends Component
     private function historyKey(): string
     {
         return 'demo.journals.employee.'.auth()->id().'.history';
+    }
+
+    private function authorizePermission(string $permission): void
+    {
+        abort_unless(auth()->user()?->can($permission), 403);
     }
 }

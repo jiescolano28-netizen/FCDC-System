@@ -10,11 +10,11 @@ uses(RefreshDatabase::class);
 
 function createCashDisbursementsEmployee(): Employee
 {
-    return Employee::create([
+    return grantEmployeeTestPermissions(Employee::create([
         'username' => 'cash.viewer',
         'email' => 'cash@example.com',
         'password' => Hash::make('cash-password'),
-    ]);
+    ]), ['accounting.view']);
 }
 
 test('cash disbursements is an authenticated accounting page with explicitly unavailable payment information and actions', function () {
