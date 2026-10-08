@@ -58,7 +58,11 @@ listener in separate WSL terminals:
 ```
 
 Run the test suite in another terminal with
-`./vendor/bin/sail test`. Stop the services with
+`./vendor/bin/sail test`. PHPUnit forces `APP_ENV=testing`, SQLite `:memory:`,
+and the activity log connection in both environment variables and `$_SERVER`;
+keep both PHPUnit entries so inherited Windows environment values cannot
+override test isolation. Tests use array-backed sessions and never use the
+development MySQL database. Stop the services with
 `./vendor/bin/sail stop`; this preserves the project-scoped `fcdc_sail-mysql`
 volume.
 

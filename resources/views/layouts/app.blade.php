@@ -112,11 +112,11 @@
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.general-ledger') ? 'active' : '' }}" href="{{ route('accounting.general-ledger') }}" @if (request()->routeIs('accounting.general-ledger')) aria-current="page" @endif>
                                 <span class="nav-label">General Ledger</span>
                             </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.financial-statements') ? 'active' : '' }}" href="{{ route('accounting.financial-statements') }}" @if (request()->routeIs('accounting.financial-statements')) aria-current="page" @endif>
-                                <span class="nav-label">Financial Statements</span>
-                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.trial-balance') ? 'active' : '' }}" href="{{ route('accounting.trial-balance') }}" @if (request()->routeIs('accounting.trial-balance')) aria-current="page" @endif>
                                 <span class="nav-label">Trial Balance</span>
+                            </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.financial-statements') ? 'active' : '' }}" href="{{ route('accounting.financial-statements') }}" @if (request()->routeIs('accounting.financial-statements')) aria-current="page" @endif>
+                                <span class="nav-label">Financial Statements</span>
                             </a>
                         </div>
                     </div>
