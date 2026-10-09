@@ -19,7 +19,12 @@ class RolePermissionCatalog
                 'inventory.view' => 'View inventory',
                 'inventory.create' => 'Create inventory items',
                 'inventory.update' => 'Update inventory items',
-                'inventory.delete' => 'Delete inventory items',
+                'inventory.delete' => 'Deactivate inventory items',
+                'inventory.movements.record' => 'Record inventory movements',
+            ],
+            'Demolition Projects & Recovery' => [
+                'demolition-projects.view' => 'View Demolition Projects',
+                'demolition-projects.manage' => 'Manage Demolition Projects and recovery records',
             ],
             'Point of Sale' => [
                 'pos.view' => 'View point of sale',

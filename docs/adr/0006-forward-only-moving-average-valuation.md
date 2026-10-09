@@ -1,0 +1,5 @@
+# Forward-only moving weighted-average inventory valuation
+
+Use perpetual moving weighted-average cost with approved opening quantities/values and valued receipts, rather than FIFO layers or an independently editable item cost. Maintain forward-only valuation chronology per item and freeze original sale COGS; corrections append linked quantity/value/accounting effects rather than replaying and rewriting historical sale costs, and reopening an accounting period does not waive that chronology. Recovered material and non-sale stock changes require approved valuation/counterparts; later purchase-VAT cost reclassification uses reviewed source-linked allocations between remaining Inventory and consumed cost, updating stock value and GL together without guessing tax eligibility or automatic receipt-cost attribution.
+
+This is a confirmed design decision, not evidence of implementation. Combined received-purchase posting, financial versus physical corrections, rounding and reconciliation invariants are defined in [the accounting workflow design](../accounting-workflow-design.md).

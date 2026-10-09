@@ -19,6 +19,7 @@ use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
+use App\Livewire\DemolitionProjects\ProjectManagement;
 use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Roles\RoleManagement;
 use App\Livewire\Settings\SettingsPage;
@@ -69,6 +70,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings', SettingsPage::class)->middleware('permission:settings.view')->name('settings');
     Route::get('/pos', PointOfSale::class)->middleware('permission:pos.view')->name('pos');
     Route::get('/tax/vat-records', VatRecords::class)->middleware('permission:tax.view')->name('tax.vat-records');
+    Route::get('/demolition-projects', ProjectManagement::class)
+        ->middleware('permission:demolition-projects.view')
+        ->name('demolition-projects.index');
 
     Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
     Route::get('/tax/vat-summary', VatSummary::class)->middleware('permission:tax.view')->name('tax.vat-summary');

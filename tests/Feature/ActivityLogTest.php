@@ -90,9 +90,12 @@ test('inventory API changes create globally visible activity with safe field dif
     expect($updated->properties['old']['name'])->toBe('Audit gravel')
         ->and($updated->properties['attributes']['name'])->toBe('Washed gravel');
 
-    $this->deleteJson(route('inventory.destroy', $inventoryId))->assertOk();
-    expect(Activity::query()->where('subject_type', Inventory::class)
-        ->where('subject_id', $inventoryId)->where('event', 'deleted')->exists())->toBeTrue();
+    $this->deleteJson(route('inventory.destroy', $inventoryId))
+        ->assertOk()
+        ->assertJsonPath('message', 'Inventory item deactivated successfully.');
+    $deactivated = Activity::query()->where('subject_type', Inventory::class)
+        ->where('subject_id', $inventoryId)->where('event', 'updated')->orderByDesc('id')->firstOrFail();
+    expect($deactivated->properties['attributes']['status'])->toBe('inactive');
 });
 
 test('employee changes exclude password values and role assignments record role diffs', function () {

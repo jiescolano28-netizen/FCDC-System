@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Inventory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
@@ -45,60 +46,27 @@ class InventoryController extends Controller
             'unit_cost' => 'required|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
             'reorder_level' => 'nullable|numeric|min:0',
+            'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Upload image directly to public/uploads/inventory
-        |--------------------------------------------------------------------------
-        */
-
         $imagePath = null;
-
         if ($request->hasFile('image')) {
-
-            // Make sure the directory exists
             $uploadDirectory = public_path('uploads/inventory');
-
-            if (!is_dir($uploadDirectory)) {
+            if (! is_dir($uploadDirectory)) {
                 mkdir($uploadDirectory, 0755, true);
             }
-
-            // Generate a unique filename
-            $imageName = time() . '_' . uniqid() . '.' .
-                $request->file('image')->getClientOriginalExtension();
-
-            // Move image into public folder
-            $request->file('image')->move(
-                $uploadDirectory,
-                $imageName
-            );
-
-            // Store relative path in database
-            $imagePath = 'uploads/inventory/' . $imageName;
+            $imageName = time().'_'.uniqid().'.'.$request->file('image')->getClientOriginalExtension();
+            $request->file('image')->move($uploadDirectory, $imageName);
+            $imagePath = 'uploads/inventory/'.$imageName;
         }
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Create inventory record
-        |--------------------------------------------------------------------------
-        */
-
-        $item = Inventory::create([
+        $item = DB::transaction(fn () => Inventory::create([
             ...$validated,
             'selling_price' => $validated['selling_price'] ?? null,
             'reorder_level' => $validated['reorder_level'] ?? 10,
             'image' => $imagePath,
-        ]);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Return public image URL
-        |--------------------------------------------------------------------------
-        */
+        ]));
 
         if ($item->image) {
             $item->image = asset($item->image);
@@ -116,116 +84,46 @@ class InventoryController extends Controller
     public function update(Request $request, $id)
     {
         $inventory = Inventory::findOrFail($id);
-
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
-            'qty' => 'required|numeric|min:0',
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
             'reorder_level' => 'nullable|numeric|min:0',
+            'description' => 'nullable|string',
+            'status' => 'sometimes|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Update normal inventory information
-        |--------------------------------------------------------------------------
-        */
-
-        $inventory->name = $validated['name'];
-        $inventory->category = $validated['category'];
-        $inventory->qty = $validated['qty'];
-        $inventory->unit = $validated['unit'];
-        $inventory->unit_cost = $validated['unit_cost'];
-        $inventory->selling_price = $validated['selling_price'] ?? null;
-        $inventory->reorder_level = $validated['reorder_level'] ?? 10;
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Replace image if a new image was selected
-        |--------------------------------------------------------------------------
-        */
+        $inventory->fill([
+            'name' => $validated['name'],
+            'category' => $validated['category'],
+            'unit' => $validated['unit'],
+            'unit_cost' => $validated['unit_cost'],
+            'selling_price' => $validated['selling_price'] ?? null,
+            'reorder_level' => $validated['reorder_level'] ?? 10,
+            'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? $inventory->status,
+        ]);
 
         if ($request->hasFile('image')) {
-
             $uploadDirectory = public_path('uploads/inventory');
-
-            // Create directory if it doesn't exist
-            if (!is_dir($uploadDirectory)) {
+            if (! is_dir($uploadDirectory)) {
                 mkdir($uploadDirectory, 0755, true);
             }
 
-
-            /*
-            |--------------------------------------------------------------------------
-            | Delete old image
-            |--------------------------------------------------------------------------
-            */
-
-            if ($inventory->image) {
-
-                $oldImagePath = public_path($inventory->image);
-
-                if (file_exists($oldImagePath)) {
-                    unlink($oldImagePath);
-                }
+            if ($inventory->image && file_exists(public_path($inventory->image))) {
+                unlink(public_path($inventory->image));
             }
 
-
-            /*
-            |--------------------------------------------------------------------------
-            | Generate new filename
-            |--------------------------------------------------------------------------
-            */
-
-            $imageName = time() . '_' . uniqid() . '.' .
-                $request->file('image')->getClientOriginalExtension();
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Move new image
-            |--------------------------------------------------------------------------
-            */
-
-            $request->file('image')->move(
-                $uploadDirectory,
-                $imageName
-            );
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | Save new image path
-            |--------------------------------------------------------------------------
-            */
-
-            $inventory->image = 'uploads/inventory/' . $imageName;
+            $imageName = time().'_'.uniqid().'.'.$request->file('image')->getClientOriginalExtension();
+            $request->file('image')->move($uploadDirectory, $imageName);
+            $inventory->image = 'uploads/inventory/'.$imageName;
         }
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Save all changes
-        |--------------------------------------------------------------------------
-        */
-
         $inventory->save();
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Return updated inventory
-        |--------------------------------------------------------------------------
-        */
-
-        $inventory->image = $inventory->image
-            ? asset($inventory->image)
-            : null;
+        $inventory->image = $inventory->image ? asset($inventory->image) : null;
 
         return response()->json([
             'message' => 'Inventory item updated successfully.',
@@ -233,43 +131,14 @@ class InventoryController extends Controller
         ]);
     }
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | DELETE /inventory/{id}
-    |--------------------------------------------------------------------------
-    */
     public function destroy($id)
     {
         $inventory = Inventory::findOrFail($id);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Delete image from public/uploads/inventory
-        |--------------------------------------------------------------------------
-        */
-
-        if ($inventory->image) {
-
-            $imagePath = public_path($inventory->image);
-
-            if (file_exists($imagePath)) {
-                unlink($imagePath);
-            }
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Delete inventory database record
-        |--------------------------------------------------------------------------
-        */
-
-        $inventory->delete();
+        $inventory->status = 'inactive';
+        $inventory->save();
 
         return response()->json([
-            'message' => 'Inventory item deleted successfully.'
+            'message' => 'Inventory item deactivated successfully.',
         ]);
     }
 }

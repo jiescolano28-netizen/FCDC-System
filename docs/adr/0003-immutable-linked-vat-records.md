@@ -1,0 +1,3 @@
+# Immutable VAT records linked to completed POS sales
+
+The confirmed VAT design selects a separately persisted, immutable VAT record for each completed POS transaction rather than presenting the POS amounts directly as a tax-record view. Although this duplicates saved amounts, it establishes an explicit tax record: creation must be atomic with checkout, the source transaction must be unique, historical inclusion must not duplicate records, and all copied amounts must reconcile with the saved sale. Period output VAT is the sum of recorded transaction VAT, not VAT recalculated on aggregate sales, so tax outputs remain consistent with checkout rounding; this is an accepted design decision, not a claim that the current demonstration tax pages implement it.

@@ -64,6 +64,11 @@
                         </div>
                     </div>
                 @endcan
+                @can('demolition-projects.view')
+                    <a class="nav-item {{ request()->routeIs('demolition-projects.*') ? 'active' : '' }}" href="{{ route('demolition-projects.index') }}" @if (request()->routeIs('demolition-projects.*')) aria-current="page" @endif>
+                        <span class="nav-label">Demolition Projects</span>
+                    </a>
+                @endcan
 
                 @php($taxNavigationActive = request()->routeIs('tax.*'))
                 @can('tax.view')

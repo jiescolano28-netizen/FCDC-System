@@ -99,6 +99,14 @@ test('livewire business actions require their dedicated permissions', function (
         ->set('unitCost', '5')
         ->call('save')
         ->assertForbidden();
+    Livewire::test(InventoryManagement::class)
+        ->set('stockItemId', 1)
+        ->set('stockQuantity', '2')
+        ->set('stockReasonCategory', 'purchase_receipt')
+        ->set('stockEffectiveDate', '2026-10-08')
+        ->call('recordStockIn')
+        ->assertForbidden();
+
 
     Livewire::test(PointOfSale::class)
         ->call('checkout')
@@ -158,8 +166,9 @@ test('view-only roles see module content without operation controls', function (
     Livewire::test(InventoryManagement::class)
         ->assertSee('Cement')
         ->assertDontSee('Add inventory item')
+        ->assertDontSee('Receive stock')
         ->assertDontSee('Edit')
-        ->assertDontSee('Delete');
+        ->assertDontSee('Deactivate');
 
     Livewire::test(PointOfSale::class)
         ->assertDontSee('Add to Sale')
