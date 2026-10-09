@@ -1,6 +1,8 @@
 <?php
+
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\PasswordResetLinkController;
 use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\AccountsPayable;
 use App\Livewire\Accounting\CashDisbursements;
@@ -9,6 +11,7 @@ use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Accounting\TrialBalance;
+use App\Livewire\ActivityLog\ActivityLogPage;
 use App\Livewire\Dashboard\DashboardPage;
 use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\Employees\EmployeeManagement;
@@ -22,7 +25,6 @@ use App\Livewire\TaxCompliance\TaxReport;
 use App\Livewire\TaxCompliance\VatRecords;
 use App\Livewire\TaxCompliance\VatReturnPreparation;
 use App\Livewire\TaxCompliance\VatSummary;
-use App\Livewire\ActivityLog\ActivityLogPage;
 use Illuminate\Support\Facades\Route;
 
 // HOMEPAGE
@@ -34,6 +36,12 @@ Route::get('/login', [LoginController::class, 'showLogin'])
 
 Route::post('/login', [LoginController::class, 'login'])
     ->name('login.submit');
+
+Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])
+    ->name('password.request');
+
+Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
+    ->name('password.email');
 
 // LOGOUT
 Route::post('/logout', [LoginController::class, 'logout'])

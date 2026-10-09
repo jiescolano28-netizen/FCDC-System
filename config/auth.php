@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Models\Employee;
 
 return [
 
@@ -17,7 +17,7 @@ return [
 
     'defaults' => [
         'guard' => env('AUTH_GUARD', 'web'),
-        'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
+        'passwords' => env('AUTH_PASSWORD_BROKER', 'employees'),
     ],
 
     /*
@@ -38,11 +38,11 @@ return [
     */
 
     'guards' => [
-    'web' => [
-        'driver' => 'session',
-        'provider' => 'employees',
+        'web' => [
+            'driver' => 'session',
+            'provider' => 'employees',
+        ],
     ],
-],
 
     /*
     |--------------------------------------------------------------------------
@@ -62,17 +62,16 @@ return [
     */
 
     'providers' => [
-    'employees' => [
-        'driver' => 'eloquent',
-        'model' => App\Models\Employee::class,
-            ],
+        'employees' => [
+            'driver' => 'eloquent',
+            'model' => Employee::class,
         ],
+    ],
 
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
-    
+    // 'users' => [
+    //     'driver' => 'database',
+    //     'table' => 'users',
+    // ],
 
     /*
     |--------------------------------------------------------------------------
@@ -94,10 +93,10 @@ return [
     */
 
     'passwords' => [
-        'users' => [
-            'provider' => 'users',
+        'employees' => [
+            'provider' => 'employees',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 60,
+            'expire' => 30,
             'throttle' => 60,
         ],
     ],

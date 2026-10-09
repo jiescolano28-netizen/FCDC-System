@@ -693,6 +693,8 @@
             </button>
 
 
+
+            <p class="forgot-password-link"><a href="{{ route('password.request') }}">Forgot password?</a></p>
         </form>
 
 

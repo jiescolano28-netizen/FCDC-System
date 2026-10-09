@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\EmployeePasswordReset;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -26,6 +27,11 @@ class Employee extends Authenticatable
         'remember_token',
     ];
 
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new EmployeePasswordReset($token));
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -33,5 +39,4 @@ class Employee extends Authenticatable
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
-
 }
