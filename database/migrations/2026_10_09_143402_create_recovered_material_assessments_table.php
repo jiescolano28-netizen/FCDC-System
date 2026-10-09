@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('recovered_material_assessments')) {
+            return;
+        }
+
         Schema::create('recovered_material_assessments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('recovered_material_id')->constrained()->restrictOnDelete();
