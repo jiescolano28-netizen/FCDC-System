@@ -155,6 +155,32 @@ test('cash checkout persists VAT, payment, customer, price snapshots, stock move
         ->toThrow(LogicException::class);
 });
 
+test('POS viewers can open and close receipts without checkout permission', function () {
+    $this->actingAs(createPosEmployee());
+    $board = createPosInventory();
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->set('amountReceived', '22.40')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    $transaction = PosTransaction::query()->sole();
+    $viewer = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'pos.viewer',
+        'email' => 'pos-viewer@example.com',
+        'password' => Hash::make('pos-password'),
+    ]), ['pos.view']);
+    $this->actingAs($viewer);
+
+    Livewire::test(PointOfSale::class)
+        ->assertSee('View receipt')
+        ->call('viewReceipt', $transaction->id)
+        ->assertSee('Receipt · Completed transaction')
+        ->call('closeReceipt')
+        ->assertDontSee('Receipt · Completed transaction');
+});
+
 test('card and bank transfers require exact payment and a reference number', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory(['qty' => 4]);

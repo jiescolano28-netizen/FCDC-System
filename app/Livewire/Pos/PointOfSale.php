@@ -15,6 +15,8 @@ class PointOfSale extends Component
 {
     use WithPagination;
 
+    private const VAT_RATE = 0.12;
+
     public string $search = '';
 
     public string $category = '';
@@ -110,7 +112,7 @@ class PointOfSale extends Component
             }
 
             $subtotalCents = array_sum(array_column($items, 'lineSubtotalCents'));
-            $vatCents = (int) round($subtotalCents * 0.12);
+            $vatCents = $this->vatCents($subtotalCents);
             $totalCents = $subtotalCents + $vatCents;
             $receivedCents = (int) round((float) $this->amountReceived * 100);
 
@@ -128,7 +130,7 @@ class PointOfSale extends Component
                 'employee_id' => auth()->id(),
                 'customer_name' => trim($this->customerName) ?: null,
                 'subtotal' => $subtotalCents / 100,
-                'vat_rate' => 0.12,
+                'vat_rate' => self::VAT_RATE,
                 'vat_amount' => $vatCents / 100,
                 'total' => $totalCents / 100,
                 'payment_method' => $this->paymentMethod,
@@ -194,13 +196,13 @@ class PointOfSale extends Component
 
     public function viewReceipt(int $transactionId): void
     {
-        $this->authorizePermission('pos.checkout');
+        $this->authorizePermission('pos.view');
         $this->receiptId = PosTransaction::query()->where('status', 'completed')->findOrFail($transactionId)->id;
     }
 
     public function closeReceipt(): void
     {
-        $this->authorizePermission('pos.checkout');
+        $this->authorizePermission('pos.view');
         $this->receiptId = null;
     }
 
@@ -251,10 +253,15 @@ class PointOfSale extends Component
             'categories' => $categories,
             'lines' => $lines,
             'subtotal' => $subtotal,
-            'vat' => round($subtotal * 0.12, 2),
+            'vat' => $this->vatCents($subtotalCents) / 100,
             'history' => $history,
             'receipt' => $receipt,
         ])->layout('layouts.app', ['title' => 'Point of sale']);
+    }
+
+    private function vatCents(int $subtotalCents): int
+    {
+        return (int) round($subtotalCents * self::VAT_RATE);
     }
 
     private function cart(): array
