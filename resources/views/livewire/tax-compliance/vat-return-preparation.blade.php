@@ -8,7 +8,7 @@
         <span class="vat-rate-badge">Illustrative 12% VAT</span>
     </header>
 
-    <p class="temporary-notice" role="note">Demonstration only: this illustrative preparation interface is not a complete or official Form 2550Q and is not a filing or submission. It does not replace eFPS, eBIRForms, or any official BIR filing system. Values are fixtures, not actual taxable activity; POS demonstration sales are not included.</p>
+    <p class="temporary-notice" role="note">Demonstration only: this illustrative preparation interface is not a complete or official Form 2550Q and is not a filing or submission. It does not replace eFPS, eBIRForms, or any official BIR filing system. Values are fixtures, not actual taxable activity; recorded POS transactions are not included.</p>
 
     <div class="vat-return-controls">
         <label>

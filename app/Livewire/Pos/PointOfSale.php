@@ -3,133 +3,205 @@
 namespace App\Livewire\Pos;
 
 use App\Models\Inventory;
+use App\Models\PosTransaction;
+use App\Models\PosTransactionLine;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class PointOfSale extends Component
 {
+    use WithPagination;
+
     public string $search = '';
+
+    public string $category = '';
+
+    public string $customerName = '';
+
+    public string $paymentMethod = 'cash';
+
+    public string $amountReceived = '';
+
+    public string $paymentReference = '';
+
+    public ?int $receiptId = null;
 
     public function addToCart(int $inventoryId): void
     {
         $this->authorizePermission('pos.checkout');
         $item = Inventory::availableForSale()->findOrFail($inventoryId);
-        $state = $this->state();
-        $available = $this->availableQuantity($item, $state);
-        $quantity = $state['cart'][$item->id]['quantity'] ?? 0;
+        $cart = $this->cart();
+        $current = (float) ($cart[$item->id]['quantity'] ?? 0);
+        $next = $current === 0.0 ? min(1, (float) $item->qty) : min($current + 1, (float) $item->qty);
 
-        if ($quantity >= $available) {
-            return;
+        if ($next > $current) {
+            $cart[$item->id] = ['quantity' => $next];
+            $this->saveCart($cart);
         }
-
-        $state['cart'][$item->id] = ['quantity' => $quantity + 1];
-        $this->saveState($state);
     }
 
     public function changeQuantity(int $inventoryId, int $delta): void
     {
         $this->authorizePermission('pos.checkout');
-        $state = $this->state();
-        $line = $state['cart'][$inventoryId] ?? null;
+        $cart = $this->cart();
+        $quantity = (float) ($cart[$inventoryId]['quantity'] ?? 0) + ($delta < 0 ? -1 : 1);
+        $this->setCartQuantity($cart, $inventoryId, $quantity);
+    }
 
-        if ($line === null) {
-            return;
-        }
-
-        $quantity = $line['quantity'] + ($delta < 0 ? -1 : 1);
-        $item = Inventory::availableForSale()->find($inventoryId);
-        $available = $item ? $this->availableQuantity($item, $state) : 0;
-
-        if ($quantity <= 0 || $available <= 0) {
-            unset($state['cart'][$inventoryId]);
-        } else {
-            $state['cart'][$inventoryId]['quantity'] = min($quantity, $available);
-        }
-
-        $this->saveState($state);
+    public function setQuantity(int $inventoryId, float $quantity): void
+    {
+        $this->authorizePermission('pos.checkout');
+        $cart = $this->cart();
+        $this->setCartQuantity($cart, $inventoryId, $quantity);
     }
 
     public function removeFromCart(int $inventoryId): void
     {
         $this->authorizePermission('pos.checkout');
-        $state = $this->state();
-        unset($state['cart'][$inventoryId]);
-        $this->saveState($state);
+        $cart = $this->cart();
+        unset($cart[$inventoryId]);
+        $this->saveCart($cart);
     }
 
     public function checkout(): void
     {
         $this->authorizePermission('pos.checkout');
-        $state = $this->state();
-        $items = [];
+        $this->resetValidation();
+        $cart = $this->cart();
 
-        foreach ($state['cart'] as $inventoryId => $line) {
-            $item = Inventory::availableForSale()->find($inventoryId);
-            $quantity = (int) $line['quantity'];
+        if ($cart === []) {
+            throw ValidationException::withMessages(['cart' => 'Add at least one item before checkout.']);
+        }
+        ksort($cart);
 
-            if ($item === null || $quantity < 1 || $quantity > $this->availableQuantity($item, $state)) {
-                continue;
+        $this->validate([
+            'customerName' => ['nullable', 'string', 'max:255'],
+            'paymentMethod' => ['required', 'in:cash,card,bank_transfer'],
+            'amountReceived' => ['required', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
+            'paymentReference' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($this->paymentMethod !== 'cash' && trim($this->paymentReference) === '') {
+            throw ValidationException::withMessages(['paymentReference' => 'A reference number is required for card and bank transfer payments.']);
+        }
+
+        $transaction = DB::transaction(function () use ($cart): PosTransaction {
+            $items = [];
+
+            foreach ($cart as $inventoryId => $line) {
+                $item = Inventory::query()->lockForUpdate()->find($inventoryId);
+                $quantity = (float) ($line['quantity'] ?? 0);
+
+                if ($item === null || $item->status !== 'active' || $item->selling_price === null
+                    || $quantity <= 0 || round($quantity, 2) !== $quantity || $quantity > (float) $item->qty) {
+                    throw ValidationException::withMessages(['cart' => 'An item is no longer available in the requested quantity. Review the cart and try again.']);
+                }
+
+                $quantityCents = (int) round($quantity * 100);
+                $priceCents = (int) round((float) $item->selling_price * 100);
+                $items[] = [
+                    'inventory' => $item,
+                    'quantity' => $quantity,
+                    'lineSubtotalCents' => (int) round($quantityCents * $priceCents / 100),
+                ];
             }
 
-            $items[] = [
-                'id' => $item->id,
-                'name' => $item->name,
-                'category' => $item->category,
-                'unit' => $item->unit,
-                'quantity' => $quantity,
-                'sellingPrice' => (float) $item->selling_price,
-            ];
-        }
+            $subtotalCents = array_sum(array_column($items, 'lineSubtotalCents'));
+            $vatCents = (int) round($subtotalCents * 0.12);
+            $totalCents = $subtotalCents + $vatCents;
+            $receivedCents = (int) round((float) $this->amountReceived * 100);
 
-        if ($items === []) {
-            $state['cart'] = [];
-            $this->saveState($state);
+            if ($this->paymentMethod === 'cash' && $receivedCents < $totalCents) {
+                throw ValidationException::withMessages(['amountReceived' => 'Cash received must cover the transaction total.']);
+            }
 
-            return;
-        }
+            if ($this->paymentMethod !== 'cash' && $receivedCents !== $totalCents) {
+                throw ValidationException::withMessages(['amountReceived' => 'Card and bank transfer payments must exactly match the transaction total.']);
+            }
 
-        $subtotal = array_sum(array_map(fn (array $item) => $item['quantity'] * $item['sellingPrice'], $items));
-        $tax = $this->taxFor($subtotal);
-        $sales = $state['sales'];
-        $saleId = 'S-'.(1050 + count($sales));
-        $sale = [
-            'id' => $saleId,
-            'date' => now()->toDateString(),
-            'items' => array_sum(array_column($items, 'quantity')),
-            'total' => $subtotal + $tax,
-            'subtotal' => $subtotal,
-            'tax' => $tax,
-            'method' => 'Card',
-            'lines' => $items,
-        ];
+            $settings = session()->get('demo.settings.employee.'.auth()->id(), []);
+            $transaction = PosTransaction::create([
+                'transaction_number' => 'POS-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
+                'employee_id' => auth()->id(),
+                'customer_name' => trim($this->customerName) ?: null,
+                'subtotal' => $subtotalCents / 100,
+                'vat_rate' => 0.12,
+                'vat_amount' => $vatCents / 100,
+                'total' => $totalCents / 100,
+                'payment_method' => $this->paymentMethod,
+                'amount_received' => $receivedCents / 100,
+                'change_due' => max(0, $receivedCents - $totalCents) / 100,
+                'payment_reference' => trim($this->paymentReference) ?: null,
+                'status' => 'completed',
+                'completed_at' => now(),
+                'receipt_company_name' => $settings['companyName'] ?? null,
+                'receipt_company_address' => $settings['address'] ?? null,
+                'receipt_company_phone' => $settings['phone'] ?? null,
+            ]);
 
-        foreach ($items as $item) {
-            $state['stock'][$item['id']] = ($state['stock'][$item['id']] ?? 0) + $item['quantity'];
-        }
+            $vatRemaining = $vatCents;
+            foreach ($items as $index => $line) {
+                /** @var Inventory $item */
+                $item = $line['inventory'];
+                $quantity = $line['quantity'];
+                $lineSubtotalCents = $line['lineSubtotalCents'];
+                $lineVatCents = $index === array_key_last($items)
+                    ? $vatRemaining
+                    : min($vatRemaining, (int) round($lineSubtotalCents * 0.12));
+                $vatRemaining -= $lineVatCents;
 
-        array_unshift($sales, $sale);
-        $state['sales'] = $sales;
-        $state['cart'] = [];
-        $state['lastSaleId'] = $saleId;
-        $this->saveState($state);
+                PosTransactionLine::create([
+                    'pos_transaction_id' => $transaction->id,
+                    'inventory_id' => $item->id,
+                    'inventory_code' => $item->code,
+                    'item_name' => $item->name,
+                    'category' => $item->category,
+                    'unit' => $item->unit,
+                    'quantity' => $quantity,
+                    'selling_price' => $item->selling_price,
+                    'unit_cost' => $item->unit_cost,
+                    'line_subtotal' => $lineSubtotalCents / 100,
+                    'vat_amount' => $lineVatCents / 100,
+                    'line_total' => ($lineSubtotalCents + $lineVatCents) / 100,
+                ]);
+
+                $item->stockMovements()->create([
+                    'posted_by' => auth()->id(),
+                    'type' => 'stock_out',
+                    'quantity' => -$quantity,
+                    'reason_category' => 'sale',
+                    'reference' => $transaction->transaction_number,
+                    'effective_date' => now()->toDateString(),
+                    'posted_at' => now(),
+                ]);
+
+                Inventory::query()->whereKey($item->id)->update(['qty' => (float) $item->qty - $quantity]);
+            }
+
+            return $transaction;
+        });
+
+        $this->saveCart([]);
+        $this->resetPage();
+        $this->receiptId = $transaction->id;
+        $this->amountReceived = '';
+        $this->paymentReference = '';
+        $this->customerName = '';
     }
 
-    public function viewReceipt(string $saleId): void
+    public function viewReceipt(int $transactionId): void
     {
         $this->authorizePermission('pos.checkout');
-        $state = $this->state();
-
-        if (collect($state['sales'])->contains('id', $saleId)) {
-            $state['lastSaleId'] = $saleId;
-            $this->saveState($state);
-        }
+        $this->receiptId = PosTransaction::query()->where('status', 'completed')->findOrFail($transactionId)->id;
     }
 
     public function closeReceipt(): void
     {
         $this->authorizePermission('pos.checkout');
-        $state = $this->state();
-        $state['lastSaleId'] = null;
-        $this->saveState($state);
+        $this->receiptId = null;
     }
 
     public function viewImage(int $inventoryId): void
@@ -143,78 +215,76 @@ class PointOfSale extends Component
 
     public function render()
     {
-        $state = $this->state();
-        $items = Inventory::availableForSale()
-            ->where(function ($query) {
+        $itemsQuery = Inventory::availableForSale()
+            ->where('qty', '>', 0)
+            ->when($this->search !== '', fn ($query) => $query->where(function ($query) {
                 $query->where('name', 'like', '%'.$this->search.'%')
                     ->orWhere('category', 'like', '%'.$this->search.'%');
-            })
-            ->get()
-            ->map(function (Inventory $item) use ($state) {
-                $item->simulated_qty = $this->availableQuantity($item, $state);
-
-                return $item;
-            })
-            ->filter(fn (Inventory $item) => $item->simulated_qty >= 1);
-
-        $cartItems = Inventory::query()->whereKey(array_keys($state['cart']))->get()->keyBy('id');
-        $lines = collect($state['cart'])->map(function (array $line, int|string $id) use ($cartItems, $state) {
+            }))
+            ->when($this->category !== '', fn ($query) => $query->where('category', $this->category));
+        $items = $itemsQuery->get();
+        $categories = Inventory::availableForSale()->where('qty', '>', 0)->distinct()->orderBy('category')->pluck('category');
+        $cart = $this->cart();
+        $cartItems = Inventory::query()->whereKey(array_keys($cart))->get()->keyBy('id');
+        $lines = collect($cart)->map(function (array $line, int|string $id) use ($cartItems) {
             $item = $cartItems->get((int) $id);
 
             if ($item === null || $item->selling_price === null) {
                 return null;
             }
 
-            $item->cart_quantity = $line['quantity'];
-            $item->simulated_qty = max(0, (float) $item->qty - ($state['stock'][$item->id] ?? 0));
+            $item->cart_quantity = (float) $line['quantity'];
 
             return $item;
         })->filter()->values();
-        $subtotal = $lines->sum(fn (Inventory $item) => $item->cart_quantity * (float) $item->selling_price);
-        $sales = $state['sales'];
-        $receipt = collect($sales)->firstWhere('id', $state['lastSaleId']);
-        $settings = session()->get('demo.settings.employee.'.auth()->id(), []);
+        $subtotalCents = $lines->sum(fn (Inventory $item) => (int) round(
+            (int) round($item->cart_quantity * 100) * (int) round((float) $item->selling_price * 100) / 100,
+        ));
+        $subtotal = $subtotalCents / 100;
+        $history = PosTransaction::query()->with('lines')->where('status', 'completed')->latest('completed_at')->paginate(20);
+        $receipt = $this->receiptId
+            ? PosTransaction::query()->with('lines')->where('status', 'completed')->find($this->receiptId)
+            : null;
 
         return view('livewire.pos.point-of-sale', [
             'items' => $items,
+            'categories' => $categories,
             'lines' => $lines,
             'subtotal' => $subtotal,
-            'tax' => $this->taxFor($subtotal),
-            'sales' => $sales,
+            'vat' => round($subtotal * 0.12, 2),
+            'history' => $history,
             'receipt' => $receipt,
-            'settings' => $settings,
         ])->layout('layouts.app', ['title' => 'Point of sale']);
     }
 
-    private function state(): array
+    private function cart(): array
     {
-        return session()->get($this->sessionKey(), [
-            'cart' => [],
-            'sales' => [],
-            'stock' => [],
-            'lastSaleId' => null,
-        ]);
+        return session()->get($this->sessionKey(), []);
     }
 
-    private function saveState(array $state): void
+    private function saveCart(array $cart): void
     {
-        session()->put($this->sessionKey(), $state);
+        session()->put($this->sessionKey(), $cart);
     }
 
     private function sessionKey(): string
     {
-        return 'demo.pos.employee.'.auth()->id();
+        return 'pos.employee.'.auth()->id().'.cart';
     }
 
-    private function availableQuantity(Inventory $item, array $state): int
+    private function setCartQuantity(array $cart, int $inventoryId, float $quantity): void
     {
-        return max(0, (int) floor((float) $item->qty - ($state['stock'][$item->id] ?? 0)));
-    }
+        $item = Inventory::availableForSale()->find($inventoryId);
 
+        if ($item === null || $quantity <= 0) {
+            unset($cart[$inventoryId]);
+        } elseif (round($quantity, 2) !== $quantity || $quantity > (float) $item->qty) {
+            throw ValidationException::withMessages(['cart' => 'Quantity must be positive, use at most two decimal places, and not exceed available stock.']);
+        } else {
+            $cart[$inventoryId] = ['quantity' => $quantity];
+        }
 
-    private function taxFor(float $subtotal): float
-    {
-        return $subtotal * 0.12;
+        $this->saveCart($cart);
     }
 
     private function authorizePermission(string $permission): void

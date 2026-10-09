@@ -43,10 +43,6 @@ test('account and date selections remain usable without creating ledger activity
         'debitTotal' => 500,
         'creditTotal' => 500,
     ]]);
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
-        'id' => 'S-DEMO-LEDGER',
-        'total' => 250,
-    ]]);
 
     Livewire::test(GeneralLedger::class)
         ->assertSee('All accounts')
@@ -61,7 +57,5 @@ test('account and date selections remain usable without creating ledger activity
         ->assertSee('Real ledger calculation and reporting are not implemented.')
         ->assertDontSee('Running balance')
         ->assertDontSee('DEMO-JE-LEDGER')
-        ->assertDontSee('S-DEMO-LEDGER')
-        ->assertDontSee('500.00')
-        ->assertDontSee('250.00');
+        ->assertDontSee('500.00');
 });

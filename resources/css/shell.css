@@ -119,18 +119,22 @@
 .pos-cart-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .pos-cart-name span { display: block; margin-top: 2px; color: var(--slate-400); font-size: 12px; }
 .pos-quantity-controls { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
-.pos-quantity-controls button { width: 24px; height: 24px; border: 0; border-radius: 4px; background: var(--slate-100); cursor: pointer; }
+.pos-quantity-controls input { width: 84px; min-width: 0; padding: 4px; border: 1px solid var(--slate-200); border-radius: 4px; font: inherit; font-size: 12px; }
 .pos-quantity-controls .pos-remove-button { color: var(--red-700); }
 .pos-cart-empty, .pos-empty-products { color: var(--slate-400); font-size: 13px; }
 .pos-cart-totals { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--slate-100); }
 .pos-cart-totals div, .pos-cart-totals strong, .pos-receipt-totals div, .pos-receipt-totals strong { display: flex; justify-content: space-between; padding: 2px 0; }
 .pos-cart-totals div { color: var(--slate-500); font-size: 13px; }
 .pos-cart-totals strong { padding-top: 6px; font-size: 15px; }
-.pos-demo-note, .pos-receipt-disclaimer { color: var(--slate-500); font-size: 12px; line-height: 1.5; }
+.pos-payment-fields { display: grid; gap: 10px; margin-top: 14px; }
+.pos-payment-fields label { display: grid; gap: 5px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.pos-payment-fields input, .pos-payment-fields select { min-height: 38px; padding: 7px 9px; border: 1px solid var(--slate-200); border-radius: 7px; background: #fff; font: inherit; font-weight: 400; }
 .pos-confirmation { padding: 10px; border-radius: 8px; color: var(--emerald-700); background: var(--emerald-50); font-size: 13px; }
 .pos-sales-history { margin-top: 16px; }
-.pos-sale-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--slate-100); font-size: 13px; }
-.pos-sale-row button, .pos-receipt-actions button { padding: 7px 10px; border: 0; border-radius: 6px; color: #fff; background: var(--emerald-700); cursor: pointer; }
+.pos-sales-history .reports-table { min-width: 900px; }
+.pos-sales-history .reports-table-wrap { overflow-x: auto; }
+.pos-sales-history .reports-table button { padding: 6px 9px; border: 0; border-radius: 6px; color: #fff; background: var(--emerald-700); cursor: pointer; }
+.pos-receipt-actions button { padding: 7px 10px; border: 0; border-radius: 6px; color: #fff; background: var(--emerald-700); cursor: pointer; }
 .pos-receipt-overlay { position: fixed; z-index: 20; inset: 0; display: grid; overflow: auto; place-items: center; padding: 18px; background: rgb(0 0 0 / 40%); }
 .pos-receipt { width: min(100%, 360px); padding: 20px; border-radius: 12px; background: #fff; font-size: 13px; }
 .pos-receipt h2 { margin: 0 0 12px; color: var(--red-700); font-size: 13px; text-align: center; }

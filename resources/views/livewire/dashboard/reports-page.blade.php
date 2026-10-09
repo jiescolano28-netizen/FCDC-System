@@ -31,7 +31,7 @@
                     @endforeach
                 </div>
             </div>
-            <p class="dashboard-chart-note">Fixed illustrative series, separate from session demo sales and persisted business activity.</p>
+            <p class="dashboard-chart-note">Fixed illustrative series, separate from completed POS transactions and persisted inventory.</p>
             <div class="dashboard-chart-wrap" data-dashboard-chart="sales" data-chart='@json($period['data'])'>
                 <canvas data-chart-canvas role="img" aria-label="Illustrative sales trend for {{ $period['label'] }}"></canvas>
             </div>
@@ -39,7 +39,7 @@
 
         <section class="dashboard-card" aria-labelledby="reports-category-title">
             <h2 class="dashboard-card-title" id="reports-category-title">Inventory value by category</h2>
-            <p class="dashboard-chart-note">Persisted quantity × unit cost. Demo checkout does not change these values.</p>
+            <p class="dashboard-chart-note">Persisted quantity × unit cost. Completed sales update on-hand quantities.</p>
             @if ($categoryValues === [])
                 <p class="dashboard-empty">No inventory categories to chart yet.</p>
             @else
@@ -57,17 +57,17 @@
 
     <section class="dashboard-card reports-sales-card" aria-labelledby="recent-sales-title">
         <h2 class="dashboard-card-title" id="recent-sales-title">Recent sales</h2>
-        <p class="dashboard-chart-note">Completed session checkouts are demonstrations, not recorded business sales. They are independent from the illustrative chart.</p>
+        <p class="dashboard-chart-note">Completed POS transactions recorded at checkout. The chart above remains illustrative.</p>
         <div class="reports-table-wrap">
             <table class="reports-table">
-                <thead><tr><th>Sale ID</th><th>Date</th><th class="numeric">Items</th><th class="numeric">Total</th><th>Method</th><th>Status</th></tr></thead>
+                <thead><tr><th>Transaction</th><th>Date</th><th class="numeric">Items</th><th class="numeric">Total</th><th>Method</th><th>Status</th></tr></thead>
                 <tbody>
                     @forelse ($sales as $sale)
-                        <tr wire:key="reports-demo-sale-{{ $sale['id'] }}">
-                            <td>Demo {{ $sale['id'] }}</td><td>{{ $sale['date'] }}</td><td class="numeric">{{ $sale['items'] }}</td><td class="numeric">₱{{ number_format($sale['total'], 2) }}</td><td>{{ $sale['method'] ?? '—' }}</td><td><span class="reports-demo-badge">Demonstration only</span></td>
+                        <tr wire:key="reports-transaction-{{ $sale->id }}">
+                            <td>{{ $sale->transaction_number }}</td><td>{{ $sale->completed_at->format('Y-m-d') }}</td><td class="numeric">{{ number_format((float) $sale->lines->sum('quantity'), 2) }}</td><td class="numeric">₱{{ number_format((float) $sale->total, 2) }}</td><td>{{ str_replace('_', ' ', ucfirst($sale->payment_method)) }}</td><td>{{ ucfirst($sale->status) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="reports-empty">No completed demo sales in this session.</td></tr>
+                        <tr><td colspan="6" class="reports-empty">No completed transactions.</td></tr>
                     @endforelse
                 </tbody>
             </table>

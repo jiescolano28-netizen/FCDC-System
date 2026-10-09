@@ -8,7 +8,7 @@
         <span class="vat-rate-badge">Illustrative 12% VAT</span>
     </header>
 
-    <p class="temporary-notice" role="note">Demonstration only: these placeholder totals are not evidence of actual taxable activity and do not constitute a statutory return. Nothing is filed with a tax authority. POS demonstration sales are not included.</p>
+    <p class="temporary-notice" role="note">Demonstration only: these placeholder totals are not evidence of actual taxable activity and do not constitute a statutory return. Nothing is filed with a tax authority. Recorded POS transactions are not included in these illustrative totals.</p>
 
     <div class="vat-summary-controls">
         <label>

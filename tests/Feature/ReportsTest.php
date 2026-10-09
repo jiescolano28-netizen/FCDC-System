@@ -45,9 +45,8 @@ test('Reports is a separately routed authenticated Dashboard page', function () 
         ->assertDontSee('id="view-reports"', false);
 });
 
-test('Reports separates illustrative sales from session demo sales and persisted inventory', function () {
-    $employee = createReportsEmployee();
-    $this->actingAs($employee);
+test('Reports separates illustrative trends from persisted transactions and inventory', function () {
+    $this->actingAs(createReportsEmployee());
     $board = createReportsInventory();
     createReportsInventory([
         'name' => 'Cement bag',
@@ -59,50 +58,39 @@ test('Reports separates illustrative sales from session demo sales and persisted
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
         ->call('changeQuantity', $board->id, 1)
-        ->call('checkout');
+        ->set('amountReceived', '44.80')
+        ->call('checkout')
+        ->assertHasNoErrors();
 
-    $response = $this->get(route('reports'));
-    $response->assertOk()
+    $this->get(route('reports'))->assertOk()
         ->assertSee('Fixed illustrative series')
-        ->assertSee('not recorded sales')
-        ->assertSee('S-1050')
+        ->assertSee('POS-')
         ->assertSee('₱44.80')
-        ->assertSee('Card')
+        ->assertSee('Cash')
         ->assertSee('Lumber')
         ->assertSee('Masonry')
-        ->assertSee('Lumber · piece: 10.00')
+        ->assertSee('Lumber · piece: 8.00')
         ->assertSee('Masonry · bag: 4.00')
-        ->assertSee('"label":"Lumber","total":50', false)
+        ->assertSee('"label":"Lumber","total":40', false)
         ->assertSee('"label":"Masonry","total":32', false);
 
-    expect($board->fresh()->qty)->toBe('10.00');
+    expect($board->fresh()->qty)->toBe('8.00');
 });
 
 test('Reports period selection updates only the illustrative sales series', function () {
-    $employee = createReportsEmployee();
-    $this->actingAs($employee);
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
-        'id' => 'S-1050',
-        'date' => '2026-10-04',
-        'items' => 1,
-        'total' => 22.4,
-        'method' => 'Card',
-        'lines' => [],
-    ]]);
+    $this->actingAs(createReportsEmployee());
 
     Livewire::test(ReportsPage::class)
         ->assertSee('Sales trend')
-        ->assertSee('S-1050')
         ->call('setSalesPeriod', 'month')
         ->assertSee('Wk 1')
-        ->assertSee('S-1050')
         ->call('setSalesPeriod', 'invalid')
         ->assertSee('Wk 1');
 });
 
-test('Reports shows useful empty states when no inventory or demo sales exist', function () {
+test('Reports shows useful empty states when no inventory or transactions exist', function () {
     $this->actingAs(createReportsEmployee())->get(route('reports'))->assertOk()
         ->assertSee('No inventory categories to chart yet.')
-        ->assertSee('No completed demo sales in this session.')
+        ->assertSee('No completed transactions.')
         ->assertSee('₱0.00');
 });

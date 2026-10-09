@@ -42,10 +42,6 @@ test('statement type and dates update the isolated non-operational document', fu
         'debitTotal' => 500,
         'creditTotal' => 500,
     ]]);
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
-        'id' => 'S-DEMO-STATEMENT',
-        'total' => 250,
-    ]]);
 
     Livewire::test(FinancialStatements::class)
         ->assertSee('Income Statement')
@@ -61,7 +57,5 @@ test('statement type and dates update the isolated non-operational document', fu
         ->assertSee('No financial statement is available.')
         ->assertSee('not a real financial statement')
         ->assertDontSee('DEMO-JE-STATEMENT')
-        ->assertDontSee('S-DEMO-STATEMENT')
-        ->assertDontSee('500.00')
-        ->assertDontSee('250.00');
+        ->assertDontSee('500.00');
 });

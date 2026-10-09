@@ -48,7 +48,7 @@ test('accounting overview is an authenticated named page with non-operational fi
     }
 });
 
-test('session demo journals and POS sales do not appear as accounting balances or postings', function () {
+test('session demo journals do not appear as accounting balances or postings', function () {
     $employee = createAccountingOverviewEmployee();
     $this->actingAs($employee);
 
@@ -58,17 +58,11 @@ test('session demo journals and POS sales do not appear as accounting balances o
         'debitTotal' => 500,
         'creditTotal' => 500,
     ]]);
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
-        'id' => 'S-DEMO-001',
-        'total' => 250,
-    ]]);
 
     $this->get(route('accounting.overview'))
         ->assertOk()
         ->assertSee('Real accounting balances and reports are not implemented', false)
         ->assertSee('No posted accounting activity', false)
         ->assertDontSee('DEMO-JE-001')
-        ->assertDontSee('S-DEMO-001')
-        ->assertDontSee('500.00')
-        ->assertDontSee('250.00');
+        ->assertDontSee('500.00');
 });

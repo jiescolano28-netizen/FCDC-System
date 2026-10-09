@@ -8,7 +8,7 @@
         <span class="vat-rate-badge">Illustrative 12% VAT</span>
     </header>
 
-    <p class="temporary-notice" role="note">Demonstration only: this report is not evidence of actual taxable activity, is not a statutory tax return, and is not filed with a tax authority. POS demonstration sales are not included.</p>
+    <p class="temporary-notice" role="note">Demonstration only: this report is not evidence of actual taxable activity, is not a statutory tax return, and is not filed with a tax authority. Recorded POS transactions are not included in this illustrative report.</p>
 
     <div class="tax-report-controls">
         <label for="tax-report-period">Reporting period</label>

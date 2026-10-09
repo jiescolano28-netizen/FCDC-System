@@ -3,6 +3,7 @@
 namespace App\Livewire\Dashboard;
 
 use App\Models\Inventory;
+use App\Models\PosTransaction;
 use App\Support\IllustrativeSales;
 use Livewire\Component;
 
@@ -36,7 +37,7 @@ class ReportsPage extends Component
 
     public function render()
     {
-        $sales = session('demo.pos.employee.'.auth()->id().'.sales', []);
+        $sales = PosTransaction::query()->with('lines')->where('status', 'completed')->latest('completed_at')->limit(20)->get();
         $period = [
             'label' => self::SALES_PERIOD_LABELS[$this->salesPeriod],
             'data' => IllustrativeSales::SERIES_BY_PERIOD[$this->salesPeriod],

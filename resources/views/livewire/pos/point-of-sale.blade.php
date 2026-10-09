@@ -1,9 +1,9 @@
-@php($money = fn ($amount) => '₱'.number_format($amount, 2))
+@php($money = fn ($amount) => '₱'.number_format((float) $amount, 2))
 <section class="pos-page" aria-labelledby="pos-heading">
     <header class="pos-heading">
         <div>
             <h1 id="pos-heading">Point of sale</h1>
-            <p class="page-subtitle">Temporary demonstration activity. Checkout does not record sales or change inventory.</p>
+            <p class="page-subtitle">Completed transactions are recorded with 12% VAT on VAT-exclusive prices.</p>
         </div>
     </header>
 
@@ -11,6 +11,13 @@
         <div class="pos-products">
             <label class="pos-search-label" for="pos-search">Search materials</label>
             <input id="pos-search" class="pos-search" type="search" placeholder="Search materials to sell..." wire:model.live.debounce.300ms="search">
+            <label class="pos-search-label" for="pos-category">Category</label>
+            <select id="pos-category" class="pos-search" wire:model.live="category">
+                <option value="">All categories</option>
+                @foreach ($categories as $categoryOption)
+                    <option value="{{ $categoryOption }}">{{ $categoryOption }}</option>
+                @endforeach
+            </select>
 
             <div class="pos-product-grid">
                 @forelse ($items as $item)
@@ -23,8 +30,8 @@
                         <div class="pos-product-category">{{ $item->category }}</div>
                         <h2>{{ $item->name }}</h2>
                         <div class="pos-product-footer">
-                            <strong>{{ $money((float) $item->selling_price) }}</strong>
-                            <span>{{ number_format($item->simulated_qty, 2) }} {{ $item->unit }} left</span>
+                            <strong>{{ $money($item->selling_price) }}</strong>
+                            <span>{{ number_format((float) $item->qty, 2) }} {{ $item->unit }} left</span>
                         </div>
                         @can('pos.checkout')
                             <button class="pos-add-button" type="button" wire:click="addToCart({{ $item->id }})">Add to Sale</button>
@@ -41,12 +48,10 @@
             <div class="pos-cart-lines">
                 @forelse ($lines as $item)
                     <div class="pos-cart-line" wire:key="cart-line-{{ $item->id }}">
-                        <div class="pos-cart-name">{{ $item->name }}<span>{{ $money((float) $item->selling_price) }} / {{ $item->unit }}</span></div>
+                        <div class="pos-cart-name">{{ $item->name }}<span>{{ $money($item->selling_price) }} / {{ $item->unit }}</span></div>
                         @can('pos.checkout')
                             <div class="pos-quantity-controls">
-                                <button type="button" wire:click="changeQuantity({{ $item->id }}, -1)" aria-label="Decrease {{ $item->name }} quantity">−</button>
-                                <span>{{ $item->cart_quantity }}</span>
-                                <button type="button" wire:click="changeQuantity({{ $item->id }}, 1)" aria-label="Increase {{ $item->name }} quantity">+</button>
+                                <input aria-label="{{ $item->name }} quantity" type="number" min="0.01" max="{{ $item->qty }}" step="0.01" value="{{ number_format($item->cart_quantity, 2, '.', '') }}" wire:change="setQuantity({{ $item->id }}, $event.target.value)">
                                 <button class="pos-remove-button" type="button" wire:click="removeFromCart({{ $item->id }})" aria-label="Remove {{ $item->name }}">×</button>
                             </div>
                         @endcan
@@ -58,61 +63,91 @@
 
             <div class="pos-cart-totals">
                 <div><span>Subtotal</span><span>{{ $money($subtotal) }}</span></div>
-                <div><span>VAT (12%)</span><span>{{ $money($tax) }}</span></div>
-                <strong><span>Total</span><span>{{ $money($subtotal + $tax) }}</span></strong>
+                <div><span>VAT (12%)</span><span>{{ $money($vat) }}</span></div>
+                <strong><span>Total</span><span>{{ $money($subtotal + $vat) }}</span></strong>
             </div>
             @can('pos.checkout')
-                <button class="pos-checkout-button" type="button" wire:click="checkout" @disabled($lines->isEmpty())>Charge {{ $money($subtotal + $tax) }}</button>
+                <div class="pos-payment-fields">
+                    <label>Customer (optional)<input type="text" maxlength="255" wire:model="customerName"></label>
+                    @error('customerName') <p class="settings-error">{{ $message }}</p> @enderror
+                    <label>Payment method
+                        <select wire:model.live="paymentMethod">
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="bank_transfer">Bank transfer</option>
+                        </select>
+                    </label>
+                    <label>Amount received (PHP)<input type="number" min="0" step="0.01" wire:model="amountReceived"></label>
+                    @if ($paymentMethod !== 'cash')
+                        <label>Reference number<input type="text" maxlength="255" wire:model="paymentReference"></label>
+                    @endif
+                    @error('cart') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('amountReceived') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('paymentReference') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('paymentMethod') <p class="settings-error">{{ $message }}</p> @enderror
+                    <button class="pos-checkout-button" type="button" wire:click="checkout" @disabled($lines->isEmpty())>Complete transaction · {{ $money($subtotal + $vat) }}</button>
+                </div>
             @endcan
-            <p class="pos-demo-note" role="note">Demonstration checkout only. No payment is processed and no sale or inventory record is created.</p>
-
-            @if ($receipt)
-                <p class="pos-confirmation" role="status">Demo sale {{ $receipt['id'] }} completed — demonstration activity, not a recorded sale.</p>
+            @if (session()->has('status'))
+                <p class="pos-confirmation" role="status">{{ session('status') }}</p>
             @endif
         </aside>
     </div>
 
-    @if (count($sales))
-        <section class="pos-sales-history" aria-labelledby="pos-history-heading">
-            <h2 id="pos-history-heading">Completed demo sales</h2>
-            @foreach ($sales as $sale)
-                <div class="pos-sale-row" wire:key="demo-sale-{{ $sale['id'] }}">
-                    <span>{{ $sale['id'] }} · {{ $sale['date'] }} · {{ $sale['items'] }} item(s) · {{ $money($sale['total']) }}</span>
-                    @can('pos.checkout')
-                        <button type="button" wire:click="viewReceipt('{{ $sale['id'] }}')">View demo receipt</button>
-                    @endcan
-                </div>
-            @endforeach
-        </section>
-    @endif
+    <section class="pos-sales-history" aria-labelledby="pos-history-heading">
+        <h2 id="pos-history-heading">Transaction history</h2>
+        <div class="reports-table-wrap">
+            <table class="reports-table">
+                <thead><tr><th>Transaction</th><th>Date</th><th>Customer</th><th>Items</th><th class="numeric">Amount</th><th class="numeric">VAT</th><th>Payment</th><th>Status</th><th>Receipt</th></tr></thead>
+                <tbody>
+                    @forelse ($history as $transaction)
+                        <tr wire:key="pos-transaction-{{ $transaction->id }}">
+                            <td>{{ $transaction->transaction_number }}</td>
+                            <td>{{ $transaction->completed_at->format('Y-m-d H:i') }}</td>
+                            <td>{{ $transaction->customer_name ?: '—' }}</td>
+                            <td>{{ $transaction->lines->map(fn ($line) => $line->item_name.' × '.number_format((float) $line->quantity, 2).' '.$line->unit)->implode(', ') }}</td>
+                            <td class="numeric">{{ $money($transaction->total) }}</td>
+                            <td class="numeric">{{ $money($transaction->vat_amount) }}</td>
+                            <td>{{ str_replace('_', ' ', ucfirst($transaction->payment_method)) }}</td>
+                            <td>{{ ucfirst($transaction->status) }}</td>
+                            <td><button type="button" wire:click="viewReceipt({{ $transaction->id }})">View receipt</button></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="9" class="reports-empty">No completed transactions.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        {{ $history->links() }}
+    </section>
 
     @if ($receipt)
         <div class="pos-receipt-overlay" role="dialog" aria-modal="true" aria-labelledby="receipt-heading">
             <article class="pos-receipt" id="pos-receipt-print">
-                <h2 id="receipt-heading">Demonstration receipt · Not a recorded sale</h2>
+                <h2 id="receipt-heading">Receipt · Completed transaction</h2>
                 <header>
-                    <strong>{{ $settings['companyName'] ?? 'Fabellion Construction and Development Corp.' }}</strong>
-                    <span>{{ $settings['address'] ?? 'San Mateo, Rizal' }}</span>
-                    <span>{{ $settings['phone'] ?? '(951) 555-0148' }}</span>
+                    <strong>{{ $receipt->receipt_company_name ?: 'Fabellion Construction and Development Corp.' }}</strong>
+                    @if ($receipt->receipt_company_address)<span>{{ $receipt->receipt_company_address }}</span>@endif
+                    @if ($receipt->receipt_company_phone)<span>{{ $receipt->receipt_company_phone }}</span>@endif
                 </header>
-                <p class="pos-receipt-meta"><span>Demo receipt #{{ $receipt['id'] }}</span><span>{{ $receipt['date'] }}</span></p>
-                <table>
-                    <tbody>
-                        @foreach ($receipt['lines'] as $line)
-                            <tr>
-                                <td>{{ $line['name'] }}<small>{{ $line['quantity'] }} x {{ $money($line['sellingPrice']) }}</small></td>
-                                <td>{{ $money($line['quantity'] * $line['sellingPrice']) }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-                <div class="pos-receipt-totals"><div><span>Subtotal</span><span>{{ $money($receipt['subtotal']) }}</span></div><div><span>VAT (12%)</span><span>{{ $money($receipt['tax']) }}</span></div><strong><span>Total</span><span>{{ $money($receipt['total']) }}</span></strong></div>
-                <p class="pos-receipt-disclaimer">For demonstration only. No payment was processed and this is not a recorded business sale.</p>
+                <p class="pos-receipt-meta"><span>{{ $receipt->transaction_number }}</span><span>{{ $receipt->completed_at->format('Y-m-d H:i') }}</span></p>
+                <p>Customer: {{ $receipt->customer_name ?: '—' }}</p>
+                <table><tbody>
+                    @foreach ($receipt->lines as $line)
+                        <tr><td>{{ $line->item_name }}<small>{{ number_format((float) $line->quantity, 2) }} {{ $line->unit }} × {{ $money($line->selling_price) }}</small></td><td>{{ $money($line->line_subtotal) }}</td></tr>
+                    @endforeach
+                </tbody></table>
+                <div class="pos-receipt-totals">
+                    <div><span>Subtotal</span><span>{{ $money($receipt->subtotal) }}</span></div>
+                    <div><span>VAT (12%)</span><span>{{ $money($receipt->vat_amount) }}</span></div>
+                    <strong><span>Total</span><span>{{ $money($receipt->total) }}</span></strong>
+                    <div><span>{{ str_replace('_', ' ', ucfirst($receipt->payment_method)) }} received</span><span>{{ $money($receipt->amount_received) }}</span></div>
+                    <div><span>Change</span><span>{{ $money($receipt->change_due) }}</span></div>
+                </div>
+                @if ($receipt->payment_reference)<p>Reference: {{ $receipt->payment_reference }}</p>@endif
                 <footer class="pos-receipt-actions">
-                    @can('pos.checkout')
-                        <button type="button" wire:click="closeReceipt">Close</button>
-                    @endcan
-                    <button type="button" onclick="document.body.classList.add('printing-pos-receipt'); window.print(); setTimeout(() => document.body.classList.remove('printing-pos-receipt'), 100)">Print demonstration receipt</button>
+                    <button type="button" wire:click="closeReceipt">Close</button>
+                    <button type="button" onclick="document.body.classList.add('printing-pos-receipt'); window.print(); setTimeout(() => document.body.classList.remove('printing-pos-receipt'), 100)">Print receipt</button>
                 </footer>
             </article>
         </div>

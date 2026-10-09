@@ -4,6 +4,7 @@ use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Settings\SettingsPage;
 use App\Models\Employee;
 use App\Models\Inventory;
+use App\Models\PosTransaction;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -38,64 +39,67 @@ function createPosInventory(array $overrides = []): Inventory
 test('POS is an authenticated named Livewire page in the shared shell', function () {
     $this->get(route('pos'))->assertRedirect(route('login'));
 
-    $employee = createPosEmployee();
-
-    $this->actingAs($employee)->get(route('pos'))->assertOk()
+    $this->actingAs(createPosEmployee())->get(route('pos'))->assertOk()
         ->assertSee('Point of sale')
-        ->assertSee('Temporary demonstration activity', false)
+        ->assertSee('Transaction history')
+        ->assertSee('Bank transfer')
         ->assertSee(route('settings'), false)
-        ->assertSee(route('pos'), false);
+        ->assertSee(route('pos'), false)
+        ->assertDontSee('demonstration checkout');
 
     $this->get(route('dashboard'))->assertOk()
         ->assertSee(route('pos'), false)
-        ->assertDontSee('id="view-pos"', false);
+        ->assertDontSee('id=\"view-pos\"', false);
 });
 
-test('cashier can search, edit a bounded cart, and keep it after navigation and refresh', function () {
+test('cashier can search by item or category, adjust a bounded decimal cart, and keep it after navigation', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory();
     createPosInventory(['name' => 'Cement bag', 'category' => 'Concrete']);
 
     $component = Livewire::test(PointOfSale::class)
+        ->set('category', 'Concrete')
+        ->assertSee('Cement bag')
+        ->assertDontSee('Pine board')
+        ->set('category', '')
         ->set('search', 'pine')
         ->assertSee('Pine board')
         ->assertDontSee('Cement bag')
         ->call('addToCart', $board->id)
-        ->call('changeQuantity', $board->id, 1)
-        ->assertSee('Subtotal');
+        ->call('addToCart', $board->id)
+        ->assertSee('2.00')
+        ->call('setQuantity', $board->id, 1.25)
+        ->assertSee('1.25');
 
-    foreach (range(1, 8) as $step) {
-        $component->call('changeQuantity', $board->id, 1);
-    }
-
-    $component->call('changeQuantity', $board->id, 1)->assertHasNoErrors();
-
-    expect(session('demo.pos.employee.'.auth()->id().'.cart')[$board->id]['quantity'])->toBe(10);
+    expect(session('pos.employee.'.auth()->id().'.cart')[$board->id]['quantity'])->toBe(1.25);
 
     $this->get(route('settings'))->assertOk();
-    $this->get(route('pos'))->assertOk()->assertSee('Pine board');
+    $this->get(route('pos'))->assertOk()->assertSee('Pine board')->assertSee('1.25');
 
     Livewire::test(PointOfSale::class)
-        ->call('changeQuantity', $board->id, -1)
+        ->call('setQuantity', $board->id, 10.01)
+        ->assertHasErrors('cart')
         ->call('removeFromCart', $board->id)
         ->assertSee('Cart is empty');
 });
 
-test('fractional stock below one unit cannot be over-added to the integer POS cart', function () {
+test('fractional stock is available and can be sold at two decimal precision', function () {
     $this->actingAs(createPosEmployee());
-    $board = createPosInventory(['qty' => 0.5]);
+    $board = createPosInventory(['qty' => 0.50]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
+        ->call('setQuantity', $board->id, 0.50)
+        ->set('amountReceived', '11.20')
         ->call('checkout')
-        ->assertSee('No matching in-stock materials.')
-        ->assertSee('Cart is empty');
+        ->assertHasNoErrors()
+        ->assertSee('₱11.20');
 
-    expect(session('demo.pos.employee.'.auth()->id().'.cart'))->toBe([])
-        ->and($board->fresh()->qty)->toBe('0.50');
+    expect($board->fresh()->qty)->toBe('0.00')
+        ->and(PosTransaction::query()->sole()->lines()->first()->quantity)->toBe('0.50');
 });
 
-test('demo checkout preserves sale details in session without changing persisted stock', function () {
+test('cash checkout persists VAT, payment, customer, price snapshots, stock movement, history, and receipt', function () {
     $employee = createPosEmployee();
     $this->actingAs($employee);
     $board = createPosInventory();
@@ -104,54 +108,132 @@ test('demo checkout preserves sale details in session without changing persisted
         ->set('address', '18 Harbor Road')
         ->set('phone', '555-0142');
 
-
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
-        ->call('changeQuantity', $board->id, 1)
+        ->call('setQuantity', $board->id, 1.25)
+        ->set('customerName', 'Walk-in customer')
+        ->set('amountReceived', '30.00')
         ->call('checkout')
-        ->assertSee('Demo sale S-1050 completed')
-        ->assertSee('demonstration activity, not a recorded sale')
-        ->assertSee('Pine board')
+        ->assertHasNoErrors()
+        ->assertSee('POS-')
+        ->assertSee('Walk-in customer')
+        ->assertSee('₱28.00')
+        ->assertSee('₱2.00')
+        ->assertSee('View receipt')
+        ->call('viewReceipt', PosTransaction::query()->sole()->id)
+        ->assertSee('Receipt · Completed transaction')
         ->assertSee('North Shore Materials')
         ->assertSee('18 Harbor Road')
         ->assertSee('555-0142')
-        ->assertSee('₱44.80');
+        ->assertSee('Pine board × 1.25 piece')
+        ->assertSee('₱25.00')
+        ->assertSee('₱3.00');
 
-    expect($board->fresh()->qty)->toBe('10.00')
-        ->and(session('demo.pos.employee.'.$employee->id.'.stock')[$board->id])->toBe(2)
-        ->and(session('demo.pos.employee.'.$employee->id.'.sales')[0]['total'])->toBe(44.8);
+    $transaction = PosTransaction::query()->with('lines')->sole();
 
-    $this->get(route('pos'))->assertOk()->assertSee('8.00 piece left')->assertSee('S-1050');
-    $this->get(route('dashboard'))->assertOk()
-        ->assertSee('Persisted inventory overview.')
-        ->assertDontSee('Completed demonstration sales')
-        ->assertDontSee('S-1050')
-        ->assertDontSee('₱44.80')
-        ->assertSee('₱50.00')
-        ->assertSee('"label":"Lumber","total":50', false);
+    expect($transaction->status)->toBe('completed')
+        ->and($transaction->subtotal)->toBe('25.00')
+        ->and($transaction->vat_rate)->toBe('0.1200')
+        ->and($transaction->vat_amount)->toBe('3.00')
+        ->and($transaction->total)->toBe('28.00')
+        ->and($transaction->payment_method)->toBe('cash')
+        ->and($transaction->amount_received)->toBe('30.00')
+        ->and($transaction->change_due)->toBe('2.00')
+        ->and($transaction->customer_name)->toBe('Walk-in customer')
+        ->and($transaction->lines)->toHaveCount(1)
+        ->and($transaction->lines[0]->quantity)->toBe('1.25')
+        ->and($transaction->lines[0]->selling_price)->toBe('20.00')
+        ->and($transaction->lines[0]->unit_cost)->toBe('5.00')
+        ->and($board->fresh()->qty)->toBe('8.75')
+        ->and((float) $board->stockMovements()->where('type', 'stock_out')->sum('quantity'))->toBe(-1.25);
+
+    expect(fn () => $transaction->update(['customer_name' => 'Edited customer']))
+        ->toThrow(LogicException::class);
+    expect(fn () => $transaction->lines[0]->delete())
+        ->toThrow(LogicException::class);
+    expect(fn () => (new PosTransaction(['status' => 'pending']))->save())
+        ->toThrow(LogicException::class);
 });
 
-test('checkout cannot exceed simulated stock and logout clears POS state for the next employee', function () {
-    $employee = createPosEmployee();
-    $otherEmployee = createPosEmployee(['username' => 'other.cashier', 'email' => 'other@example.com']);
-    $this->actingAs($employee);
+test('card and bank transfers require exact payment and a reference number', function () {
+    $this->actingAs(createPosEmployee());
+    $board = createPosInventory(['qty' => 4]);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->set('paymentMethod', 'card')
+        ->set('amountReceived', '44.79')
+        ->set('paymentReference', 'CARD-1')
+        ->call('checkout')
+        ->assertHasErrors('amountReceived');
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->call('setQuantity', $board->id, 1)
+        ->set('paymentMethod', 'card')
+        ->set('amountReceived', '22.40')
+        ->call('checkout')
+        ->assertHasErrors('paymentReference');
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->call('setQuantity', $board->id, 1)
+        ->set('paymentMethod', 'bank_transfer')
+        ->set('amountReceived', '22.40')
+        ->set('paymentReference', 'BANK-8734')
+        ->call('checkout')
+        ->assertHasNoErrors()
+        ->assertSee('Bank transfer')
+        ->assertSee('BANK-8734');
+
+    $transaction = PosTransaction::query()->sole();
+    expect($transaction->payment_method)->toBe('bank_transfer')
+        ->and($transaction->payment_reference)->toBe('BANK-8734')
+        ->and($transaction->amount_received)->toBe('22.40')
+        ->and($transaction->change_due)->toBe('0.00');
+});
+
+test('a checkout failure leaves transaction records and stock untouched', function () {
+    $this->actingAs(createPosEmployee());
     $board = createPosInventory(['qty' => 1]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
-        ->call('changeQuantity', $board->id, 1)
+        ->set('amountReceived', '1.00')
         ->call('checkout')
-        ->assertSee('Demo sale S-1050 completed');
+        ->assertHasErrors('amountReceived');
 
-    $this->post(route('logout'))->assertRedirect(route('login'));
-    $this->post(route('login.submit'), [
-        'email' => $otherEmployee->email,
-        'password' => 'pos-password',
-    ])->assertRedirect(route('dashboard'));
+    expect(PosTransaction::query()->count())->toBe(0)
+        ->and($board->fresh()->qty)->toBe('1.00')
+        ->and($board->stockMovements()->where('type', 'stock_out')->count())->toBe(0);
 
-    $this->get(route('pos'))->assertOk()
-        ->assertSee('Cart is empty')
-        ->assertDontSee('S-1050');
+    $secondBoard = createPosInventory(['name' => 'Cement bag', 'qty' => 1]);
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $secondBoard->id);
+    Inventory::query()->whereKey($secondBoard->id)->update(['qty' => 0]);
 
-    expect($board->fresh()->qty)->toBe('1.00');
+    Livewire::test(PointOfSale::class)
+        ->set('amountReceived', '44.80')
+        ->call('checkout')
+        ->assertHasErrors('cart');
+
+    expect(PosTransaction::query()->count())->toBe(0)
+        ->and($board->fresh()->qty)->toBe('1.00')
+        ->and($board->stockMovements()->where('type', 'stock_out')->count())->toBe(0);
+});
+
+test('POS offers only active priced items with positive stock', function () {
+    $this->actingAs(createPosEmployee());
+    $activeItem = createPosInventory(['name' => 'Active boards']);
+    $inactiveItem = createPosInventory(['name' => 'Retired boards', 'status' => 'inactive']);
+    createPosInventory(['name' => 'Unpriced boards', 'selling_price' => null]);
+
+    Livewire::test(PointOfSale::class)
+        ->assertSee('Active boards')
+        ->assertDontSee('Retired boards')
+        ->assertDontSee('Unpriced boards');
+
+    expect(Inventory::availableForSale()->pluck('id')->all())
+        ->toContain($activeItem->id)
+        ->not->toContain($inactiveItem->id);
 });

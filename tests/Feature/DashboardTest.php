@@ -31,7 +31,6 @@ function createDashboardInventory(array $attributes = []): Inventory
     ], $attributes));
 }
 
-
 test('dashboard route serves only the authenticated inventory dashboard', function () {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 
@@ -85,13 +84,6 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
     Inventory::where('name', 'Cement bag')->update(['created_at' => now()]);
     Inventory::where('name', 'Steel rod')->update(['created_at' => now()->subHours(2)]);
     Inventory::where('name', 'Tile')->update(['created_at' => now()->subHours(3)]);
-    session()->put('demo.pos.employee.'.$employee->id.'.sales', [[
-        'id' => 'S-1050',
-        'date' => '2026-10-04',
-        'items' => 2,
-        'total' => 44.8,
-        'lines' => [['quantity' => 2, 'name' => 'Pine board', 'sellingPrice' => 20]],
-    ]]);
 
     Livewire::test(DashboardPage::class)
         ->assertSee('4 tracked materials')
@@ -107,9 +99,6 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
         ->assertSee('Inventory value by category')
         ->assertSee('"label":"Lumber","total":50', false)
         ->assertSee('"label":"Masonry","total":8', false)
-        ->assertDontSee('Demo sales')
-        ->assertDontSee('S-1050')
-        ->assertDontSee('₱44.80')
         ->assertDontSee('VAT')
         ->assertDontSee('Accounts payable');
 });
