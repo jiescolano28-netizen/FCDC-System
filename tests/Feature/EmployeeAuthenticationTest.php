@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -153,8 +154,101 @@ test('employees can request a private password reset link', function () {
         return $storedToken !== $notification->token
             && Hash::check($notification->token, $storedToken)
             && str_contains($mail->render(), url('/reset-password/'.$notification->token))
+            && str_contains($mail->render(), 'email=')
             && str_contains($mail->render(), 'Fabellon Construction');
     });
 
     Notification::assertCount(1);
+});
+
+test('a valid employee reset link can change the password once', function () {
+    $employee = createEmployeeForAuthentication();
+    $employee->forceFill(['remember_token' => 'remember-before-reset'])->save();
+    $token = Password::broker('employees')->createToken($employee);
+    $link = route('password.reset', ['token' => $token, 'email' => $employee->email]);
+
+    $this->get($link)->assertOk()
+        ->assertSee('New password')
+        ->assertSee('Confirm new password')
+        ->assertSee('name="password_confirmation"', false);
+
+    $credentials = [
+        'token' => $token,
+        'email' => $employee->email,
+        'password' => 'replacement-password',
+        'password_confirmation' => 'replacement-password',
+    ];
+
+    $this->post(route('password.update'), $credentials)
+        ->assertRedirect(route('login'))
+        ->assertSessionHas('status', 'Your password has been reset. You can now sign in.');
+
+    $this->get(route('login'))->assertSee('Your password has been reset. You can now sign in.');
+
+    $employee->refresh();
+    expect(Hash::check('replacement-password', $employee->password))->toBeTrue()
+        ->and($employee->getRememberToken())->not->toBe('remember-before-reset')
+        ->and(DB::table('password_reset_tokens')->where('email', $employee->email)->exists())->toBeFalse();
+
+    $this->from($link)->post(route('password.update'), $credentials)
+        ->assertSessionHasErrors('email');
+
+    expect(Hash::check('replacement-password', $employee->fresh()->password))->toBeTrue();
+});
+
+test('invalid and expired employee reset links cannot change passwords', function () {
+    $employee = createEmployeeForAuthentication();
+    $token = Password::broker('employees')->createToken($employee);
+    $link = route('password.reset', ['token' => $token, 'email' => $employee->email]);
+    $invalidLink = route('password.reset', ['token' => 'not-a-reset-token', 'email' => $employee->email]);
+
+    $this->get($invalidLink)->assertOk()
+        ->assertSee('This password reset link is invalid or has expired.');
+
+    $invalidCredentials = [
+        'token' => 'not-a-reset-token',
+        'email' => $employee->email,
+        'password' => 'attempted-new-password',
+        'password_confirmation' => 'attempted-new-password',
+    ];
+
+    $this->travel(31)->minutes();
+    $this->get($link)->assertOk()
+        ->assertSee('This password reset link is invalid or has expired.');
+
+    $this->from($invalidLink)->post(route('password.update'), $invalidCredentials)
+        ->assertSessionHasErrors('email');
+
+    $expiredCredentials = [...$invalidCredentials, 'token' => $token];
+    $this->from($link)->post(route('password.update'), $expiredCredentials)
+        ->assertSessionHasErrors('email');
+
+    expect(Hash::check('correct-horse-battery', $employee->fresh()->password))->toBeTrue();
+});
+
+test('employee reset passwords must be at least eight characters and confirmed', function () {
+    $employee = createEmployeeForAuthentication();
+    $token = Password::broker('employees')->createToken($employee);
+    $credentials = [
+        'token' => $token,
+        'email' => $employee->email,
+        'password' => 'short',
+        'password_confirmation' => 'different',
+    ];
+
+    $link = route('password.reset', ['token' => $token, 'email' => $employee->email]);
+    $this->from($link)->post(route('password.update'), $credentials)
+        ->assertSessionHasErrors('password');
+
+    $confirmedCredentials = [
+        ...$credentials,
+        'password' => 'replacement-password',
+        'password_confirmation' => 'different-password',
+    ];
+
+    $this->from($link)->post(route('password.update'), $confirmedCredentials)
+        ->assertSessionHasErrors('password');
+
+    expect(Hash::check('correct-horse-battery', $employee->fresh()->password))->toBeTrue()
+        ->and(Password::broker('employees')->tokenExists($employee->fresh(), $token))->toBeTrue();
 });

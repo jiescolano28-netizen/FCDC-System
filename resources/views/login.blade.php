@@ -130,18 +130,22 @@
             background: #ffe9e9;
             border: 1px solid #ffbcbc;
             color: #b00020;
-
-
             padding: 10px 12px;
             border-radius: 6px;
-
-
             margin-bottom: 18px;
-
-
             font-size: 13px;
-
             animation: shake 0.4s ease;
+        }
+
+        .success-message {
+            margin-bottom: 18px;
+            padding: 10px 12px;
+            border: 1px solid #b9d7bb;
+            border-radius: 6px;
+            background: #edf6ee;
+            color: #245b2a;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         @keyframes shake {
@@ -577,6 +581,10 @@
 
 
 
+        @if (session('status'))
+            <div class="success-message" role="status">{{ session('status') }}</div>
+        @endif
+
         <!-- ERROR MESSAGE -->
         @if ($errors->any())
             <div class="error-message">
@@ -681,6 +689,7 @@
 
 
                 </label>
+                <a class="forgot-link" href="{{ route('password.request') }}">Forgot password?</a>
             </div>
 
 
@@ -694,7 +703,7 @@
 
 
 
-            <p class="forgot-password-link"><a href="{{ route('password.request') }}">Forgot password?</a></p>
+
         </form>
 
 

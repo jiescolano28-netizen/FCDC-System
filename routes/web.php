@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\EmployeePasswordResetController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\PasswordResetLinkController;
@@ -42,6 +43,12 @@ Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])
 
 Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
     ->name('password.email');
+
+Route::get('/reset-password/{token}', [EmployeePasswordResetController::class, 'create'])
+    ->name('password.reset');
+
+Route::post('/reset-password', [EmployeePasswordResetController::class, 'store'])
+    ->name('password.update');
 
 // LOGOUT
 Route::post('/logout', [LoginController::class, 'logout'])

@@ -22,7 +22,10 @@ class EmployeePasswordReset extends Notification
         return (new MailMessage)
             ->subject('Reset your Fabellon Construction account password')
             ->view('emails.password-reset', [
-                'url' => url('/reset-password/'.$this->token),
+                'url' => route('password.reset', [
+                    'token' => $this->token,
+                    'email' => $notifiable->getEmailForPasswordReset(),
+                ]),
             ]);
     }
 }
