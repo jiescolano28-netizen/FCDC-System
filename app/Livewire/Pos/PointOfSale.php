@@ -5,6 +5,7 @@ namespace App\Livewire\Pos;
 use App\Models\Inventory;
 use App\Models\PosTransaction;
 use App\Models\PosTransactionLine;
+use App\Models\PosVatRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -182,6 +183,15 @@ class PointOfSale extends Component
 
                 Inventory::query()->whereKey($item->id)->update(['qty' => (float) $item->qty - $quantity]);
             }
+
+            PosVatRecord::create([
+                'pos_transaction_id' => $transaction->id,
+                'taxable_sales' => $transaction->subtotal,
+                'vat_rate' => $transaction->vat_rate,
+                'output_vat' => $transaction->vat_amount,
+                'total' => $transaction->total,
+                'completed_at' => $transaction->completed_at,
+            ]);
 
             return $transaction;
         });

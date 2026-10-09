@@ -5,8 +5,11 @@ use App\Livewire\Settings\SettingsPage;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\PosTransaction;
+use App\Models\PosVatRecord;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
@@ -262,4 +265,46 @@ test('POS offers only active priced items with positive stock', function () {
     expect(Inventory::availableForSale()->pluck('id')->all())
         ->toContain($activeItem->id)
         ->not->toContain($inactiveItem->id);
+});
+test('cashier checkout creates its linked VAT record without tax-view permission', function () {
+    $cashier = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'vat-cashier',
+        'email' => 'vat-cashier@example.com',
+        'password' => Hash::make('pos-password'),
+    ]), ['pos.checkout']);
+    $this->actingAs($cashier);
+    $board = createPosInventory(['selling_price' => 180, 'qty' => 2]);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->set('amountReceived', '201.60')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    $transaction = PosTransaction::query()->sole();
+    $record = PosVatRecord::query()->sole();
+
+    expect($record->pos_transaction_id)->toBe($transaction->id)
+        ->and($record->taxable_sales)->toBe('180.00')
+        ->and($record->vat_rate)->toBe('0.1200')
+        ->and($record->output_vat)->toBe('21.60')
+        ->and($record->total)->toBe('201.60')
+        ->and($board->fresh()->qty)->toBe('1.00')
+        ->and($cashier->can('tax.view'))->toBeFalse();
+});
+test('VAT persistence failure rolls back the sale and stock changes', function () {
+    $this->actingAs(createPosEmployee());
+    $board = createPosInventory(['selling_price' => 180, 'qty' => 2]);
+    DB::unprepared("CREATE TRIGGER reject_pos_vat_record BEFORE INSERT ON pos_vat_records BEGIN SELECT RAISE(ABORT, 'VAT record failure'); END");
+
+    expect(fn () => Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->set('amountReceived', '201.60')
+        ->call('checkout'))->toThrow(QueryException::class);
+
+    DB::statement('DROP TRIGGER reject_pos_vat_record');
+    expect(PosTransaction::query()->count())->toBe(0)
+        ->and(PosVatRecord::query()->count())->toBe(0)
+        ->and($board->fresh()->qty)->toBe('2.00')
+        ->and($board->stockMovements()->where('type', 'stock_out')->count())->toBe(0);
 });

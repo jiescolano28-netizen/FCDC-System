@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 class PosTransaction extends Model
@@ -53,5 +54,10 @@ class PosTransaction extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PosTransactionLine::class);
+    }
+
+    public function vatRecord(): HasOne
+    {
+        return $this->hasOne(PosVatRecord::class);
     }
 }

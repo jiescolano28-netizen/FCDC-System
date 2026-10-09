@@ -2,47 +2,92 @@
 
 namespace App\Livewire\TaxCompliance;
 
-use App\Support\VatDemonstrationData;
+use App\Models\PosVatRecord;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class VatRecords extends Component
 {
+    use WithPagination;
+
     public string $search = '';
 
-    public string $period = 'All';
+    public string $startDate = '';
 
-    public string $transactionDate = '';
+    public string $endDate = '';
 
-    public ?array $selectedRecord = null;
+    public ?int $selectedRecordId = null;
 
-    public function viewRecord(string $reference): void
+    public function mount(): void
     {
-        $this->selectedRecord = collect(VatDemonstrationData::records())
-            ->firstWhere('reference', $reference);
+        $this->startDate = now('Asia/Manila')->startOfMonth()->toDateString();
+        $this->endDate = now('Asia/Manila')->endOfMonth()->toDateString();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStartDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedEndDate(): void
+    {
+        $this->resetPage();
+    }
+
+    public function viewRecord(int $recordId): void
+    {
+        $this->authorizePermission();
+
+        $this->selectedRecordId = PosVatRecord::query()->whereKey($recordId)->value('id');
     }
 
     public function closeDetails(): void
     {
-        $this->selectedRecord = null;
+        $this->authorizePermission();
+        $this->selectedRecordId = null;
     }
 
     public function render()
     {
-        $records = collect(VatDemonstrationData::records());
-        $filteredRecords = $records->filter(function (array $record): bool {
-            $search = mb_strtolower(trim($this->search));
-
-            return ($search === ''
-                    || str_contains(mb_strtolower($record['reference']), $search)
-                    || str_contains(mb_strtolower($record['period']), $search))
-                && ($this->period === 'All' || $record['period'] === $this->period)
-                && ($this->transactionDate === '' || $record['date'] === $this->transactionDate);
-        });
+        $this->authorizePermission();
+        $search = mb_strtolower(trim($this->search));
+        $records = PosVatRecord::query()
+            ->with('posTransaction.lines')
+            ->when($search !== '', fn ($query) => $query->whereHas(
+                'posTransaction',
+                fn ($transaction) => $transaction->whereRaw('LOWER(transaction_number) LIKE ?', ['%'.$search.'%']),
+            ))
+            ->when($this->startDate !== '', fn ($query) => $query->where(
+                'completed_at',
+                '>=',
+                Carbon::parse($this->startDate, 'Asia/Manila')->startOfDay()->utc(),
+            ))
+            ->when($this->endDate !== '', fn ($query) => $query->where(
+                'completed_at',
+                '<',
+                Carbon::parse($this->endDate, 'Asia/Manila')->addDay()->startOfDay()->utc(),
+            ))
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->paginate(20);
 
         return view('livewire.tax-compliance.vat-records', [
-            'records' => $filteredRecords,
-            'recordCount' => $records->count(),
-            'taxPeriods' => VatDemonstrationData::taxPeriods(),
+            'records' => $records,
+            'recordCount' => $records->total(),
+            'selectedRecord' => $this->selectedRecordId
+                ? PosVatRecord::query()->with('posTransaction.lines')->find($this->selectedRecordId)
+                : null,
         ])->layout('layouts.app', ['title' => 'VAT Records']);
+    }
+
+    private function authorizePermission(): void
+    {
+        abort_unless(auth()->user()?->can('tax.view'), 403);
     }
 }

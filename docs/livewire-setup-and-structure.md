@@ -83,9 +83,15 @@ The dashboard shows the five newest inventory materials, ordered by creation tim
 
 The category chart renderer is loaded through the shared Vite bundle and initializes only when the dashboard root is present.
 
+## Recorded POS VAT
+
+The authenticated `/tax/vat-records` Livewire page requires `tax.view` and lists persisted VAT records linked one-to-one with completed POS transactions. Successful checkout saves the record in the same database transaction as sale lines and stock changes; the record copies the saved taxable subtotal, VAT rate, VAT amount, VAT-inclusive total, and UTC completion timestamp. The migration includes existing completed POS sales, and `php artisan tax:include-historical-pos-vat-records` can safely repeat inclusion without changing existing records.
+
+Search matches transaction-number substrings; inclusive date filters and displayed completion dates use `Asia/Manila`, while timestamps remain stored in UTC. Details use the transaction's saved item-line snapshots. VAT records cannot be edited or deleted. The list contains POS activity only, not company-wide tax results.
+
 ## VAT demonstration pages
 
-The authenticated `/tax/vat-summary` Livewire page selects monthly or quarterly periods from `VatDemonstrationData::summaries()`, displaying the existing fixture totals without persisting or calculating business activity. It links back to VAT Records, and both pages label their fixtures as illustrative and non-filing.
+VAT Summary, Tax Report, and VAT Return Preparation continue to use `VatDemonstrationData`; those screens remain illustrative and are not calculated from persisted POS activity. The VAT Records link from those pages leads to actual POS-sourced records, not the demonstration fixtures.
 
 ## Accounting overview demonstration
 
