@@ -6,6 +6,82 @@
         </div>
     </header>
 
+    <section class="dashboard-card reports-sales-card" aria-labelledby="completed-pos-sales-title">
+        <div class="dashboard-card-heading">
+            <h2 class="dashboard-card-title" id="completed-pos-sales-title">Completed POS sales</h2>
+            <div class="dashboard-period-toggle" role="group" aria-label="POS sales reporting period">
+                <button type="button" wire:click="$set('reportPeriod', 'daily')" @class(['active' => $reportPeriod === 'daily']) @if ($reportPeriod === 'daily') aria-pressed="true" @else aria-pressed="false" @endif>Daily</button>
+                <button type="button" wire:click="$set('reportPeriod', 'monthly')" @class(['active' => $reportPeriod === 'monthly']) @if ($reportPeriod === 'monthly') aria-pressed="true" @else aria-pressed="false" @endif>Monthly</button>
+            </div>
+        </div>
+        <label for="pos-report-date">{{ $reportPeriod === 'monthly' ? 'Month' : 'Day' }}</label>
+        <input id="pos-report-date" type="date" wire:model.live="reportDate">
+        @error('reportDate') <p class="reports-empty">{{ $message }}</p> @enderror
+        <p class="dashboard-chart-note">
+            Actual completed POS transactions · {{ $reportStart->format($reportPeriod === 'monthly' ? 'F Y' : 'F j, Y') }} ·
+            {{ $posSales['count'] }} transactions
+        </p>
+        <p class="dashboard-stat-value">₱{{ number_format($posSales['total'], 2) }}</p>
+        <p class="dashboard-stat-note">Recorded transaction totals, including recorded VAT. Illustrative sales below are separate.</p>
+
+        <div class="reports-chart-grid">
+            <section aria-labelledby="pos-sales-by-item-title">
+                <h3 id="pos-sales-by-item-title">Sales by item</h3>
+                <div class="reports-table-wrap">
+                    <table class="reports-table">
+                        <thead><tr><th>Item snapshot</th><th class="numeric">Quantity</th><th class="numeric">Sales</th></tr></thead>
+                        <tbody>
+                            @forelse ($posSales['items'] as $item)
+                                <tr wire:key="pos-report-item-{{ $loop->index }}">
+                                    <td>{{ $item->item_name }} · {{ $item->inventory_code }}</td>
+                                    <td class="numeric">{{ number_format((float) $item->quantity, 2) }} {{ $item->unit }}</td>
+                                    <td class="numeric">₱{{ number_format((float) $item->total, 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="3" class="reports-empty">No completed POS transactions for this period.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section aria-labelledby="pos-sales-by-category-title">
+                <h3 id="pos-sales-by-category-title">Sales by category</h3>
+                <div class="reports-table-wrap">
+                    <table class="reports-table">
+                        <thead><tr><th>Category snapshot</th><th class="numeric">Sales</th></tr></thead>
+                        <tbody>
+                            @forelse ($posSales['categories'] as $category)
+                                <tr wire:key="pos-report-category-{{ $loop->index }}">
+                                    <td>{{ $category->category }}</td>
+                                    <td class="numeric">₱{{ number_format((float) $category->total, 2) }}</td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="2" class="reports-empty">No completed POS transactions for this period.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+        <h3>Sales by payment method</h3>
+        <div class="reports-table-wrap">
+            <table class="reports-table">
+                <thead><tr><th>Payment method</th><th class="numeric">Transactions</th><th class="numeric">Sales</th></tr></thead>
+                <tbody>
+                    @forelse ($posSales['payments'] as $payment)
+                        <tr wire:key="pos-report-payment-{{ $payment->payment_method }}">
+                            <td>{{ str_replace('_', ' ', ucfirst($payment->payment_method)) }}</td>
+                            <td class="numeric">{{ $payment->count }}</td>
+                            <td class="numeric">₱{{ number_format((float) $payment->total, 2) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="3" class="reports-empty">No completed POS transactions for this period.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <div class="dashboard-stats reports-stats">
         <article class="dashboard-card dashboard-stat">
             <span class="dashboard-stat-icon" aria-hidden="true">₱</span>
