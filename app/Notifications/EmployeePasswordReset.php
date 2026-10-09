@@ -5,10 +5,13 @@ namespace App\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Symfony\Component\Mime\Email;
 
 class EmployeePasswordReset extends Notification
 {
     use Queueable;
+
+    private const COMPANY_LOGO_CID = 'fabellion-company-logo.png';
 
     public function __construct(public readonly string $token) {}
 
@@ -26,6 +29,14 @@ class EmployeePasswordReset extends Notification
                     'token' => $this->token,
                     'email' => $notifiable->getEmailForPasswordReset(),
                 ]),
-            ]);
+                'logoCid' => 'cid:'.self::COMPANY_LOGO_CID,
+            ])
+            ->withSymfonyMessage(function (Email $message): void {
+                $message->embedFromPath(
+                    public_path('image/company-logo.png'),
+                    self::COMPANY_LOGO_CID,
+                    'image/png',
+                );
+            });
     }
 }

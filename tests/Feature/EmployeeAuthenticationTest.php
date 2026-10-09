@@ -6,6 +6,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Spatie\Activitylog\Models\Activity;
@@ -251,4 +252,35 @@ test('employee reset passwords must be at least eight characters and confirmed',
 
     expect(Hash::check('correct-horse-battery', $employee->fresh()->password))->toBeTrue()
         ->and(Password::broker('employees')->tokenExists($employee->fresh(), $token))->toBeTrue();
+});
+
+test('password reset email uses the login color and embeds the company logo', function () {
+    $employee = createEmployeeForAuthentication();
+    $notification = new EmployeePasswordReset('email-preview-token');
+    config(['mail.default' => 'array']);
+    Mail::purge('array');
+    $transport = Mail::mailer('array')->getSymfonyTransport();
+
+    $employee->notify($notification);
+
+    $sentMessage = $transport->messages()->last();
+    $email = $sentMessage->getOriginalMessage();
+    $source = $sentMessage->toString();
+    $logo = collect($email->getAttachments())
+        ->first(fn ($attachment) => $attachment->getName() === 'fabellion-company-logo.png');
+    $htmlPart = collect($email->getBody()->getParts())
+        ->first(fn ($part) => $part->getMediaType() === 'text' && $part->getMediaSubtype() === 'html');
+
+    expect($email->getHtmlBody())
+        ->toContain('src="cid:fabellion-company-logo.png"')
+        ->toContain('#3f7f3d')
+        ->not->toContain('#c9a227')
+        ->and($logo)->not->toBeNull()
+        ->and($logo->getContentType())->toBe('image/png')
+        ->and($source)
+        ->toContain('Content-ID: <'.$logo->getContentId().'>')
+        ->toContain('Content-Disposition: inline')
+        ->and($htmlPart)->not->toBeNull()
+        ->and($htmlPart->getBody())
+        ->toContain('src="cid:'.$logo->getContentId().'"');
 });
