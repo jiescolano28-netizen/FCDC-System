@@ -404,6 +404,14 @@
 .accounting-page { max-width: 1440px; margin: 0 auto; }
 .accounting-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .accounting-balance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.accounting-period { display: flex; align-items: end; gap: 14px; margin-bottom: 16px; }
+.accounting-period label { display: grid; gap: 5px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
+.accounting-period input { min-height: 38px; padding: 7px 9px; border: 1px solid var(--slate-200); border-radius: 7px; font: inherit; }
+.accounting-scope-note { margin: 0 0 12px; color: var(--slate-500); font-size: 12px; line-height: 1.5; }
+.accounting-activity .reports-table { min-width: 720px; }
+.accounting-activity .reports-table-wrap { overflow-x: auto; }
+.accounting-activity .reports-table a { color: var(--emerald-700); font-weight: 600; }
+.accounting-action:focus-visible { outline: 2px solid var(--emerald-700); outline-offset: 2px; }
 .accounting-unavailable { margin: 5px 0 2px; color: var(--slate-700); font-size: 18px; font-weight: 600; }
 .accounting-activity, .accounting-actions { margin-top: 16px; }
 .accounting-action-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
