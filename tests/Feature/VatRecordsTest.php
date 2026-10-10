@@ -2,6 +2,7 @@
 
 use App\Livewire\TaxCompliance\TaxReport;
 use App\Livewire\TaxCompliance\VatRecords;
+use App\Livewire\TaxCompliance\VatSummary;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\PosTransaction;
@@ -71,6 +72,175 @@ function createRecordedVatSale(
 
     return $transaction;
 }
+function createVatReportSale(string $number, string $completedAt, string $taxable = '180.05', string $vat = '21.61', string $total = '201.66'): PosTransaction
+{
+    $transaction = PosTransaction::create([
+        'transaction_number' => $number,
+        'subtotal' => $taxable,
+        'vat_rate' => 0.12,
+        'vat_amount' => $vat,
+        'total' => $total,
+        'payment_method' => 'cash',
+        'amount_received' => $total,
+        'change_due' => 0,
+        'status' => 'completed',
+        'customer_name' => 'Report Customer',
+        'completed_at' => $completedAt,
+    ]);
+    PosTransactionLine::create([
+        'pos_transaction_id' => $transaction->id,
+        'inventory_code' => 'BRD-001',
+        'item_name' => 'Saved pine board',
+        'category' => 'Lumber',
+        'unit' => 'piece',
+        'quantity' => 2,
+        'selling_price' => $taxable / 2,
+        'unit_cost' => 50,
+        'line_subtotal' => $taxable,
+        'vat_amount' => $vat,
+        'line_total' => $total,
+    ]);
+    PosVatRecord::create([
+        'pos_transaction_id' => $transaction->id,
+        'taxable_sales' => $taxable,
+        'vat_rate' => 0.12,
+        'output_vat' => $vat,
+        'total' => $total,
+        'completed_at' => $transaction->completed_at,
+    ]);
+
+    return $transaction;
+}
+
+test('tax report defaults to the Manila month and reconciles recorded month and quarter sales', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    createVatReportSale('REPORT-OCT-BOUNDARY', '2026-09-30 16:00:00');
+    createVatReportSale('REPORT-OCT-SECOND', '2026-10-15 08:00:00');
+    createVatReportSale('REPORT-SEP-OUTSIDE', '2026-09-30 15:59:59');
+    createVatReportSale('REPORT-NOV-OUTSIDE', '2026-10-31 16:00:00');
+    $this->actingAs(createVatRecordsEmployee());
+    Livewire::test(TaxReport::class)
+        ->assertSet('periodType', 'monthly')
+        ->assertSet('selectedYear', 2026)
+        ->assertSet('selectedPeriod', 10)
+        ->assertSee('October 2026')
+        ->assertSee('REPORT-OCT-BOUNDARY')
+        ->assertDontSee('REPORT-SEP-OUTSIDE')
+        ->assertSee('₱360.10')
+        ->assertSee('₱43.22')
+        ->assertSee('₱403.32');
+
+    Livewire::test(VatSummary::class)
+        ->set('selectedYear', 2026)
+        ->set('selectedPeriod', 10)
+        ->assertSee('₱360.10')
+        ->assertSee('₱43.22')
+        ->assertSee('₱403.32');
+    Livewire::test(TaxReport::class)
+        ->set('periodType', 'quarterly')
+        ->assertSee('₱540.15')
+        ->assertSee('₱64.83')
+        ->assertSee('₱604.98')
+        ->set('periodType', 'custom')
+        ->set('startDate', '2026-10-01')
+        ->assertSee('₱360.10')
+        ->assertSee('₱43.22')
+        ->assertSee('₱403.32')
+        ->assertSee('REPORT-OCT-BOUNDARY')
+        ->assertSee('REPORT-OCT-SECOND')
+        ->assertDontSee('REPORT-NOV-OUTSIDE');
+});
+
+test('tax report details are read-only and CSV exports all filtered transactions across pages', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    $first = createVatReportSale('POS-CSV-001', '2026-10-01 00:00:00');
+    createVatReportSale('POS-CSV-002', '2026-10-31 15:59:59');
+    foreach (range(3, 22) as $number) {
+        createVatReportSale(sprintf('POS-CSV-%03d', $number), '2026-10-15 04:30:00');
+    }
+    createVatReportSale('POS-CSV-OUTSIDE', '2026-10-31 16:00:00');
+    $this->actingAs(createVatRecordsEmployee());
+
+    $report = Livewire::test(TaxReport::class)
+        ->set('periodType', 'custom')
+        ->set('endDate', '2026-10-31')
+        ->set('paginators.page', 2)
+        ->assertSee('POS-CSV-001')
+        ->assertSee('POS-CSV-002')
+        ->assertSee('POS-CSV-022')
+        ->call('viewRecord', $first->vatRecord->id)
+        ->assertSee('Report Customer')
+        ->assertSee('Saved pine board')
+        ->assertSee('POS-CSV-001')
+        ->call('exportCsv')
+        ->assertFileDownloaded('vat-report-2026-10-01-to-2026-10-31.csv');
+    $csv = base64_decode($report->effects['download']['content']);
+
+    expect($csv)
+        ->toContain('POS-CSV-022', 'Recorded POS VAT only', 'Asia/Manila', 'Fabellion Construction and Development Corp.', '2026-10-01 through 2026-10-31', '3961.10', '475.42', '4436.52')
+        ->not->toContain('POS-CSV-OUTSIDE')
+        ->and(substr_count($csv, 'POS-CSV-'))->toBe(22);
+});
+
+test('empty tax report periods show zero activity in the printable report and CSV', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    $this->actingAs(createVatRecordsEmployee());
+
+    $report = Livewire::test(TaxReport::class)
+        ->set('periodType', 'custom')
+        ->set('startDate', '2026-11-01')
+        ->set('endDate', '2026-11-30')
+        ->assertSee('No recorded POS sales for this period.')
+        ->assertSee('₱0.00')
+        ->assertDontSee('VAT-2026-08-001')
+        ->call('exportCsv')
+        ->assertFileDownloaded('vat-report-2026-11-01-to-2026-11-30.csv');
+    $csv = base64_decode($report->effects['download']['content']);
+
+    expect($csv)
+        ->toContain('2026-11-01 through 2026-11-30', 'Recorded POS VAT only', '"Taxable sales",0.00', '"Output VAT",0.00')
+        ->not->toContain('VAT-2026');
+});
+
+test('custom tax report dates stay valid while either boundary changes', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    $this->actingAs(createVatRecordsEmployee());
+
+    Livewire::test(TaxReport::class)
+        ->set('periodType', 'custom')
+        ->set('endDate', '2026-09-30')
+        ->assertSet('startDate', '2026-09-30')
+        ->set('startDate', '2026-10-01')
+        ->assertSet('endDate', '2026-10-01')
+        ->assertSee('2026-10-01 through 2026-10-01');
+});
+
+test('tax report route and detail and export actions require tax.view', function () {
+    $employee = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'report-without-tax',
+        'email' => 'report-without-tax@example.com',
+        'password' => Hash::make('vat-password'),
+    ]), ['pos.checkout']);
+    $sale = createVatReportSale('REPORT-PRIVATE', '2026-10-15 04:30:00');
+    $this->actingAs($employee)->get(route('tax.report'))->assertForbidden();
+
+    expect(fn () => (new TaxReport)->viewRecord($sale->vatRecord->id))
+        ->toThrow(HttpException::class);
+    expect(fn () => (new TaxReport)->exportCsv())
+        ->toThrow(HttpException::class);
+});
+
+test('tax report has an authenticated POS-only printable surface with established company identity', function () {
+    $this->get(route('tax.report'))->assertRedirect(route('login'));
+
+    $this->actingAs(createVatRecordsEmployee())
+        ->get(route('tax.report'))->assertOk()
+        ->assertSee('Fabellion Construction and Development Corp.')
+        ->assertSee('Asia/Manila')
+        ->assertSee('POS-only')
+        ->assertSee('tax-report-document', false)
+        ->assertSee(route('tax.report'), false);
+});
 
 test('VAT records require tax permission and display actual saved POS transactions', function () {
     $this->get(route('tax.vat-records'))->assertRedirect(route('login'));
@@ -219,34 +389,4 @@ test('tax route and detail actions remain inaccessible without tax permission', 
     $sale = createRecordedVatSale('POS-AUTH-001', '2026-10-15 04:30:00');
     expect(fn () => (new VatRecords)->viewRecord($sale->vatRecord->id))
         ->toThrow(HttpException::class);
-});
-
-test('tax report filters the illustrative records and totals by reporting period', function () {
-    $this->actingAs(createVatRecordsEmployee());
-
-    Livewire::test(TaxReport::class)
-        ->assertSee('Q3 2026')
-        ->assertSee('₱54,800.00')
-        ->assertSee('₱6,576.00')
-        ->assertSee('₱61,376.00')
-        ->assertSee('VAT-2026-08-001')
-        ->set('period', 'Q2 2026')
-        ->assertSee('VAT-2026-06-001')
-        ->assertSee('VAT-2026-05-001')
-        ->assertDontSee('VAT-2026-08-001')
-        ->assertSee('₱22,000.00')
-        ->assertSee('₱2,640.00')
-        ->assertSee('₱24,640.00');
-});
-
-test('tax report has a separate authenticated named route and isolated print document', function () {
-    $this->get(route('tax.report'))->assertRedirect(route('login'));
-
-    $this->actingAs(createVatRecordsEmployee())
-        ->get(route('tax.report'))
-        ->assertOk()
-        ->assertSee('Tax Compliance demonstrations')
-        ->assertSee('tax-report-document', false)
-        ->assertSee('not filed with a tax authority', false)
-        ->assertSee(route('tax.report'), false);
 });

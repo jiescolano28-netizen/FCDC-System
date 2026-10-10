@@ -24,7 +24,7 @@ test('VAT return preparation is available only through its authenticated named r
         ->get(route('tax.vat-return-preparation'))
         ->assertOk()
         ->assertSee('VAT Return Preparation')
-        ->assertSee('Tax Compliance demonstrations', false)
+        ->assertSee('Tax Compliance', false)
         ->assertSee('VAT Summary')
         ->assertSee('href="'.route('tax.vat-return-preparation').'"', false)
         ->assertSee('Illustrative preparation interface', false)

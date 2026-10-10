@@ -89,11 +89,13 @@ The authenticated `/tax/vat-records` Livewire page requires `tax.view` and lists
 
 Search matches transaction-number substrings; inclusive date filters and displayed completion dates use `Asia/Manila`, while timestamps remain stored in UTC. Details use the transaction's saved item-line snapshots. VAT records cannot be edited or deleted. The list contains POS activity only, not company-wide tax results.
 
-## VAT summary and demonstration pages
+## VAT summary and POS tax report
 
-VAT Summary requires `tax.view` and aggregates saved `PosVatRecord` amounts by selected Manila calendar month or quarter. Its recorded-period service also supports custom inclusive date ranges for later report and worksheet consumers. Empty periods show zero totals and an explicit no-recorded-sales state; figures identify POS-only scope, input VAT not captured, zero deductions applied, and a POS-only VAT payable estimate. VAT Summary does not establish the company’s final liability.
+VAT Summary requires `tax.view` and aggregates saved `PosVatRecord` amounts by selected Manila calendar month or quarter. Its recorded-period service also supports custom inclusive date ranges shared by the Tax Report and the preparation worksheet. Empty periods show zero totals and an explicit no-recorded-sales state; figures identify POS-only scope, input VAT not captured, zero deductions applied, and a POS-only VAT payable estimate. VAT Summary does not establish the company’s final liability.
 
-Tax Report and VAT Return Preparation remain illustrative/demo-backed and are not calculated from persisted POS activity. Their current screens are not functional reports or preparation worksheets. The VAT Records link leads to actual POS-sourced records, separate from those remaining demonstration surfaces.
+Tax Report requires `tax.view` and reports saved POS VAT for a Manila calendar month, calendar quarter or custom inclusive date range. It shows transaction details from saved sale-line snapshots, paginates the interactive list, exports every matching transaction to CSV, and prints all matching transactions from an authorized report surface. The report identifies Fabellion Construction and Development Corp., its POS-only scope, selected dates, reporting timezone and generation time. It is not a complete official return or submitted filing.
+
+VAT Return Preparation remains illustrative/demo-backed; it is not calculated from persisted POS activity and is not a functional preparation worksheet.
 
 ## Accounting overview demonstration
 

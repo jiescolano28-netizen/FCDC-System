@@ -83,5 +83,4 @@ Example: a taxable sale of PHP 180.00 produces VAT of PHP 21.60 and a VAT-inclus
 - At design time, the four `app/Livewire/TaxCompliance` components read `app/Support/VatDemonstrationData.php`, not persisted POS records.
 - No persisted purchase-invoice/input-VAT source or POS refund/void workflow was found in the inspected application paths.
 - `php artisan about --only=environment` confirmed the application timezone is UTC. A read-only `php artisan tinker` scenario confirmed the Manila date conversion and the transaction-versus-aggregate rounding difference.
-
-These observations describe the repository at design time. VAT Records and the recorded monthly/quarterly VAT Summary are now implemented; Tax Report and VAT Return Preparation remain illustrative/demo-backed. Current implementation status is maintained in `docs/livewire-setup-and-structure.md`.
+These observations describe the repository at design time. VAT Records, the recorded monthly/quarterly VAT Summary, and POS-sourced Tax Report are implemented. VAT Return Preparation remains illustrative/demo-backed. Current implementation status is maintained in `docs/livewire-setup-and-structure.md`.

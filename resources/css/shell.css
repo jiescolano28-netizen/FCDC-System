@@ -358,6 +358,12 @@
 .tax-report-controls label { font-weight: 600; }
 .tax-report-controls select { min-height: 38px; padding: 7px 10px; border: 1px solid var(--slate-200); border-radius: 7px; background: #fff; font: inherit; }
 .tax-report-controls .vat-detail-button { margin-left: auto; padding: 9px 14px; }
+.tax-report-controls input { min-height: 38px; padding: 7px 10px; border: 1px solid var(--slate-200); border-radius: 7px; background: #fff; font: inherit; }
+.tax-report-controls .tax-report-export { margin-left: auto; text-decoration: none; }
+.tax-report-transactions > header h3, .tax-report-print-only h3 { margin: 0 0 4px; color: var(--slate-700); font-size: 14px; }
+.tax-report-transactions > header p { margin: 0 0 10px; color: var(--slate-500); font-size: 12px; }
+.tax-report-print-only { display: none; }
+.tax-report-pagination { margin-top: 12px; }
 .tax-report-document { padding: 24px; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
 .tax-report-document-header { padding-bottom: 16px; border-bottom: 2px solid var(--emerald-700); }
 .tax-report-document-header h2 { margin: 4px 0 12px; color: var(--emerald-900); font-size: 22px; }
@@ -385,10 +391,15 @@
     body.tax-report-body #tax-report-document { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
     body.tax-report-body .tax-report-page { max-width: none; margin: 0; }
     body.tax-report-body .tax-report-disclaimer { color: #333; background: #fff; }
-    body.tax-report-body .tax-report-table-wrap { overflow: visible; }
-    body.tax-report-body .tax-report-table-wrap table { min-width: 0; font-size: 9pt; }
-    body.tax-report-body .tax-report-table-wrap th,
-    body.tax-report-body .tax-report-table-wrap td { padding: 6px 4px; white-space: normal; }
+    body.tax-report-body .tax-report-screen-only { display: none !important; }
+    body.tax-report-body .tax-report-print-only { display: block !important; }
+    body.tax-report-body .tax-report-print-only table { width: 100%; border-collapse: collapse; min-width: 0; font-size: 8pt; }
+    body.tax-report-body .tax-report-print-only th,
+    body.tax-report-body .tax-report-print-only td { padding: 5px 4px; border: 1px solid #bbb; text-align: left; vertical-align: top; white-space: normal; }
+    body.tax-report-body .tax-report-print-only .numeric { text-align: right; }
+    body.tax-report-body .tax-report-print-only tr { break-inside: avoid; }
+    body.tax-report-body .tax-report-document-header,
+    body.tax-report-body .tax-report-summary { break-inside: avoid; }
 }
 .accounting-page { max-width: 1440px; margin: 0 auto; }
 .accounting-page h1 { margin: 0; font-size: 20px; font-weight: 600; }

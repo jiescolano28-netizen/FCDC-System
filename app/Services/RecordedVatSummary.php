@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\PosVatRecord;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 
 class RecordedVatSummary
 {
@@ -25,14 +26,7 @@ class RecordedVatSummary
 
     public function forDateRange(string $startDate, string $endDate): array
     {
-        $start = CarbonImmutable::parse($startDate, 'Asia/Manila')->startOfDay();
-        $end = CarbonImmutable::parse($endDate, 'Asia/Manila')->startOfDay();
-        abort_unless($end->greaterThanOrEqualTo($start), 404);
-
-        $records = PosVatRecord::query()
-            ->whereHas('posTransaction', fn ($query) => $query
-                ->where('completed_at', '>=', $start->utc())
-                ->where('completed_at', '<', $end->addDay()->utc()))
+        $records = $this->recordsForDateRange($startDate, $endDate)
             ->get(['taxable_sales', 'output_vat', 'total']);
 
         $taxableSales = 0;
@@ -56,6 +50,19 @@ class RecordedVatSummary
             'deductions_applied' => $this->formatCents($deductionsApplied),
             'vat_payable_estimate' => $this->formatCents($outputVat - $deductionsApplied),
         ];
+    }
+
+    public function recordsForDateRange(string $startDate, string $endDate): Builder
+    {
+        $start = CarbonImmutable::parse($startDate, 'Asia/Manila')->startOfDay();
+        $end = CarbonImmutable::parse($endDate, 'Asia/Manila')->startOfDay();
+        abort_unless($end->greaterThanOrEqualTo($start), 404);
+
+        return PosVatRecord::query()
+            ->whereHas('posTransaction', fn ($query) => $query
+                ->where('status', 'completed')
+                ->where('completed_at', '>=', $start->utc())
+                ->where('completed_at', '<', $end->addDay()->utc()));
     }
 
     private function formatCents(int $amount): string

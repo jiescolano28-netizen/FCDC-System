@@ -74,7 +74,7 @@
                 @can('tax.view')
                     <div class="nav-group">
                         <button class="nav-item nav-parent {{ $taxNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="tax-menu" aria-controls="tax-menu" aria-expanded="{{ $taxNavigationActive ? 'true' : 'false' }}">
-                            <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Tax Compliance demonstrations</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
+                            <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Tax Compliance</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
                         </button>
                         <div class="nav-dropdown {{ $taxNavigationActive ? 'open' : '' }}" id="tax-menu">
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-records') ? 'active' : '' }}" href="{{ route('tax.vat-records') }}" @if (request()->routeIs('tax.vat-records')) aria-current="page" @endif>
