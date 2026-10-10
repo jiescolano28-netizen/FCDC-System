@@ -79,6 +79,11 @@ class SupplierPurchaseInvoice extends Model
         return $this->hasMany(SupplierPurchaseCorrection::class, 'supplier_purchase_invoice_id');
     }
 
+    public function vatReclassifications(): HasMany
+    {
+        return $this->hasMany(SupplierPurchaseVatReclassification::class);
+    }
+
     public function correctionChainInvoiceIds(): array
     {
         $rootId = $this->id;

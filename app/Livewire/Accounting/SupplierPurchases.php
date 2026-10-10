@@ -11,7 +11,9 @@ use App\Models\SupplierPurchaseInvoice;
 use App\Models\SupplierPurchaseCorrection;
 use App\Services\Accounting\SupplierPurchaseService;
 use App\Services\Accounting\SupplierPurchaseCorrectionService;
+use App\Services\Accounting\SupplierPurchaseVatReclassificationService;
 use Livewire\Attributes\Url;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class SupplierPurchases extends Component
@@ -60,6 +62,58 @@ class SupplierPurchases extends Component
     public string $refundEvidenceReference = '';
 
     public string $refundDate = '';
+
+    public string $vatReclassificationReason = '';
+
+    public string $vatReclassificationAmount = '';
+
+    public array $vatReclassificationLines = [];
+    public string $vatIdempotencyKey = '';
+
+    public function startVatReclassification(int $invoiceId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $invoice = SupplierPurchaseInvoice::query()->with('lines')->findOrFail($invoiceId);
+        abort_unless($invoice->status === 'posted' && $invoice->isActiveCorrectionIdentity(), 404);
+        $this->selectedId = $invoice->id;
+        $this->vatIdempotencyKey = (string) Str::uuid();
+        $this->vatReclassificationReason = '';
+        $this->vatReclassificationAmount = '';
+        $this->vatReclassificationLines = $invoice->lines->map(fn ($line) => [
+            'line_id' => $line->id,
+            'amount' => '0.00',
+            'remaining_inventory' => '0.00',
+            'consumed_cost' => '0.00',
+            'consumed_accounting_account_id' => '',
+        ])->all();
+    }
+
+    public function postVatReclassification(int $invoiceId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $allocations = array_map(fn (array $line): array => [
+            'line_id' => $line['line_id'],
+            'amount_cents' => $this->amountCents($line['amount']),
+            'remaining_inventory_cents' => $this->amountCents($line['remaining_inventory'] ?: '0'),
+            'consumed_cost_cents' => $this->amountCents($line['consumed_cost'] ?: '0'),
+            'consumed_accounting_account_id' => $line['consumed_accounting_account_id'] ?: null,
+        ], array_values(array_filter($this->vatReclassificationLines, fn (array $line): bool => $this->amountCents($line['amount'] ?: '0') > 0)));
+        app(SupplierPurchaseVatReclassificationService::class)->reclassify($invoiceId, [
+            'amount_cents' => $this->amountCents($this->vatReclassificationAmount),
+            'reason' => $this->vatReclassificationReason,
+            'idempotency_key' => $this->vatIdempotencyKey,
+            'allocations' => $allocations,
+        ], (int) auth()->id());
+        $this->reset(['vatReclassificationReason', 'vatReclassificationAmount', 'vatReclassificationLines', 'vatIdempotencyKey']);
+        session()->flash('purchase-message', 'Posted source-linked allowable purchase VAT reclassification; AP, physical quantity, and original sale COGS remain unchanged.');
+    }
+
+    public function cancelVatReclassification(): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $this->reset(['vatReclassificationReason', 'vatReclassificationAmount', 'vatReclassificationLines', 'vatIdempotencyKey']);
+    }
+
 
     public function mount(): void
     {
@@ -233,11 +287,15 @@ class SupplierPurchases extends Component
                 'correctionChildren.corrections', 'correctionParent.corrections',
             ])->find($this->selectedId)
             : null;
+        $selectedVatReclassifications = collect();
         $selectedCorrections = collect();
         $selectedPaymentAllocations = collect();
         $receiptMovements = collect();
         if ($selected) {
             $chainIds = $selected->correctionChainInvoiceIds();
+            $selectedVatReclassifications = \App\Models\SupplierPurchaseVatReclassification::query()
+                ->with(['journal.lines.account', 'lines.purchaseLine', 'lines.account', 'lines.consumedAccount'])
+                ->whereIn('supplier_purchase_invoice_id', $chainIds)->orderBy('id')->get();
             $selectedCorrections = SupplierPurchaseCorrection::query()
                 ->with(['journal.lines.account', 'refundReceipts.journal', 'replacementInvoice'])
                 ->whereIn('supplier_purchase_invoice_id', $chainIds)->orderBy('id')->get();
@@ -257,6 +315,7 @@ class SupplierPurchases extends Component
             'selectedInvoice' => $selected,
             'selectedCorrections' => $selectedCorrections,
             'selectedPaymentAllocations' => $selectedPaymentAllocations,
+            'selectedVatReclassifications' => $selectedVatReclassifications,
             'receiptMovements' => $receiptMovements,
             'suppliers' => Supplier::query()->orderBy('name')->get(),
             'accounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
@@ -273,6 +332,7 @@ class SupplierPurchases extends Component
             'cashAccounts' => $cashAccounts,
             'canCorrectPurchases' => auth()->user()?->can('accounting.correct-supplier-purchases'),
             'canPostRefunds' => auth()->user()?->can('accounting.post-supplier-refunds'),
+            'canReclassifyPurchaseVat' => auth()->user()?->can('accounting.correct-supplier-purchases'),
         ])->layout('layouts.app', ['title' => 'Supplier Purchases']);
     }
 

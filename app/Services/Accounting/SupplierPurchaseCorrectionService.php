@@ -121,6 +121,12 @@ class SupplierPurchaseCorrectionService
                     throw ValidationException::withMessages(['allocations' => 'A correction cannot increase some purchase lines while decreasing others in one posting.']);
                 }
             }
+            $priorVatReclassified = (int) \App\Models\SupplierPurchaseVatReclassification::query()
+                ->whereIn('supplier_purchase_invoice_id', $invoice->correctionChainInvoiceIds())
+                ->sum('amount_cents');
+            if ($correctedTotal < $priorVatReclassified) {
+                throw ValidationException::withMessages(['allocations' => 'The correction cannot reduce the purchase source below previously reclassified input VAT.']);
+            }
             $paid = $invoice->paidAmountCents();
             $received = $invoice->refundReceivedAmountCents();
             $newRefundDue = max(0, $paid - $received - $correctedTotal);
@@ -383,6 +389,11 @@ class SupplierPurchaseCorrectionService
                 if ($allocation['amount_cents'] > 0 && $allocation['direction'] !== 'decrease') {
                     throw ValidationException::withMessages(['allocations' => 'A direct-purchase correction must reduce every changed line.']);
                 }
+            }
+            $priorVatReclassified = (int) \App\Models\SupplierPurchaseVatReclassification::query()
+                ->where('cash_disbursement_id', $payment->id)->sum('amount_cents');
+            if ($correctedTotal < $priorVatReclassified) {
+                throw ValidationException::withMessages(['allocations' => 'The correction cannot reduce the direct purchase below previously reclassified input VAT.']);
             }
             $this->assertForwardInventoryDate($inventoryChanges, $date);
             $receivable = $this->classifiedAccount('accounts_receivable', 'Asset');

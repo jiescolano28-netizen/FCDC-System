@@ -358,7 +358,7 @@ test('purchase correction allocates reviewed cost between remaining and consumed
     ]), [
         'accounting.prepare-supplier-purchases', 'accounting.post-supplier-purchases',
         'accounting.correct-supplier-purchases', 'accounting.post-disbursements',
-        'accounting.prepare-disbursements', 'inventory.movements.record', 'inventory.valuation.approve',
+        'accounting.prepare-disbursements', 'inventory.movements.record', 'inventory.valuation.approve', 'accounting.view',
     ]);
     $period = AccountingPostingPeriod::create([
         'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
@@ -383,6 +383,11 @@ test('purchase correction allocates reviewed cost between remaining and consumed
     $adjustment = AccountingAccount::create([
         'code' => '62'.$actor->id, 'name' => 'Inventory Cost Adjustment', 'type' => 'Expense',
         'classification' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $inputVat = AccountingAccount::create([
+        'code' => '13'.$actor->id, 'name' => 'Input VAT', 'type' => 'Asset',
+        'classification' => 'input_vat', 'normal_balance' => 'debit', 'is_active' => true,
         'approved_at' => now(), 'approved_by' => $actor->id,
     ]);
     foreach ([['inventory', $inventoryAccount], ['accounts_payable', $ap], ['adjustment', $adjustment]] as [$source, $account]) {
@@ -440,6 +445,122 @@ test('purchase correction allocates reviewed cost between remaining and consumed
         ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $adjustment->id)->credit_cents)->toBe(200_000)
         ->and(DB::table('stock_movements')->where('source_reference', 'supplier_purchase:'.$invoice->id)->count())->toBe(1)
         ->and($openingJournal->fresh()->status)->toBe('posted');
+    $activeInvoice = $correction->replacementInvoice;
+    $apBeforeVatReclassification = $activeInvoice->outstandingAmountCents();
+    $requestKey = fake()->uuid();
+    $vatReclassification = app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($activeInvoice->id, [
+        'amount_cents' => 1_200_000,
+        'reason' => 'Accountant approved VAT based on supplier invoice review.',
+        'idempotency_key' => $requestKey,
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'amount_cents' => 1_200_000,
+            'remaining_inventory_cents' => 800_000, 'consumed_cost_cents' => 400_000,
+            'consumed_accounting_account_id' => $adjustment->id,
+        ]],
+    ], $actor->id);
+
+    expect($item->fresh()->qty)->toBe('8.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(2_400_000)
+        ->and($activeInvoice->fresh()->outstandingAmountCents())->toBe($apBeforeVatReclassification)
+        ->and((int) $vatReclassification->journal->lines->firstWhere('accounting_account_id', $inputVat->id)->debit_cents)->toBe(1_200_000)
+        ->and((int) $vatReclassification->journal->lines->firstWhere('accounting_account_id', $inventoryAccount->id)->credit_cents)->toBe(800_000)
+        ->and((int) $vatReclassification->journal->lines->firstWhere('accounting_account_id', $adjustment->id)->credit_cents)->toBe(400_000)
+        ->and((float) DB::table('stock_movements')->where('accounting_journal_id', $vatReclassification->journal_id)->value('quantity'))->toBe(0.0)
+        ->and(DB::table('supplier_purchase_vat_reclassifications')->where('supplier_purchase_invoice_id', $activeInvoice->id)->sum('amount_cents'))->toBe(1_200_000);
+
+    expect(fn () => app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($activeInvoice->id, [
+        'amount_cents' => 1_200_000, 'reason' => 'Accountant approved VAT based on supplier invoice review.',
+        'idempotency_key' => $requestKey,
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'amount_cents' => 1_200_000,
+            'remaining_inventory_cents' => 800_000, 'consumed_cost_cents' => 400_000,
+            'consumed_accounting_account_id' => $adjustment->id,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    $journalCount = DB::table('accounting_journals')->count();
+    expect(fn () => app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($activeInvoice->id, [
+        'amount_cents' => 1_000_000,
+        'reason' => 'Reviewed but incorrectly allocated.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'amount_cents' => 999_999,
+            'remaining_inventory_cents' => 999_999, 'consumed_cost_cents' => 0,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    expect(fn () => app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($activeInvoice->id, [
+        'amount_cents' => 2_800_001,
+        'reason' => 'Exceeds remaining source amount.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'amount_cents' => 2_800_001,
+            'remaining_inventory_cents' => 2_800_001, 'consumed_cost_cents' => 0,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    expect(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->carrying_value_cents)->toBe(2_400_000)
+        ->and($activeInvoice->fresh()->outstandingAmountCents())->toBe($apBeforeVatReclassification);
+    expect(fn () => app(SupplierPurchaseCorrectionService::class)->correct($activeInvoice->id, [
+        'reason' => 'Attempt to correct below VAT already reclassified.',
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'corrected_amount_cents' => 1_100_000,
+            'remaining_inventory_cents' => 0, 'consumed_cost_cents' => 2_900_000,
+            'consumed_accounting_account_id' => $adjustment->id,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    expect($activeInvoice->fresh()->outstandingAmountCents())->toBe($apBeforeVatReclassification)
+        ->and(DB::table('supplier_purchase_vat_reclassifications')->sum('amount_cents'))->toBe(1_200_000)
+        ->and($item->fresh()->carrying_value_cents)->toBe(2_400_000);
+    $nonInventoryInvoice = app(SupplierPurchaseService::class)->saveDraft([
+        'supplier_id' => $supplier->id, 'invoice_number' => 'NONINV-VAT-'.$actor->id,
+        'recognition_date' => now('Asia/Manila')->toDateString(), 'due_date' => now('Asia/Manila')->toDateString(),
+        'description' => 'Office supplies', 'receipt_confirmed' => true,
+        'lines' => [[
+            'inventory_id' => '', 'accounting_account_id' => $adjustment->id,
+            'description' => 'Office supplies', 'quantity' => '', 'amount' => '1000.00',
+        ]],
+    ], $actor->id);
+    $nonInventoryInvoice = app(SupplierPurchaseService::class)->post($nonInventoryInvoice->id, $actor->id);
+    $nonInventoryAp = $nonInventoryInvoice->outstandingAmountCents();
+    $nonInventoryVat = app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($nonInventoryInvoice->id, [
+        'amount_cents' => 20_000, 'reason' => 'Accountant approved non-inventory purchase VAT.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $nonInventoryInvoice->lines->first()->id, 'amount_cents' => 20_000,
+        ]],
+    ], $actor->id);
+    $this->actingAs($actor)->get(route('accounting.supplier-purchases', ['invoice' => $activeInvoice->id]))
+        ->assertOk()
+        ->assertSee('Allowable purchase VAT reclassification history')
+        ->assertSee('Accountant approved VAT based on supplier invoice review.')
+        ->assertSee($vatReclassification->journal->reference);
+    expect((int) $nonInventoryVat->journal->lines->firstWhere('accounting_account_id', $adjustment->id)->credit_cents)->toBe(20_000)
+        ->and($nonInventoryInvoice->fresh()->outstandingAmountCents())->toBe($nonInventoryAp)
+        ->and($item->fresh()->qty)->toBe('8.00');
+    $unauthorizedValuationActor = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'novalvat.'.fake()->unique()->numerify('####'),
+        'password' => Hash::make('password'), 'first_name' => 'No', 'last_name' => 'Valuation',
+        'email' => fake()->unique()->safeEmail(),
+    ]), ['accounting.correct-supplier-purchases']);
+    $journalCount = DB::table('accounting_journals')->count();
+    expect(fn () => app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($activeInvoice->id, [
+        'amount_cents' => 100, 'reason' => 'Unauthorized inventory valuation.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $activeInvoice->lines->first()->id, 'amount_cents' => 100,
+            'remaining_inventory_cents' => 100, 'consumed_cost_cents' => 0,
+        ]],
+    ], $unauthorizedValuationActor->id))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->carrying_value_cents)->toBe(2_400_000);
+
+    $period->forceFill(['status' => 'closed'])->save();
+    expect(fn () => app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassify($nonInventoryInvoice->id, [
+        'amount_cents' => 100, 'reason' => 'Attempt in a closed period.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $nonInventoryInvoice->lines->first()->id, 'amount_cents' => 100,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
 });
 test('direct supplier purchases preserve the disbursement and post a linked refund receivable', function () {
     $actor = grantEmployeeTestPermissions(Employee::create([
@@ -448,7 +569,7 @@ test('direct supplier purchases preserve the disbursement and post a linked refu
         'email' => fake()->unique()->safeEmail(),
     ]), [
         'accounting.prepare-disbursements', 'accounting.post-disbursements',
-        'accounting.correct-supplier-purchases', 'accounting.post-supplier-refunds',
+        'accounting.correct-supplier-purchases', 'accounting.post-supplier-refunds', 'accounting.view',
     ]);
     $period = AccountingPostingPeriod::create([
         'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
@@ -474,6 +595,11 @@ test('direct supplier purchases preserve the disbursement and post a linked refu
     $receivable = AccountingAccount::create([
         'code' => 'AR-D'.$actor->id, 'name' => 'Accounts Receivable', 'type' => 'Asset',
         'classification' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $inputVat = AccountingAccount::create([
+        'code' => 'IV-D'.$actor->id, 'name' => 'Direct Purchase Input VAT', 'type' => 'Asset',
+        'classification' => 'input_vat', 'normal_balance' => 'debit', 'is_active' => true,
         'approved_at' => now(), 'approved_by' => $actor->id,
     ]);
     $supplier = Supplier::create(['code' => 'DIR-'.$actor->id, 'name' => 'Direct Purchase Supplier', 'created_by' => $actor->id]);
@@ -520,6 +646,26 @@ test('direct supplier purchases preserve the disbursement and post a linked refu
         ->and($nextCorrection->refund_due_cents)->toBe(500_000)
         ->and($nextCorrection->journal->correction_of_id)->toBe($correction->journal_id)
         ->and((int) $nextCorrection->journal->lines->firstWhere('accounting_account_id', $receivable->id)->debit_cents)->toBe(500_000);
+    $directVat = app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassifyDirectPurchase($payment->id, [
+        'amount_cents' => 500_000, 'reason' => 'Accountant approved direct purchase VAT.',
+        'idempotency_key' => fake()->uuid(),
+        'allocations' => [[
+            'line_id' => $payment->lines->first()->id, 'amount_cents' => 500_000,
+        ]],
+    ], $actor->id);
+    expect((int) $directVat->journal->lines->firstWhere('accounting_account_id', $inputVat->id)->debit_cents)->toBe(500_000)
+        ->and((int) $directVat->journal->lines->firstWhere('accounting_account_id', $expense->id)->credit_cents)->toBe(500_000)
+        ->and($payment->fresh()->amount_cents)->toBe(5_000_000)
+        ->and((int) DB::table('cash_disbursements')->where('id', $payment->id)->value('amount_cents'))->toBe(5_000_000);
+    $this->actingAs($actor)->get(route('accounting.cash-disbursements', ['disbursement' => $payment->id]))
+        ->assertOk()
+        ->assertSee('Allowable direct-purchase VAT reclassification history')
+        ->assertSee('Accountant approved direct purchase VAT.')
+        ->assertSee($directVat->journal->reference);
+    expect(fn () => app(SupplierPurchaseCorrectionService::class)->correctDirectPurchase($payment->id, [
+        'supplier_id' => $supplier->id, 'reason' => 'Attempt to correct below reclassified direct-purchase VAT.',
+        'allocations' => [['line_id' => $payment->lines->first()->id, 'corrected_amount_cents' => 400_000]],
+    ], $actor->id))->toThrow(ValidationException::class);
     expect(fn () => app(CashDisbursementService::class)->reverse($payment->id, 'Attempt reversal after correction', $actor->id))
         ->toThrow(ValidationException::class);
     $reversedPayment = app(CashDisbursementService::class)->saveDraft([

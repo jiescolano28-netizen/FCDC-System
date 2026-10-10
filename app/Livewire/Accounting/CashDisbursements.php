@@ -14,6 +14,7 @@ use App\Models\SupplierPurchaseCorrection;
 use App\Services\Accounting\SupplierPurchaseCorrectionService;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class CashDisbursements extends Component
@@ -64,6 +65,13 @@ class CashDisbursements extends Component
     public string $directCorrectionSupplierId = '';
 
     public array $directCorrectionLines = [];
+
+    public string $directVatAmount = '';
+
+    public string $directVatReason = '';
+
+    public array $directVatLines = [];
+    public string $directVatIdempotencyKey = '';
 
     public string $refundAmount = '';
 
@@ -230,6 +238,40 @@ class CashDisbursements extends Component
         session()->flash('disbursement-message', 'Posted linked direct-purchase cost correction and Supplier Refund Receivable; the payment and receipt history remain unchanged.');
     }
 
+    public function startDirectVatReclassification(int $disbursementId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $payment = CashDisbursementRecord::query()->with('lines')->findOrFail($disbursementId);
+        abort_unless($payment->status === 'posted' && $payment->supplier_id === null
+            && $payment->reversal_of_id === null && ! $payment->reversals()->exists(), 404);
+        $this->selectedId = $payment->id;
+        $this->directVatIdempotencyKey = (string) Str::uuid();
+        $this->directVatAmount = '';
+        $this->directVatReason = '';
+        $this->directVatLines = $payment->lines->map(fn ($line) => [
+            'line_id' => $line->id, 'amount' => '0.00', 'remaining_inventory' => '0.00',
+            'consumed_cost' => '0.00', 'consumed_accounting_account_id' => '',
+        ])->all();
+    }
+
+    public function postDirectVatReclassification(int $disbursementId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $allocations = array_map(fn (array $line): array => [
+            'line_id' => $line['line_id'], 'amount_cents' => $this->amountCents($line['amount']),
+            'remaining_inventory_cents' => $this->amountCents($line['remaining_inventory'] ?: '0'),
+            'consumed_cost_cents' => $this->amountCents($line['consumed_cost'] ?: '0'),
+            'consumed_accounting_account_id' => $line['consumed_accounting_account_id'] ?: null,
+        ], array_values(array_filter($this->directVatLines, fn (array $line): bool => $this->amountCents($line['amount'] ?: '0') > 0)));
+        app(\App\Services\Accounting\SupplierPurchaseVatReclassificationService::class)->reclassifyDirectPurchase($disbursementId, [
+            'amount_cents' => $this->amountCents($this->directVatAmount), 'reason' => $this->directVatReason,
+            'idempotency_key' => $this->directVatIdempotencyKey,
+            'allocations' => $allocations,
+        ], (int) auth()->id());
+        $this->reset(['directVatAmount', 'directVatReason', 'directVatLines', 'directVatIdempotencyKey']);
+        session()->flash('disbursement-message', 'Posted source-linked direct-purchase VAT reclassification; the disbursement and physical quantity remain unchanged.');
+    }
+
     public function receiveSupplierRefund(int $correctionId): void
     {
         $this->authorizePermission('accounting.post-supplier-refunds');
@@ -278,6 +320,10 @@ class CashDisbursements extends Component
             ? SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $selected->id)
                 ->with(['journal.lines.account', 'refundReceipts.journal'])->orderBy('id')->get()
             : collect();
+        $directVatReclassifications = $selected
+            ? \App\Models\SupplierPurchaseVatReclassification::query()->where('cash_disbursement_id', $selected->id)
+                ->with(['journal.lines.account', 'lines.disbursementLine', 'lines.account', 'lines.consumedAccount'])->orderBy('id')->get()
+            : collect();
         $otherMethods = AccountingPostingMapping::query()->where('source', 'like', 'disbursement_method:%')
             ->with('account')->get()->filter(fn ($mapping) => $mapping->isApprovedForPosting())
             ->map(fn ($mapping) => substr($mapping->source, strlen('disbursement_method:')))->values();
@@ -317,6 +363,7 @@ class CashDisbursements extends Component
             'disbursements' => $disbursements,
             'selectedDisbursement' => $selected,
             'suppliers' => $suppliers,
+            'directVatReclassifications' => $directVatReclassifications,
             'eligibleInvoices' => $eligibleInvoices,
             'moneyAccounts' => $moneyAccounts,
             'debitAccounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')

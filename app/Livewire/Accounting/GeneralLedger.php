@@ -141,9 +141,9 @@ class GeneralLedger extends Component
     {
         return match ($journal->source_type) {
             'opening' => $journal->source_id === 'FCDC' ? route('accounting.opening-books') : null,
-            'supplier_purchase', 'supplier_purchase_correction' => SupplierPurchaseInvoice::query()->whereKey($journal->source_id)->exists()
+            'supplier_purchase', 'supplier_purchase_correction', 'supplier_purchase_vat_reclassification' => SupplierPurchaseInvoice::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.supplier-purchases', ['invoice' => $journal->source_id]) : null,
-            'cash_disbursement', 'cash_disbursement_reversal' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
+            'cash_disbursement', 'cash_disbursement_reversal', 'direct_purchase_vat_reclassification' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.cash-disbursements', ['disbursement' => $journal->source_id]) : null,
             'direct_purchase_correction' => $this->directCorrectionUrl($journal),
             'supplier_refund_receipt' => $this->refundCorrectionUrl($journal),

@@ -6,7 +6,7 @@ Status: confirmed design; not implemented by this document.
 
 VAT is the functional tax workflow for this scope. All supported POS sales are standard-rated at 12% on VAT-exclusive selling amounts. Only recorded POS sales are covered; reports and worksheets must not imply coverage of all company taxable activity or determination of the company's final VAT liability.
 
-VAT-exempt and zero-rated sales, non-POS sales, purchase-based input VAT, accountant-entered input VAT, cancellations, refunds and reversals are outside this scope. The application does not submit returns to BIR.
+Tax workflow/report coverage remains limited to recorded POS sales. VAT-exempt and zero-rated sales, non-POS sales, purchase-based tax reporting, use of accounting-ledger input VAT as return deductions, cancellations, refunds and reversals are outside this scope. The accounting workflow may record source-linked, accountant-approved purchase input VAT in its general ledger; those amounts are not imported into POS tax pages or represented as tax-return deductions. The application does not submit returns to BIR.
 
 ## 4.1 VAT Records
 

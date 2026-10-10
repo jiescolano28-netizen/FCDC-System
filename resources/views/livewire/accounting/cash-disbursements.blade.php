@@ -125,6 +125,7 @@
             @if ($selectedDisbursement->reversals->isNotEmpty())<p>Reversed by {{ $selectedDisbursement->reversals->first()->reference }}. Reason: {{ $selectedDisbursement->reversals->first()->correction_reason }}</p>@endif
             @if ($selectedDisbursement->status === 'posted' && ! $selectedDisbursement->supplier_id && ! $selectedDisbursement->reversal_of_id && $selectedDisbursement->reversals->isEmpty() && $canCorrectPurchases)
                 <button type="button" wire:click="startDirectPurchaseCorrection({{ $selectedDisbursement->id }})">Correct directly paid purchase</button>
+                <button type="button" wire:click="startDirectVatReclassification({{ $selectedDisbursement->id }})">Reclass allowable purchase VAT</button>
             @endif
             @if ($directCorrectionLines && $selectedDisbursement->id === $this->selectedId)
                 <form wire:submit="postDirectPurchaseCorrection({{ $selectedDisbursement->id }})">
@@ -145,6 +146,43 @@
                         </fieldset>
                     @endforeach
                     <button type="submit">Post direct purchase correction</button>
+                </form>
+            @endif
+            @if ($directVatReclassifications->isNotEmpty())
+                <h3>Allowable direct-purchase VAT reclassification history</h3>
+                @foreach ($directVatReclassifications as $reclassification)
+                    <article>
+                        <p>Input VAT PHP {{ number_format($reclassification->amount_cents / 100, 2) }} · {{ $reclassification->accounting_date->format('Y-m-d') }} · {{ $reclassification->reason }}</p>
+                        <p>Journal {{ $reclassification->journal?->reference }}</p>
+                        @foreach ($reclassification->lines as $line)
+                            <p>{{ $line->disbursementLine?->description }} · PHP {{ number_format($line->amount_cents / 100, 2) }} ·
+                                @if ($line->inventory_id) remaining Inventory PHP {{ number_format($line->remaining_inventory_cents / 100, 2) }}, consumed cost PHP {{ number_format($line->consumed_cost_cents / 100, 2) }} to {{ $line->consumedAccount?->name ?? '—' }} @else {{ $line->account?->name }} @endif
+                            </p>
+                        @endforeach
+                    </article>
+                @endforeach
+            @endif
+            @if ($directVatLines && $selectedDisbursement->id === $this->selectedId && $canCorrectPurchases)
+                <form wire:submit="postDirectVatReclassification({{ $selectedDisbursement->id }})">
+                    <h3>Reclass allowable direct-purchase VAT</h3>
+                    <p>Use the explicitly approved amount and reviewed allocations. This does not change the disbursement or physical quantity.</p>
+                    <label>Approved input VAT (PHP)<input inputmode="decimal" wire:model="directVatAmount" required></label>
+                    <label>Supporting rationale<textarea wire:model="directVatReason" maxlength="4000" required></textarea></label>
+                    @foreach ($directVatLines as $index => $vatLine)
+                        @php($sourceLine = $selectedDisbursement->lines->firstWhere('id', $vatLine['line_id']))
+                        <fieldset wire:key="direct-vat-line-{{ $sourceLine->id }}">
+                            <legend>{{ $sourceLine->description }}</legend>
+                            <label>Allocated input VAT (PHP)<input inputmode="decimal" wire:model="directVatLines.{{ $index }}.amount"></label>
+                            @if ($sourceLine->inventory_id)
+                                <label>Approved remaining Inventory credit (PHP)<input inputmode="decimal" wire:model="directVatLines.{{ $index }}.remaining_inventory"></label>
+                                <label>Approved consumed-cost credit (PHP)<input inputmode="decimal" wire:model="directVatLines.{{ $index }}.consumed_cost"></label>
+                                <label>Consumed-cost account<select wire:model="directVatLines.{{ $index }}.consumed_accounting_account_id"><option value="">Select approved expense account</option>@foreach ($correctionExpenseAccounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @else
+                                <p>Credits the original purchase account: {{ $sourceLine->account?->code }} — {{ $sourceLine->account?->name }}.</p>
+                            @endif
+                        </fieldset>
+                    @endforeach
+                    <button type="submit">Post approved VAT reclassification</button>
                 </form>
             @endif
             @foreach ($directCorrections as $correction)

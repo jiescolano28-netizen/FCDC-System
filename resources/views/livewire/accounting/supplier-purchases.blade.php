@@ -72,6 +72,7 @@
                         @endif
                         @if ($invoice->status === 'posted' && $activeIdentity && $canCorrectPurchases)
                             <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
+                            <button type="button" wire:click="startVatReclassification({{ $invoice->id }})">Reclass allowable purchase VAT</button>
                         @endif
                     </td>
                 </tr>
@@ -109,6 +110,44 @@
                         @endif
                     </article>
                 @endforeach
+            @endif
+            @if ($selectedVatReclassifications->isNotEmpty())
+                <h3>Allowable purchase VAT reclassification history</h3>
+                @foreach ($selectedVatReclassifications as $reclassification)
+                    <article>
+                        <p>Input VAT PHP {{ number_format($reclassification->amount_cents / 100, 2) }} · {{ $reclassification->accounting_date->format('Y-m-d') }} · {{ $reclassification->reason }}</p>
+                        <p>Journal {{ $reclassification->journal?->reference }}</p>
+                        <ul>@foreach ($reclassification->lines as $line)
+                            <li>{{ $line->purchaseLine?->description }}: PHP {{ number_format($line->amount_cents / 100, 2) }}
+                                @if ($line->inventory_id) (remaining Inventory PHP {{ number_format($line->remaining_inventory_cents / 100, 2) }}, consumed cost PHP {{ number_format($line->consumed_cost_cents / 100, 2) }} to {{ $line->consumedAccount?->name ?? '—' }}) @else ({{ $line->account?->name }}) @endif
+                            </li>
+                        @endforeach</ul>
+                    </article>
+                @endforeach
+            @endif
+            @if ($vatReclassificationLines && $selectedInvoice->id === $this->selectedId && $canReclassifyPurchaseVat)
+                <form wire:submit="postVatReclassification({{ $selectedInvoice->id }})">
+                    <h3>Reclass allowable purchase VAT</h3>
+                    <p>Enter the accountant-approved amount and explicitly allocate it. No tax eligibility or cost split is inferred. AP and physical quantities do not change.</p>
+                    <label>Approved input VAT (PHP)<input inputmode="decimal" wire:model="vatReclassificationAmount" required></label>
+                    <label>Supporting rationale<textarea wire:model="vatReclassificationReason" maxlength="4000" required></textarea></label>
+                    @foreach ($vatReclassificationLines as $index => $vatLine)
+                        @php($sourceLine = $selectedInvoice->lines->firstWhere('id', $vatLine['line_id']))
+                        <fieldset wire:key="vat-reclass-line-{{ $sourceLine->id }}">
+                            <legend>{{ $sourceLine->description }} — source allocation PHP {{ number_format($sourceLine->line_amount_cents / 100, 2) }}</legend>
+                            <label>Allocated input VAT (PHP)<input inputmode="decimal" wire:model="vatReclassificationLines.{{ $index }}.amount"></label>
+                            @if ($sourceLine->inventory_id)
+                                <label>Approved remaining Inventory credit (PHP)<input inputmode="decimal" wire:model="vatReclassificationLines.{{ $index }}.remaining_inventory"></label>
+                                <label>Approved consumed-cost credit (PHP)<input inputmode="decimal" wire:model="vatReclassificationLines.{{ $index }}.consumed_cost"></label>
+                                <label>Consumed-cost account<select wire:model="vatReclassificationLines.{{ $index }}.consumed_accounting_account_id"><option value="">Select approved expense account</option>@foreach ($accounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @else
+                                <p>Credits the original purchase account: {{ $sourceLine->account?->code }} — {{ $sourceLine->account?->name }}.</p>
+                            @endif
+                        </fieldset>
+                    @endforeach
+                    <button type="submit">Post approved VAT reclassification</button>
+                    <button type="button" wire:click="cancelVatReclassification">Cancel</button>
+                </form>
             @endif
             @if ($correctionLines && $selectedInvoice->id === $this->selectedId)
                 <form wire:submit="postCorrection({{ $selectedInvoice->id }})">
