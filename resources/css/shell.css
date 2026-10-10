@@ -505,6 +505,20 @@
 .trial-balance-empty { padding: 20px 12px; border: 1px solid #e8d89e; border-radius: 7px; color: #684f0c; background: #fff9e5; text-align: center; }
 .trial-balance-empty p { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
 .trial-balance-empty span { font-size: 12px; line-height: 1.5; }
+.trial-balance-status, .trial-balance-no-activity { margin: 12px 0; padding: 11px 14px; border-radius: 7px; font-size: 13px; }
+.trial-balance-status.is-balanced, .schedule-matched { color: #24543e; background: #edf8f1; }
+.trial-balance-status.has-accounting-error, .schedule-mismatch { color: #7b2525; background: #fff0f0; }
+.trial-balance-table-wrap { overflow-x: auto; }
+.trial-balance-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.trial-balance-table th, .trial-balance-table td { padding: 9px 8px; border-bottom: 1px solid var(--slate-200); text-align: right; white-space: nowrap; }
+.trial-balance-table thead th { color: var(--slate-700); background: #f8fafc; font-weight: 700; }
+.trial-balance-table th:first-child, .trial-balance-table tbody th { text-align: left; }
+.trial-balance-table tbody th { font-weight: 600; }
+.trial-balance-table tbody th > span:first-child { color: var(--slate-500); margin-right: 5px; }
+.trial-balance-inactive { padding: 2px 5px; border-radius: 4px; color: #684f0c !important; background: #fff9e5; font-size: 10px; }
+.trial-balance-reconciliation { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--slate-200); }
+.trial-balance-reconciliation h3 { margin: 0 0 10px; font-size: 15px; }
+.trial-balance-reconciliation p { padding: 10px; border-radius: 6px; font-size: 12px; }
 @media (max-width: 600px) {
     .trial-balance-period-controls, .trial-balance-totals { grid-template-columns: minmax(0, 1fr); }
     .trial-balance-report { padding: 16px; }

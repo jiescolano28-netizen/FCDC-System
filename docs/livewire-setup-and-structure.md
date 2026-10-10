@@ -107,9 +107,9 @@ The authenticated `/accounting/cash-disbursements` Livewire page uses the shared
 
 The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; no account mapping, accounting policy, financial calculation, session journal, POS sale, or persisted business data is used. Print styles isolate the document from the application shell.
 
-## Trial Balance demonstration
+## Trial Balance
 
-The authenticated `/accounting/trial-balance` Livewire page uses the shared shell and provides date controls over an explicitly empty report. Totals remain unavailable; the report states it is not a real trial balance and does not certify balanced company books. It does not read demo journals, calculate balances, apply accounting period or closing rules, or persist reports. Print styles isolate this page's report and retain the selected dates and non-operational explanation.
+The authenticated `/accounting/trial-balance` Livewire page reads posted FCDC journal lines from the approved opening cutover through the inclusive Manila end date. It shows cumulative debit/credit closings, the prior opening balance and selected-period movement, including inactive accounts with posted balances. Centavo totals report unequal books without a balancing plug. The report separately compares Accounts Payable with posted supplier/invoice balances and Inventory with approved opening valuation plus valued stock movements at the same as-of date; unsupported inventory valuation is shown as an explicit coverage error. Dates before cutover and invalid ranges are unavailable rather than presented as zero.
 
 ## Completed module-page cutover
 
