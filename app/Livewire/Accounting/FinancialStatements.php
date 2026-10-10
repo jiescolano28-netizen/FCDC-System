@@ -85,12 +85,7 @@ class FinancialStatements extends Component
             return ['error' => 'Select a valid inclusive reporting period.', 'available' => false];
         }
 
-        $cutover = AccountingJournal::query()
-            ->where('book_key', 'FCDC')
-            ->where('source_type', 'opening')
-            ->where('source_id', 'FCDC')
-            ->where('status', 'posted')
-            ->value('accounting_date');
+        $cutover = $this->accountingCutoverDate();
         if ($cutover === null) {
             return ['error' => 'Posted accounting cutover coverage is unavailable until approved opening balances are posted.', 'available' => false];
         }
@@ -201,9 +196,7 @@ class FinancialStatements extends Component
             return ['available' => false, 'error' => 'Select a valid Manila as-of date.'];
         }
 
-        $cutover = AccountingJournal::query()
-            ->where('book_key', 'FCDC')->where('source_type', 'opening')->where('source_id', 'FCDC')
-            ->where('status', 'posted')->value('accounting_date');
+        $cutover = $this->accountingCutoverDate();
         if ($cutover === null) {
             return ['available' => false, 'error' => 'Posted accounting cutover coverage is unavailable until approved opening balances are posted.'];
         }
@@ -356,7 +349,8 @@ class FinancialStatements extends Component
     }
 
 
-    /** @param array<int, int> $closingIds
+    /**
+     * @param array<int, int> $closingIds
      * @return array<int, int>
      */
     private function fiscalClosingExclusionIds(array $closingIds): array
@@ -371,6 +365,16 @@ class FinancialStatements extends Component
         }
 
         return $excludedIds;
+    }
+
+    private function accountingCutoverDate(): ?string
+    {
+        return AccountingJournal::query()
+            ->where('book_key', 'FCDC')
+            ->where('source_type', 'opening')
+            ->where('source_id', 'FCDC')
+            ->where('status', 'posted')
+            ->value('accounting_date');
     }
 
     private function validDate(string $date): bool
