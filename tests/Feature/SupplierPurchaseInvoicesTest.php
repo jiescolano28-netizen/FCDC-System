@@ -226,7 +226,7 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         'last_name' => 'Corrector',
         'email' => fake()->unique()->safeEmail(),
     ]), [
-        'accounting.prepare-supplier-purchases', 'accounting.post-supplier-purchases',
+        'accounting.view', 'accounting.prepare-supplier-purchases', 'accounting.post-supplier-purchases',
         'accounting.correct-supplier-purchases', 'accounting.post-supplier-refunds',
         'accounting.prepare-disbursements', 'accounting.post-disbursements',
     ]);
@@ -329,6 +329,13 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         ->and($invoice->fresh()->supplierRefundDueCents())->toBe(0)
         ->and($invoice->fresh()->outstandingAmountCents())->toBe(500_000)
         ->and((int) $secondCorrection->journal->lines->firstWhere('accounting_account_id', $ap->id)->credit_cents)->toBe(500_000);
+    Livewire::actingAs($actor)->test(\App\Livewire\Accounting\SupplierPurchases::class)
+        ->assertSee('Correct purchase')
+        ->call('showInvoice', $invoice->id)
+        ->assertSee('Financial correction and supplier refund history')
+        ->assertSee('REF-COR-'.$actor->id)
+        ->assertSee($secondCorrection->replacementInvoice->invoice_number)
+        ->assertSee('Supplier refund receivable outstanding');
 });
 test('purchase correction allocates reviewed cost between remaining and consumed stock without changing quantity', function () {
     $actor = grantEmployeeTestPermissions(Employee::create([
