@@ -412,7 +412,7 @@ class OpeningBooksService
         return $schedule->lines->map(fn ($line) => [
             'inventoryId' => (string) $line->inventory_id,
             'quantity' => $line->quantity,
-            'value' => $this->amountFromCents((int) $line->carrying_value_cents),
+            'value' => $this->decimalFromHundredths((int) $line->carrying_value_cents),
         ])->all();
     }
 
@@ -444,10 +444,6 @@ class OpeningBooksService
         return intdiv($hundredths, 100).'.'.str_pad((string) ($hundredths % 100), 2, '0', STR_PAD_LEFT);
     }
 
-    private function amountFromCents(int $cents): string
-    {
-        return intdiv($cents, 100).'.'.str_pad((string) ($cents % 100), 2, '0', STR_PAD_LEFT);
-    }
 
     private function validatedYtdLines(array $lines): array
     {
