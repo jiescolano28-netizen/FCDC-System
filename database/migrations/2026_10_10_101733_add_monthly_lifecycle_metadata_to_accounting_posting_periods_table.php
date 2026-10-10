@@ -13,8 +13,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasColumn('accounting_posting_periods', 'period_month')) {
+            Schema::table('accounting_posting_periods', function (Blueprint $table) {
+                $table->unsignedTinyInteger('period_month')->default(1)->after('fiscal_year');
+            });
+        }
+
         Schema::table('accounting_posting_periods', function (Blueprint $table) {
-            $table->unsignedTinyInteger('period_month')->default(1)->after('fiscal_year');
             $table->timestamp('closed_at')->nullable();
             $table->foreignId('closed_by')->nullable()->constrained('employees');
             $table->text('close_reason')->nullable();
@@ -25,7 +30,10 @@ return new class extends Migration
 
         Schema::table('accounting_posting_periods', function (Blueprint $table) {
             $table->dropUnique(['book_key', 'fiscal_year']);
-            $table->unique(['book_key', 'fiscal_year', 'period_month']);
+            $table->unique(
+                ['book_key', 'fiscal_year', 'period_month'],
+                'acct_post_periods_book_fy_month_unique'
+            );
         });
 
         foreach (DB::table('accounting_posting_periods')->orderBy('id')->get() as $period) {
