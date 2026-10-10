@@ -56,7 +56,7 @@
                     @if ($invoice->status === 'draft')
                         @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
                         @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
-                    @if ($invoice->status === 'posted' && ! $invoice->correction_of_id && $invoice->corrections->isEmpty() && $canCorrectPurchases)
+                    @if ($invoice->status === 'posted' && $invoice->supplier_purchase_correction_id === null && $invoice->correctionChildren->isEmpty() && $canCorrectPurchases)
                         <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
                     @endif
                     @endif
@@ -73,18 +73,17 @@
             <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Receipt confirmed</dt><dd>{{ $selectedInvoice->receipt_confirmed ? 'Yes' : 'No' }}</dd><dt>Original gross amount</dt><dd>PHP {{ number_format($selectedInvoice->gross_amount_cents / 100, 2) }}</dd><dt>Corrected active value</dt><dd>PHP {{ number_format($selectedInvoice->activeCorrectedAmountCents() / 100, 2) }}</dd><dt>Paid</dt><dd>PHP {{ number_format($selectedInvoice->paidAmountCents() / 100, 2) }}</dd><dt>Outstanding AP</dt><dd>PHP {{ number_format($selectedInvoice->outstandingAmountCents() / 100, 2) }}</dd><dt>Supplier refund receivable outstanding</dt><dd>PHP {{ number_format($selectedInvoice->supplierRefundDueCents() / 100, 2) }}</dd><dt>Payable status</dt><dd>{{ $selectedInvoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $selectedInvoice->payableStatus() }}</dd><dt>Accounting journal</dt><dd>{{ $selectedInvoice->journal?->reference ?? 'Not posted' }}</dd>@if ($selectedInvoice->correction_of_id)<dt>Corrected invoice</dt><dd>{{ $selectedInvoice->correctionParent?->invoice_number }} · {{ $selectedInvoice->correction_reason }}</dd>@endif</dl>
             <h3>Allocations and receipt history</h3><table class="reports-table"><thead><tr><th>Description</th><th>Allocation</th><th>Quantity</th><th class="numeric">Amount</th></tr></thead><tbody>@foreach ($selectedInvoice->lines as $line)<tr><td>{{ $line->description }} @if ($line->inventory) · {{ $line->inventory->name }} @elseif ($line->account) · {{ $line->account->code }} {{ $line->account->name }} @endif</td><td>{{ $line->inventory_id ? 'Inventory' : 'Asset / expense' }}</td><td>{{ $line->quantity ?? '—' }}</td><td class="numeric">{{ number_format($line->line_amount_cents / 100, 2) }}</td></tr>@endforeach</tbody></table>
 
-            @php($purchaseCorrections = $selectedInvoice->correction_of_id ? $selectedInvoice->correctionParent?->corrections : $selectedInvoice->corrections)
-            @if ($purchaseCorrections?->isNotEmpty())
+            @if ($selectedCorrections->isNotEmpty())
                 <h3>Financial correction and supplier refund history</h3>
-                @foreach ($purchaseCorrections as $correction)
+                @foreach ($selectedCorrections as $correction)
                     <article>
                         <p>Correction {{ $correction->id }} · {{ $correction->accounting_date->format('Y-m-d') }} · {{ $correction->reason }}</p>
-                        <p>Original PHP {{ number_format($correction->original_amount_cents / 100, 2) }} · Corrected PHP {{ number_format($correction->corrected_amount_cents / 100, 2) }} · Refund due PHP {{ number_format(max(0, $correction->refund_due_cents - $correction->refundReceipts->sum('amount_cents')) / 100, 2) }}</p>
+                        <p>Original PHP {{ number_format($correction->original_amount_cents / 100, 2) }} · Corrected PHP {{ number_format($correction->corrected_amount_cents / 100, 2) }} · Refund receivable change PHP {{ number_format($correction->refund_due_cents / 100, 2) }}</p>
                         <p>Journal {{ $correction->journal?->reference }} · corrected invoice {{ $correction->replacementInvoice?->invoice_number }}</p>
                         @foreach ($correction->refundReceipts as $refundReceipt)
                             <p>Refund received {{ $refundReceipt->receipt_date->format('Y-m-d') }} · {{ $refundReceipt->reference }} · {{ $refundReceipt->evidence_reference }} · PHP {{ number_format($refundReceipt->amount_cents / 100, 2) }} · Journal {{ $refundReceipt->journal?->reference }}</p>
                         @endforeach
-                        @if ($canPostRefunds && $correction->refund_due_cents > $correction->refundReceipts->sum('amount_cents'))
+                        @if ($canPostRefunds && $correction->id === $selectedCorrections->last()->id && $selectedInvoice->supplierRefundDueCents() > 0)
                             <form wire:submit="receiveSupplierRefund({{ $correction->id }})">
                                 <label>Actual refund received (PHP)<input inputmode="decimal" wire:model="refundAmount" required></label>
                                 <label>Cash/Bank account<select wire:model="refundMoneyAccountId" required><option value="">Select account</option>@foreach ($cashAccounts as $cashAccount)<option value="{{ $cashAccount->id }}">{{ $cashAccount->code }} — {{ $cashAccount->name }}</option>@endforeach</select></label>

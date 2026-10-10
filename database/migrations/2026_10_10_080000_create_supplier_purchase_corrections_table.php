@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('source_type', 30);
             $table->unsignedBigInteger('original_amount_cents');
             $table->unsignedBigInteger('corrected_amount_cents');
-            $table->unsignedBigInteger('refund_due_cents')->default(0);
+            $table->bigInteger('refund_due_cents')->default(0);
             $table->text('reason');
             $table->date('accounting_date');
             $table->foreignId('prepared_by')->constrained('employees');

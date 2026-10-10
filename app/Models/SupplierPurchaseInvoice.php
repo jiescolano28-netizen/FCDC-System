@@ -75,43 +75,59 @@ class SupplierPurchaseInvoice extends Model
         return $this->hasMany(SupplierPurchaseCorrection::class, 'supplier_purchase_invoice_id');
     }
 
+    public function correctionChainInvoiceIds(): array
+    {
+        $rootId = $this->id;
+        while ($parentId = self::query()->whereKey($rootId)->value('correction_of_id')) {
+            $rootId = (int) $parentId;
+        }
+
+        $ids = [$rootId];
+        $frontier = [$rootId];
+        while ($frontier !== []) {
+            $frontier = self::query()->whereIn('correction_of_id', $frontier)->orderBy('id')->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $ids = [...$ids, ...$frontier];
+        }
+
+        return $ids;
+    }
+
     public function activeCorrectedAmountCents(): int
     {
-        $sourceId = $this->correction_of_id ?? $this->id;
-        $correction = SupplierPurchaseCorrection::query()->where('supplier_purchase_invoice_id', $sourceId)->latest('id')->first();
+        $ids = $this->correctionChainInvoiceIds();
 
-        return $correction ? (int) $correction->corrected_amount_cents : (int) $this->gross_amount_cents;
+        return (int) self::query()->whereIn('id', $ids)->orderByDesc('id')->value('gross_amount_cents');
+    }
+
+    public function refundReceivedAmountCents(): int
+    {
+        return (int) DB::table('supplier_refund_receipts')
+            ->join('supplier_purchase_corrections', 'supplier_purchase_corrections.id', '=', 'supplier_refund_receipts.supplier_purchase_correction_id')
+            ->whereIn('supplier_purchase_corrections.supplier_purchase_invoice_id', $this->correctionChainInvoiceIds())
+            ->sum('supplier_refund_receipts.amount_cents');
     }
 
     public function supplierRefundDueCents(): int
     {
-        $sourceId = $this->correction_of_id ?? $this->id;
+        $correctionAmounts = (int) SupplierPurchaseCorrection::query()
+            ->whereIn('supplier_purchase_invoice_id', $this->correctionChainInvoiceIds())->sum('refund_due_cents');
 
-        return max(0, (int) SupplierPurchaseCorrection::query()->where('supplier_purchase_invoice_id', $sourceId)->sum('refund_due_cents')
-            - (int) DB::table('supplier_refund_receipts')
-                ->join('supplier_purchase_corrections', 'supplier_purchase_corrections.id', '=', 'supplier_refund_receipts.supplier_purchase_correction_id')
-                ->where('supplier_purchase_corrections.supplier_purchase_invoice_id', $sourceId)
-                ->sum('supplier_refund_receipts.amount_cents'));
+        return max(0, $correctionAmounts - $this->refundReceivedAmountCents());
     }
-
 
     public function paidAmountCents(): int
     {
-        $sourceId = $this->correction_of_id ?? $this->id;
-
         return (int) DB::table('cash_disbursement_lines')
             ->join('cash_disbursements', 'cash_disbursements.id', '=', 'cash_disbursement_lines.cash_disbursement_id')
-            ->whereIn('cash_disbursement_lines.supplier_purchase_invoice_id', function ($query) use ($sourceId): void {
-                $query->select('id')->from('supplier_purchase_invoices')
-                    ->where('id', $sourceId)->orWhere('correction_of_id', $sourceId);
-            })
+            ->whereIn('cash_disbursement_lines.supplier_purchase_invoice_id', $this->correctionChainInvoiceIds())
             ->where('cash_disbursements.status', 'posted')
             ->selectRaw('COALESCE(SUM(CASE WHEN cash_disbursements.reversal_of_id IS NULL THEN cash_disbursement_lines.amount_cents ELSE -cash_disbursement_lines.amount_cents END), 0) as paid_cents')
             ->value('paid_cents');
     }
+
     public function outstandingAmountCents(): int
     {
-        return max(0, $this->activeCorrectedAmountCents() - $this->paidAmountCents());
+        return max(0, $this->activeCorrectedAmountCents() - $this->paidAmountCents() + $this->refundReceivedAmountCents());
     }
 
     public function payableStatus(): string
@@ -119,7 +135,7 @@ class SupplierPurchaseInvoice extends Model
         if ($this->status !== 'posted') {
             return ucfirst($this->status);
         }
-        $paid = $this->paidAmountCents();
+        $paid = $this->paidAmountCents() - $this->refundReceivedAmountCents();
 
         return $paid >= $this->activeCorrectedAmountCents() ? 'Paid' : ($paid > 0 ? 'Partially paid' : 'Unpaid');
     }

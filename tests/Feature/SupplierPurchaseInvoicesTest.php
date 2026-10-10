@@ -316,8 +316,19 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
     expect($receipt->amount_cents)->toBe(1_000_000)
         ->and($invoice->fresh()->supplierRefundDueCents())->toBe(0)
         ->and($receipt->journal->correction_of_id)->toBe($correction->journal_id)
-        ->and((int) $receipt->journal->lines->firstWhere('accounting_account_id', $bank->id)->debit_cents)->toBe(1_000_000)
-        ->and($invoice->fresh()->accounting_journal_id)->toBe($posted->accounting_journal_id);
+        ->and((int) $receipt->journal->lines->firstWhere('accounting_account_id', $bank->id)->debit_cents)->toBe(1_000_000);
+    expect($invoice->fresh()->accounting_journal_id)->toBe($posted->accounting_journal_id);
+
+    $secondCorrection = app(SupplierPurchaseCorrectionService::class)->correct($replacement->id, [
+        'reason' => 'Revised corrected purchase amount',
+        'allocations' => [['line_id' => $replacement->lines->first()->id, 'corrected_amount_cents' => 4_500_000]],
+    ], $actor->id);
+
+    expect($secondCorrection->replacementInvoice->correction_of_id)->toBe($replacement->id)
+        ->and($invoice->fresh()->activeCorrectedAmountCents())->toBe(4_500_000)
+        ->and($invoice->fresh()->supplierRefundDueCents())->toBe(0)
+        ->and($invoice->fresh()->outstandingAmountCents())->toBe(500_000)
+        ->and((int) $secondCorrection->journal->lines->firstWhere('accounting_account_id', $ap->id)->credit_cents)->toBe(500_000);
 });
 test('purchase correction allocates reviewed cost between remaining and consumed stock without changing quantity', function () {
     $actor = grantEmployeeTestPermissions(Employee::create([

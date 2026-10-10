@@ -142,7 +142,7 @@ class SupplierPurchases extends Component
     {
         $this->authorizePermission('accounting.correct-supplier-purchases');
         $invoice = SupplierPurchaseInvoice::query()->with('lines')->findOrFail($invoiceId);
-        abort_unless($invoice->status === 'posted' && $invoice->correction_of_id === null && ! $invoice->corrections()->exists(), 404);
+        abort_unless($invoice->status === 'posted' && $invoice->supplier_purchase_correction_id === null && ! $invoice->correctionChildren()->exists(), 404);
         $this->selectedId = $invoice->id;
         $this->correctionReason = '';
         $this->correctionLines = $invoice->lines->map(fn ($line) => [
@@ -199,7 +199,7 @@ class SupplierPurchases extends Component
     {
         $this->authorizePermission('accounting.view');
         $today = now('Asia/Manila')->toDateString();
-        $query = SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal', 'correctionParent'])
+        $query = SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal', 'correctionParent', 'correctionChildren'])
             ->when(trim($this->search) !== '', function ($query): void {
                 $term = '%'.trim($this->search).'%';
                 $query->where(function ($query) use ($term): void {
@@ -232,20 +232,17 @@ class SupplierPurchases extends Component
                 'correctionChildren.corrections', 'correctionParent.corrections',
             ])->find($this->selectedId)
             : null;
+        $selectedCorrections = collect();
         $receiptMovements = collect();
         if ($selected) {
-            $receiptMovements = StockMovement::query()
-                ->where(function ($query) use ($selected): void {
-                    $query->where('source_reference', 'supplier_purchase:'.$selected->id);
-                    if ($selected->correction_of_id) {
-                        $query->orWhere('source_reference', 'supplier_purchase:'.$selected->correction_of_id);
-                    }
-                    $correctionIds = SupplierPurchaseCorrection::query()
-                        ->where('supplier_purchase_invoice_id', $selected->correction_of_id ?? $selected->id)->pluck('id');
-                    if ($correctionIds->isNotEmpty()) {
-                        $query->orWhereIn('source_reference', $correctionIds->map(fn ($id) => 'supplier_purchase_correction:'.$id));
-                    }
-                })->with('inventory')->orderBy('effective_date')->orderBy('id')->get();
+            $chainIds = $selected->correctionChainInvoiceIds();
+            $selectedCorrections = SupplierPurchaseCorrection::query()
+                ->with(['journal.lines.account', 'refundReceipts.journal', 'replacementInvoice'])
+                ->whereIn('supplier_purchase_invoice_id', $chainIds)->orderBy('id')->get();
+            $sourceReferences = collect($chainIds)->map(fn ($id) => 'supplier_purchase:'.$id)
+                ->concat($selectedCorrections->pluck('id')->map(fn ($id) => 'supplier_purchase_correction:'.$id));
+            $receiptMovements = StockMovement::query()->whereIn('source_reference', $sourceReferences)
+                ->with('inventory')->orderBy('effective_date')->orderBy('id')->get();
         }
         $cashAccounts = AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
             ->where('type', 'Asset')->whereIn('classification', ['cash', 'bank'])->orderBy('code')->get();
@@ -253,6 +250,7 @@ class SupplierPurchases extends Component
         return view('livewire.accounting.supplier-purchases', [
             'invoices' => $invoices,
             'selectedInvoice' => $selected,
+            'selectedCorrections' => $selectedCorrections,
             'receiptMovements' => $receiptMovements,
             'suppliers' => Supplier::query()->orderBy('name')->get(),
             'accounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')

@@ -42,12 +42,12 @@ class SupplierPurchaseCorrectionService
 
         return DB::transaction(function () use ($invoiceId, $data, $reason, $actor): SupplierPurchaseCorrection {
             $invoice = SupplierPurchaseInvoice::query()->with('lines')->lockForUpdate()->findOrFail($invoiceId);
-            if ($invoice->status !== 'posted' || $invoice->correction_of_id !== null || $invoice->corrections()->exists()) {
-                throw ValidationException::withMessages(['invoice' => 'Only an uncorrected posted credit purchase can be corrected.']);
+            if ($invoice->status !== 'posted' || $invoice->supplier_purchase_correction_id !== null || $invoice->correctionChildren()->exists()) {
+                throw ValidationException::withMessages(['invoice' => 'Only the active posted credit purchase identity can be corrected.']);
             }
             $date = CarbonImmutable::now('Asia/Manila')->startOfDay();
             $period = $this->openPeriod($date);
-            $currentAmount = $invoice->activeCorrectedAmountCents();
+            $currentAmount = (int) $invoice->gross_amount_cents;
             $linesById = $invoice->lines->keyBy('id');
             $correctedLines = [];
             $reviewedAdjustments = [];
@@ -119,12 +119,13 @@ class SupplierPurchaseCorrectionService
                 }
             }
             $paid = $invoice->paidAmountCents();
-            $newRefundDue = max(0, $paid - $correctedTotal);
+            $received = $invoice->refundReceivedAmountCents();
+            $newRefundDue = max(0, $paid - $received - $correctedTotal);
             $existingRefundDue = $invoice->supplierRefundDueCents();
-            $refundDelta = max(0, $newRefundDue - $existingRefundDue);
-            $apDelta = $difference < 0
-                ? min(abs($difference), max(0, $currentAmount - $paid - $existingRefundDue))
-                : $difference;
+            $refundDelta = $newRefundDue - $existingRefundDue;
+            $currentApDue = max(0, $currentAmount - $paid + $received);
+            $newApDue = max(0, $correctedTotal - $paid + $received);
+            $apDelta = $newApDue - $currentApDue;
 
             $accounts = [];
             foreach ($reviewedAdjustments as $index => $adjustment) {
@@ -146,7 +147,7 @@ class SupplierPurchaseCorrectionService
                 }
             }
             $ap = $this->mappedAccount('accounts_payable');
-            $receivable = $refundDelta > 0 ? $this->classifiedAccount('accounts_receivable', 'Asset') : null;
+            $receivable = $refundDelta !== 0 ? $this->classifiedAccount('accounts_receivable', 'Asset') : null;
             $journalLines = [];
             foreach ($reviewedAdjustments as $adjustment) {
                 if ($adjustment['amount_cents'] === 0) {
@@ -169,13 +170,11 @@ class SupplierPurchaseCorrectionService
                     $journalLines[$accountId][$isIncrease ? 'debit_cents' : 'credit_cents'] += $adjustment['amount_cents'];
                 }
             }
-            if ($difference < 0 && $apDelta > 0) {
-                $journalLines[$ap->id] = ['debit_cents' => $apDelta, 'credit_cents' => 0];
-            } elseif ($difference > 0) {
-                $journalLines[$ap->id] = ['debit_cents' => 0, 'credit_cents' => $apDelta];
+            if ($apDelta !== 0) {
+                $journalLines[$ap->id] = ['debit_cents' => max(0, -$apDelta), 'credit_cents' => max(0, $apDelta)];
             }
-            if ($refundDelta > 0) {
-                $journalLines[$receivable->id] = ['debit_cents' => $refundDelta, 'credit_cents' => 0];
+            if ($refundDelta !== 0) {
+                $journalLines[$receivable->id] = ['debit_cents' => max(0, $refundDelta), 'credit_cents' => max(0, -$refundDelta)];
             }
             $totalDebits = array_sum(array_column($journalLines, 'debit_cents'));
             $totalCredits = array_sum(array_column($journalLines, 'credit_cents'));
@@ -477,8 +476,9 @@ class SupplierPurchaseCorrectionService
 
         return DB::transaction(function () use ($correctionId, $data, $actor): SupplierRefundReceipt {
             $correction = SupplierPurchaseCorrection::query()->with('invoice')->lockForUpdate()->findOrFail($correctionId);
-            $alreadyReceived = (int) $correction->refundReceipts()->sum('amount_cents');
-            $due = (int) $correction->refund_due_cents - $alreadyReceived;
+            $due = $correction->invoice
+                ? SupplierPurchaseInvoice::query()->lockForUpdate()->findOrFail($correction->invoice->id)->supplierRefundDueCents()
+                : (int) $correction->refund_due_cents - (int) $correction->refundReceipts()->sum('amount_cents');
             $amount = (int) $data['amount_cents'];
             if ($due < 1 || $amount > $due) {
                 throw ValidationException::withMessages(['amount_cents' => 'The refund receipt cannot exceed the outstanding linked supplier refund.']);
