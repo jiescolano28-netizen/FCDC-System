@@ -373,7 +373,7 @@ test('assessment can create an inventory item with the recovered unit and receiv
     $item->update(['selling_price' => 6.5]);
     expect(Inventory::availableForSale()->whereKey($item->id)->exists())->toBeTrue();
 });
-test('valued recovery corrections cannot create quantity-only reversal effects', function () {
+test('a partially accepted recovery can be reassessed through a linked current-period correction', function () {
     $employee = recoveredMaterialEmployee(['demolition-projects.view', 'demolition-projects.manage', 'inventory.movements.record', 'inventory.valuation.approve']);
     $this->actingAs($employee);
     $project = recoveredMaterialProject();
@@ -396,8 +396,8 @@ test('valued recovery corrections cannot create quantity-only reversal effects',
         ->set('inventoryId', $item->id)
         ->call('saveAssessment')
         ->assertHasNoErrors();
+    $original = RecoveredMaterialAssessment::firstOrFail();
 
-    $original = RecoveredMaterialAssessment::firstOrFail()->stockMovement;
     Livewire::test(ProjectManagement::class)
         ->call('beginAssessment', $recovery->id, true)
         ->set('acceptedQuantity', '3')
@@ -405,12 +405,128 @@ test('valued recovery corrections cannot create quantity-only reversal effects',
         ->set('rejectionReason', 'Two boards cracked on recheck')
         ->set('recoveryUnitValue', '10.00')
         ->set('inventoryId', $item->id)
+        ->set('assessmentCorrectionReason', 'Second inspection found cracks')
+        ->call('saveAssessment')
+        ->assertHasNoErrors();
+
+    $corrected = RecoveredMaterialAssessment::query()->where('supersedes_assessment_id', $original->id)->firstOrFail();
+    expect((float) $item->fresh()->qty)->toBe(3.0)
+        ->and($item->fresh()->carrying_value_cents)->toBe(3000)
+        ->and((float) $original->fresh()->accepted_quantity)->toBe(5.0)
+        ->and((float) $corrected->accepted_quantity)->toBe(3.0)
+        ->and((float) $corrected->rejected_quantity)->toBe(2.0)
+        ->and($corrected->stockMovement->correction_of_movement_id)->toBe($original->stock_movement_id)
+        ->and($corrected->stockMovement->accountingJournal->correction_of_id)->toBe($original->stockMovement->accounting_journal_id)
+        ->and($corrected->stockMovement->correction_reason)->toBe('Second inspection found cracks');
+    Livewire::test(ProjectManagement::class)
+        ->call('beginAssessment', $recovery->id, true)
+        ->set('acceptedQuantity', '5')
+        ->set('rejectedQuantity', '0')
+        ->set('recoveryUnitValue', '10.00')
+        ->set('inventoryId', $item->id)
+        ->set('assessmentCorrectionReason', 'Accepted quantity restored after verification')
+        ->call('saveAssessment')
+        ->assertHasNoErrors();
+    $restored = RecoveredMaterialAssessment::query()->where('supersedes_assessment_id', $corrected->id)->firstOrFail();
+    expect((float) $item->fresh()->qty)->toBe(5.0)
+        ->and($item->fresh()->carrying_value_cents)->toBe(5000)
+        ->and($restored->stockMovement->correction_of_movement_id)->toBe($corrected->stock_movement_id)
+        ->and($restored->stockMovement->accountingJournal->lines->sum('debit_cents'))->toBe(2000)
+        ->and($restored->stockMovement->accountingJournal->lines->sum('credit_cents'))->toBe(2000);
+});
+test('recovery reassessment refuses to reverse unavailable accepted stock without partial effects', function () {
+    $employee = recoveredMaterialEmployee(['demolition-projects.view', 'demolition-projects.manage', 'inventory.movements.record', 'inventory.valuation.approve']);
+    $this->actingAs($employee);
+    $project = recoveredMaterialProject();
+    $item = recoveredMaterialInventory(['qty' => 0]);
+    setupRecoveredMaterialBooks($employee, $item);
+    $recovery = RecoveredMaterial::create([
+        'demolition_project_id' => $project->id,
+        'recorded_by' => $employee->id,
+        'material' => 'Recovered panels',
+        'quantity' => 5,
+        'unit' => 'piece',
+        'condition' => 'good',
+    ]);
+    Livewire::test(ProjectManagement::class)
+        ->call('beginAssessment', $recovery->id)
+        ->set('acceptedQuantity', '5')
+        ->set('rejectedQuantity', '0')
+        ->set('recoveryUnitValue', '10.00')
+        ->set('inventoryId', $item->id)
+        ->call('saveAssessment')
+        ->assertHasNoErrors();
+    $original = RecoveredMaterialAssessment::firstOrFail();
+    app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '3.00', 'project_use', 'CONSUMED-PANELS',
+        now('Asia/Manila')->toDateString(), $employee->id,
+    );
+    $movementCount = StockMovement::count();
+    $journalCount = AccountingJournal::count();
+
+    Livewire::test(ProjectManagement::class)
+        ->call('beginAssessment', $recovery->id, true)
+        ->set('acceptedQuantity', '1')
+        ->set('rejectedQuantity', '4')
+        ->set('rejectionReason', 'Four unavailable panels')
+        ->set('recoveryUnitValue', '10.00')
+        ->set('inventoryId', $item->id)
+        ->set('assessmentCorrectionReason', 'Recheck found four panels already consumed')
         ->call('saveAssessment')
         ->assertHasErrors(['movement']);
 
+    expect((float) $item->fresh()->qty)->toBe(2.0)
+        ->and(RecoveredMaterialAssessment::count())->toBe(1)
+        ->and($original->fresh()->stockMovement->reversal)->toBeNull()
+        ->and(StockMovement::count())->toBe($movementCount)
+        ->and(AccountingJournal::count())->toBe($journalCount);
+});
+
+test('failed recovery correction assessment rolls back the correction movement and journal', function () {
+    $employee = recoveredMaterialEmployee(['demolition-projects.view', 'demolition-projects.manage', 'inventory.movements.record', 'inventory.valuation.approve']);
+    $this->actingAs($employee);
+    $project = recoveredMaterialProject();
+    $item = recoveredMaterialInventory(['qty' => 0]);
+    setupRecoveredMaterialBooks($employee, $item);
+    $recovery = RecoveredMaterial::create([
+        'demolition_project_id' => $project->id,
+        'recorded_by' => $employee->id,
+        'material' => 'Atomic panels',
+        'quantity' => 5,
+        'unit' => 'piece',
+        'condition' => 'good',
+    ]);
+    Livewire::test(ProjectManagement::class)
+        ->call('beginAssessment', $recovery->id)
+        ->set('acceptedQuantity', '5')
+        ->set('rejectedQuantity', '0')
+        ->set('recoveryUnitValue', '10.00')
+        ->set('inventoryId', $item->id)
+        ->call('saveAssessment')
+        ->assertHasNoErrors();
+    $movementCount = StockMovement::count();
+    $journalCount = AccountingJournal::count();
+    RecoveredMaterialAssessment::creating(function (RecoveredMaterialAssessment $assessment): void {
+        if ($assessment->supersedes_assessment_id !== null) {
+            throw new RuntimeException('injected reassessment persistence failure');
+        }
+    });
+
+    expect(fn () => Livewire::test(ProjectManagement::class)
+        ->call('beginAssessment', $recovery->id, true)
+        ->set('acceptedQuantity', '3')
+        ->set('rejectedQuantity', '2')
+        ->set('rejectionReason', 'Two panels cracked')
+        ->set('recoveryUnitValue', '10.00')
+        ->set('inventoryId', $item->id)
+        ->set('assessmentCorrectionReason', 'Correction write rollback')
+        ->call('saveAssessment'))->toThrow(RuntimeException::class);
+
     expect((float) $item->fresh()->qty)->toBe(5.0)
-        ->and($original->fresh()->reversal)->toBeNull()
-        ->and(RecoveredMaterialAssessment::count())->toBe(1);
+        ->and($item->fresh()->carrying_value_cents)->toBe(5000)
+        ->and(RecoveredMaterialAssessment::count())->toBe(1)
+        ->and(StockMovement::count())->toBe($movementCount)
+        ->and(AccountingJournal::count())->toBe($journalCount);
 });
 
 test('recovery management is independent of inventory movement permission', function () {

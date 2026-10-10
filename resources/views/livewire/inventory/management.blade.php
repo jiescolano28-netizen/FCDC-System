@@ -182,6 +182,8 @@
                                 @forelse ($item->stockMovements as $movement)
                                     <div>
                                         {{ $movement->type === 'adjustment' ? 'Stock adjustment' : ucfirst(str_replace('_', ' ', $movement->type)) }} · {{ number_format((float) $movement->quantity, 2) }} {{ $item->unit }} · {{ ucfirst(str_replace('_', ' ', $movement->reason_category)) }} · effective {{ $movement->effective_date->format('Y-m-d') }} · posted {{ $movement->posted_at->format('Y-m-d H:i') }} · by {{ $movement->poster?->username ?? 'System migration' }}@if ($movement->reference) · ref {{ $movement->reference }}@endif @if ($movement->value_cents !== null) · value PHP {{ number_format(abs($movement->value_cents) / 100, 2) }} · carrying PHP {{ number_format($movement->carrying_value_after_cents / 100, 2) }} · journal {{ $movement->accountingJournal?->reference }}@endif @if ($movement->demolition_project_id) · project #{{ $movement->demolition_project_id }} · recovery #{{ $movement->recovered_material_id }}@endif @if ($movement->notes) · {{ $movement->notes }}@endif
+                                        @if ($movement->correction_of_movement_id) · corrects movement #{{ $movement->correction_of_movement_id }} @endif
+                                        @if ($movement->correction_reason) · reason: {{ $movement->correction_reason }} @endif
                                         @if ($movement->reversal)
                                             · Reversed by movement #{{ $movement->reversal->id }}
                                         @elseif ($movement->type !== 'reversal')

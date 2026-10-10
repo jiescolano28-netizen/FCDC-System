@@ -12,7 +12,6 @@ use Illuminate\Validation\ValidationException;
 
 class AssessRecoveredMaterial
 {
-    public function __construct(private ReverseStockMovement $reversals) {}
 
     public function handle(
         int $recoveredMaterialId,
@@ -25,7 +24,7 @@ class AssessRecoveredMaterial
             $prior = $recovery->assessments()->lockForUpdate()->first();
 
             if ($prior && ! $correction) {
-                throw ValidationException::withMessages(['assessment' => 'This recovery has already been assessed. Use correction to reverse and reassess it.']);
+                throw ValidationException::withMessages(['assessment' => 'This recovery has already been assessed. Use correction to reassess it with a linked current-period effect.']);
             }
             if (! $prior && $correction) {
                 throw ValidationException::withMessages(['assessment' => 'An unassessed recovery cannot be corrected.']);
@@ -40,13 +39,15 @@ class AssessRecoveredMaterial
                 throw ValidationException::withMessages(['rejectionReason' => 'A reason is required for rejected material.']);
             }
 
-            if ($prior?->stock_movement_id) {
-                $movement = StockMovement::query()->findOrFail($prior->stock_movement_id);
-                if ($movement->reversal()->exists()) {
-                    throw ValidationException::withMessages(['assessment' => 'This receipt was already reversed; refresh the recovery history before correcting it.']);
-                }
-                $this->reversals->handle($movement->id, $employeeId);
+            if ($correction) {
+                return app(CorrectRecoveredMaterialAssessment::class)->handle(
+                    $recovery,
+                    $prior,
+                    $assessment,
+                    $employeeId,
+                );
             }
+
 
             $item = $this->inventoryItem($recovery, $assessment);
             if ($item->status !== 'active') {

@@ -114,7 +114,7 @@ test('general ledger shows supported posted account activity with opening and de
 test('general ledger links existing operational sources to their detail pages', function () {
     $viewer = grantEmployeeTestPermissions(Employee::create([
         'username' => 'ledger.pos.viewer', 'email' => 'ledger.pos@example.com', 'password' => Hash::make('password'),
-    ]), ['accounting.view', 'pos.view']);
+    ]), ['accounting.view', 'pos.view', 'inventory.view']);
     $cash = createLedgerAccount('1000');
     $equity = createLedgerAccount('3000', 'credit');
     postLedgerJournal('OPENING-SOURCE', 'opening', '2026-01-01', 'Opening balances', [[$cash, 10000, 0], [$equity, 0, 10000]]);
@@ -131,10 +131,26 @@ test('general ledger links existing operational sources to their detail pages', 
         'completed_at' => '2026-02-15 08:00:00',
     ]);
     postLedgerJournal('POS-GL-001', 'pos_sale', '2026-02-15', 'Completed sale', [[$cash, 11200, 0], [$equity, 0, 11200]], null, (string) $transaction->id);
+    $item = \App\Models\Inventory::create([
+        'name' => 'Corrected GL stock', 'category' => 'Other', 'qty' => '0.00',
+        'unit' => 'piece', 'unit_cost' => '0.00', 'reorder_level' => '0',
+    ]);
+    $movement = \App\Models\StockMovement::create([
+        'inventory_id' => $item->id, 'posted_by' => $viewer->id, 'type' => 'valuation_correction',
+        'quantity' => '0.00', 'reason_category' => 'valuation_correction', 'reference' => 'STK-CORR-1',
+        'effective_date' => '2026-02-15', 'posted_at' => now(), 'value_cents' => -100,
+        'carrying_value_after_cents' => 0,
+    ]);
+    postLedgerJournal('STK-CORR-1', 'stock_valuation_correction', '2026-02-15', 'Stock value correction', [[$cash, 100, 0], [$equity, 0, 100]], null, (string) $movement->id);
+    postLedgerJournal('REC-CORR-1', 'recovered_material_correction', '2026-02-15', 'Recovery reassessment', [[$cash, 100, 0], [$equity, 0, 100]], null, (string) $movement->id);
+
 
     Livewire::actingAs($viewer)->test(GeneralLedger::class)
         ->set('accountId', (string) $cash->id)->set('fromDate', '2026-02-01')->set('toDate', '2026-02-28')
-        ->assertSee(route('pos', ['receipt' => $transaction->id]), false);
+        ->assertSee(route('pos', ['receipt' => $transaction->id]), false)
+        ->assertSee(route('inventory.management', ['item' => $item->id]), false);
+    $this->actingAs($viewer)->get(route('inventory.management', ['item' => $item->id]))
+        ->assertOk()->assertSee('Corrected GL stock');
     $this->actingAs($viewer)->get(route('pos', ['receipt' => $transaction->id]))
         ->assertOk()->assertSee('TX-GL-001');
 });

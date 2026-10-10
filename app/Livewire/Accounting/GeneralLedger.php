@@ -149,7 +149,7 @@ class GeneralLedger extends Component
             'supplier_refund_receipt' => $this->refundCorrectionUrl($journal),
             'pos_sale' => auth()->user()?->can('pos.view') && PosTransaction::query()->whereKey($journal->source_id)->where('status', 'completed')->exists()
                 ? route('pos', ['receipt' => $journal->source_id]) : null,
-            'stock_movement' => auth()->user()?->can('inventory.view') && StockMovement::query()->whereKey($journal->source_id)->exists()
+            'stock_movement', 'stock_valuation_correction', 'recovered_material_correction' => auth()->user()?->can('inventory.view') && StockMovement::query()->whereKey($journal->source_id)->exists()
                 ? $this->stockHistoryUrl($journal->source_id) : null,
             default => null,
         };

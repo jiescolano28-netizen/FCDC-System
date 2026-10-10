@@ -256,3 +256,32 @@ test('value correction exceeding its source amount rolls back all correction eff
         ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
         ->and($item->fresh()->carrying_value_cents)->toBe(120000);
 });
+
+test('failure while linking a value correction rolls back its journal and stock history', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Atomic timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-ATOMIC',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    $movementCount = StockMovement::count();
+    $journalCount = DB::table('accounting_journals')->count();
+    StockMovement::creating(function (StockMovement $movement): void {
+        if ($movement->type === 'valuation_correction') {
+            throw new RuntimeException('injected movement persistence failure');
+        }
+    });
+
+    expect(fn () => app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Injected failure', -1000, 0, null, $employee->id,
+    ))->toThrow(RuntimeException::class);
+
+    expect(StockMovement::count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->carrying_value_cents)->toBe(120000);
+});

@@ -121,6 +121,7 @@
                                         @if ($history->stockMovement)
                                             · stock movement #{{ $history->stockMovement->id }}
                                             · effective {{ $history->stockMovement->effective_date->format('Y-m-d') }}
+                                            @if ($history->stockMovement->correction_reason) · correction reason: {{ $history->stockMovement->correction_reason }} @endif
                                             @if ($history->stockMovement->accountingJournal)
                                                 · journal {{ $history->stockMovement->accountingJournal->reference }}
                                             @endif
@@ -141,7 +142,7 @@
                         @endif
                         @can('demolition-projects.manage')
                             @if ($assessment)
-                                <button class="secondary" type="button" wire:click="beginAssessment({{ $recovery->id }}, true)">Reverse and reassess</button>
+                                <button class="secondary" type="button" wire:click="beginAssessment({{ $recovery->id }}, true)">Correct and reassess</button>
                             @else
                                 <button class="primary" type="button" wire:click="beginAssessment({{ $recovery->id }})">Assess and receive</button>
                             @endif
@@ -183,16 +184,25 @@
                         <input id="rejectionReason" wire:model="rejectionReason">
                         @error('rejectionReason') <span class="error">{{ $message }}</span> @enderror
                     </div>
+                    @if ($correctingAssessment)
+                        <div>
+                            <label for="assessmentCorrectionReason">Correction reason</label>
+                            <textarea id="assessmentCorrectionReason" wire:model="assessmentCorrectionReason"></textarea>
+                            @error('assessmentCorrectionReason') <span class="error">{{ $message }}</span> @enderror
+                        </div>
+                    @endif
                     <div>
                         <label for="recoveryUnitValue">Approved recovery unit value (PHP; not selling price)</label>
-                        <input id="recoveryUnitValue" type="number" min="0.01" step="0.01" wire:model="recoveryUnitValue">
+                        <input id="recoveryUnitValue" type="number" min="0.01" step="0.01" wire:model="recoveryUnitValue" @readonly($correctingAssessment)>
                         @error('recoveryUnitValue') <span class="error">{{ $message }}</span> @enderror
                     </div>
-                    <fieldset>
-                        <legend>Inventory item (unit must match: {{ $selectedRecovery?->unit }})</legend>
-                        <label><input type="radio" value="existing" wire:model.live="inventoryChoice"> Existing item</label>
-                        <label><input type="radio" value="new" wire:model.live="inventoryChoice"> Create new item</label>
-                    </fieldset>
+                    @unless ($correctingAssessment)
+                        <fieldset>
+                            <legend>Inventory item (unit must match: {{ $selectedRecovery?->unit }})</legend>
+                            <label><input type="radio" value="existing" wire:model.live="inventoryChoice"> Existing item</label>
+                            <label><input type="radio" value="new" wire:model.live="inventoryChoice"> Create new item</label>
+                        </fieldset>
+                    @endunless
                     @if ($inventoryChoice === 'existing')
                         <div>
                             <label for="inventoryId">Active inventory item</label>
