@@ -126,7 +126,7 @@ class AccountsPayable extends Component
 
     public function showInvoice(int $invoiceId): void
     {
-        $this->selectedInvoiceId = SupplierOpeningInvoice::where('status', 'posted')->findOrFail($invoiceId)->id;
+        $this->selectedInvoiceId = SupplierOpeningInvoice::findOrFail($invoiceId)->id;
     }
 
     public function render()
@@ -134,6 +134,8 @@ class AccountsPayable extends Component
         $invoices = SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf'])
             ->where(function ($query): void {
                 $query->whereHas('supplier', fn ($supplier) => $supplier->search($this->search))
+                    ->orWhere('supplier_name_snapshot', 'like', '%'.trim($this->search).'%')
+                    ->orWhere('supplier_code_snapshot', 'like', '%'.trim($this->search).'%')
                     ->orWhere('invoice_number', 'like', '%'.trim($this->search).'%');
             })
             ->when($this->status === 'Draft', fn ($query) => $query->where('status', 'draft'))
@@ -143,7 +145,7 @@ class AccountsPayable extends Component
         $postedInvoices = SupplierOpeningInvoice::where('status', 'posted')->get();
         $today = now('Asia/Manila')->toDateString();
         $selectedInvoice = $this->selectedInvoiceId
-            ? SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals', 'openingJournal'])->where('status', 'posted')->find($this->selectedInvoiceId)
+            ? SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals', 'openingJournal'])->find($this->selectedInvoiceId)
             : null;
 
         return view('livewire.accounting.accounts-payable', [

@@ -77,6 +77,10 @@ class SupplierPayablesService
         $normalized = mb_strtoupper($number, 'UTF-8');
 
         return DB::transaction(function () use ($data, $actorId, $number, $normalized, $amountCents): SupplierOpeningInvoice {
+            $openingJournal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
+            if ($openingJournal?->status === 'posted') {
+                throw ValidationException::withMessages(['invoiceNumber' => 'The approved opening supplier schedule is immutable.']);
+            }
             $supplier = Supplier::whereKey($data['supplier_id'])->lockForUpdate()->firstOrFail();
             $invoice = isset($data['id'])
                 ? SupplierOpeningInvoice::whereKey($data['id'])->lockForUpdate()->firstOrFail()
@@ -84,12 +88,13 @@ class SupplierPayablesService
             if ($invoice->exists && $invoice->status !== 'draft') {
                 throw ValidationException::withMessages(['invoiceNumber' => 'Posted opening invoices are immutable.']);
             }
-            $duplicate = SupplierOpeningInvoice::where('supplier_id', $supplier->id)
+            $postedDuplicate = SupplierOpeningInvoice::where('supplier_id', $supplier->id)
                 ->where('invoice_number_normalized', $normalized)
+                ->where('status', 'posted')
                 ->when($invoice->exists, fn ($query) => $query->whereKeyNot($invoice->id))
                 ->exists();
-            if ($duplicate) {
-                throw ValidationException::withMessages(['invoiceNumber' => 'This normalized invoice number already exists for this supplier.']);
+            if ($postedDuplicate) {
+                throw ValidationException::withMessages(['invoiceNumber' => 'This normalized invoice number is already posted for this supplier.']);
             }
             $invoice->fill([
                 'supplier_id' => $supplier->id,
@@ -115,16 +120,30 @@ class SupplierPayablesService
 
     public function deleteOpeningInvoice(int $invoiceId): void
     {
-        $invoice = SupplierOpeningInvoice::findOrFail($invoiceId);
-        if ($invoice->status !== 'draft') {
-            throw ValidationException::withMessages(['invoice' => 'Posted opening invoices cannot be deleted.']);
-        }
-        $invoice->delete();
+        DB::transaction(function () use ($invoiceId): void {
+            $openingJournal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
+            if ($openingJournal?->status === 'posted') {
+                throw ValidationException::withMessages(['invoice' => 'The approved opening supplier schedule is immutable.']);
+            }
+            $invoice = SupplierOpeningInvoice::whereKey($invoiceId)->lockForUpdate()->firstOrFail();
+            if ($invoice->status !== 'draft') {
+                throw ValidationException::withMessages(['invoice' => 'Posted opening invoices cannot be deleted.']);
+            }
+            $invoice->delete();
+        });
+
     }
 
     public function postOpeningSchedule(AccountingJournal $journal, int $actorId): void
     {
-        $invoices = SupplierOpeningInvoice::where('status', 'draft')->lockForUpdate()->get();
+        $activeInvoices = SupplierOpeningInvoice::whereIn('status', ['draft', 'posted'])->lockForUpdate()->get();
+        $duplicate = $activeInvoices
+            ->groupBy(fn (SupplierOpeningInvoice $invoice) => $invoice->supplier_id.':'.$invoice->invoice_number_normalized)
+            ->first(fn ($group) => $group->count() > 1);
+        if ($duplicate) {
+            throw ValidationException::withMessages(['opening' => 'Normalized supplier invoice numbers must be unique among posted opening invoices.']);
+        }
+        $invoices = $activeInvoices->where('status', 'draft');
         $apLines = $journal->lines->filter(fn ($line) => $line->account?->classification === 'accounts_payable');
         $apDebitCents = $apLines->sum('debit_cents');
         $apCreditCents = $apLines->sum('credit_cents');

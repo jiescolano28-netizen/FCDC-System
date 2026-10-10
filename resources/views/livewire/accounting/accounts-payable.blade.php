@@ -75,7 +75,8 @@
                             <td class="numeric">{{ number_format($invoice->amount_cents / 100, 2) }}</td>
                             <td>{{ $invoice->status === 'draft' ? 'Opening · Draft' : 'Opening · Posted' }}@if ($invoice->status === 'posted' && $invoice->due_date->toDateString() < now('Asia/Manila')->toDateString()) · Overdue @endif</td>
                             <td>
-                                @if ($invoice->status === 'posted')<button type="button" wire:click="showInvoice({{ $invoice->id }})">Invoice detail / print</button>@else
+                                <button type="button" wire:click="showInvoice({{ $invoice->id }})">Invoice detail / print</button>
+                                @if ($invoice->status === 'draft')
                                     @can('accounting.maintain-opening-books')<button type="button" wire:click="editOpeningInvoice({{ $invoice->id }})">Edit draft</button><button type="button" wire:click="deleteOpeningInvoice({{ $invoice->id }})">Delete draft</button>@endcan
                                 @endif
                             </td>
@@ -98,7 +99,7 @@
             }
         </style>
         <section id="supplier-invoice-print" class="chart-account-card" aria-labelledby="invoice-detail-heading">
-            <h2 id="invoice-detail-heading">Opening invoice {{ $selectedInvoice->invoice_number }} — Posted</h2>
+            <h2 id="invoice-detail-heading">Opening invoice {{ $selectedInvoice->invoice_number }} — {{ ucfirst($selectedInvoice->status) }}</h2>
             <p>{{ $selectedInvoice->supplier_name_snapshot }} ({{ $selectedInvoice->supplier_code_snapshot }})</p>
             @if ($selectedInvoice->supplier_legal_name_snapshot)<p>Legal name: {{ $selectedInvoice->supplier_legal_name_snapshot }}</p>@endif
             @if ($selectedInvoice->supplier_tax_identifier_snapshot)<p>Tax identifier: {{ $selectedInvoice->supplier_tax_identifier_snapshot }}</p>@endif

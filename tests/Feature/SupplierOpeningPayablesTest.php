@@ -59,6 +59,12 @@ test('opening supplier invoices post only with an exactly matching AP opening an
         ->assertHasNoErrors()
         ->assertSee('Draft');
 
+    Livewire::test(AccountsPayable::class)
+        ->call('showInvoice', 1)
+        ->assertSee('Opening invoice inv-100 — Draft')
+        ->assertSee('Opening building supplies')
+        ->assertSee('Net 30');
+
     Livewire::test(OpeningBooks::class)
         ->set('cutoverDate', '2026-07-01')
         ->set('lines', [
@@ -72,6 +78,16 @@ test('opening supplier invoices post only with an exactly matching AP opening an
     Livewire::test(OpeningBooks::class)->call('approveOpening')->assertHasNoErrors()->assertSee('Opening supplier schedule reconciled');
 
     $this->actingAs($preparer);
+    Livewire::test(AccountsPayable::class)
+        ->set('supplierId', '1')
+        ->set('invoiceNumber', 'INV-LATE')
+        ->set('recognitionDate', '2026-07-01')
+        ->set('dueDate', '2026-07-31')
+        ->set('amount', '10.00')
+        ->set('description', 'Late schedule amendment')
+        ->call('saveOpeningInvoice')
+        ->assertHasErrors('invoiceNumber');
+    expect(DB::table('supplier_opening_invoices')->count())->toBe(1);
     Livewire::test(AccountsPayable::class)
         ->call('editSupplier', 1)
         ->set('supplierName', 'Northwind Updated')
@@ -98,14 +114,14 @@ test('opening supplier invoices post only with an exactly matching AP opening an
         ->and(DB::table('accounting_journals')->where('source_type', 'opening')->count())->toBe(1);
 });
 
-test('opening AP approval rejects a mismatched schedule and normalized duplicate invoice but allows another supplier', function () {
+test('opening AP approval rejects duplicate normalized draft invoices but permits that number for another supplier', function () {
     $preparer = supplierPayablesEmployee(['accounting.maintain-suppliers', 'accounting.maintain-opening-books'], 'duplicate-preparer');
     $reviewer = supplierPayablesEmployee(['accounting.approve-opening-books'], 'duplicate-reviewer');
     $ap = supplierPayablesAccount('2100', 'accounts_payable', 'Liability', 'credit');
     $capital = supplierPayablesAccount('3000', 'capital', 'Equity', 'credit');
 
     $this->actingAs($preparer);
-    $component = Livewire::test(AccountsPayable::class)
+    Livewire::test(AccountsPayable::class)
         ->set('supplierCode', 'SUP-001')->set('supplierName', 'Northwind Materials')->call('saveSupplier')
         ->set('supplierCode', 'SUP-002')->set('supplierName', 'Southwind Materials')->call('saveSupplier');
     expect(DB::table('suppliers')->count())->toBe(2);
@@ -117,7 +133,7 @@ test('opening AP approval rejects a mismatched schedule and normalized duplicate
     Livewire::test(AccountsPayable::class)
         ->set('supplierId', '1')->set('invoiceNumber', 'inv-9')->set('recognitionDate', '2026-07-01')
         ->set('dueDate', '2026-07-31')->set('amount', '10.00')->set('description', 'Duplicate')
-        ->call('saveOpeningInvoice')->assertHasErrors('invoiceNumber');
+        ->call('saveOpeningInvoice')->assertHasNoErrors();
     Livewire::test(AccountsPayable::class)
         ->set('supplierId', '2')->set('invoiceNumber', ' inv-9 ')->set('recognitionDate', '2026-07-01')
         ->set('dueDate', '2026-07-31')->set('amount', '25.00')->set('description', 'Other supplier')
@@ -126,8 +142,8 @@ test('opening AP approval rejects a mismatched schedule and normalized duplicate
     Livewire::test(OpeningBooks::class)
         ->set('cutoverDate', '2026-07-01')
         ->set('lines', [
-            ['accountId' => (string) $ap->id, 'debit' => '', 'credit' => '124.99'],
-            ['accountId' => (string) $capital->id, 'debit' => '124.99', 'credit' => ''],
+            ['accountId' => (string) $ap->id, 'debit' => '', 'credit' => '135.00'],
+            ['accountId' => (string) $capital->id, 'debit' => '135.00', 'credit' => ''],
         ])
         ->call('saveOpening')->assertHasNoErrors();
 
@@ -136,7 +152,37 @@ test('opening AP approval rejects a mismatched schedule and normalized duplicate
 
     expect(DB::table('accounting_journals')->where('status', 'posted')->count())->toBe(0)
         ->and(DB::table('supplier_opening_invoices')->where('status', 'posted')->count())->toBe(0)
-        ->and(DB::table('supplier_opening_invoices')->count())->toBe(2);
+        ->and(DB::table('supplier_opening_invoices')->where('status', 'draft')->count())->toBe(3);
+});
+
+test('opening AP approval rejects an invoice schedule that differs from the controlled AP credit', function () {
+    $preparer = supplierPayablesEmployee(['accounting.maintain-suppliers', 'accounting.maintain-opening-books'], 'mismatch-preparer');
+    $reviewer = supplierPayablesEmployee(['accounting.approve-opening-books'], 'mismatch-reviewer');
+    $ap = supplierPayablesAccount('2100', 'accounts_payable', 'Liability', 'credit');
+    $capital = supplierPayablesAccount('3000', 'capital', 'Equity', 'credit');
+
+    $this->actingAs($preparer);
+    Livewire::test(AccountsPayable::class)
+        ->set('supplierCode', 'SUP-001')->set('supplierName', 'Northwind Materials')
+        ->call('saveSupplier')->assertHasNoErrors();
+    Livewire::test(AccountsPayable::class)
+        ->set('supplierId', '1')->set('invoiceNumber', 'INV-MISMATCH')->set('recognitionDate', '2026-07-01')
+        ->set('dueDate', '2026-07-31')->set('amount', '100.00')->set('description', 'Opening payable')
+        ->call('saveOpeningInvoice')->assertHasNoErrors();
+    Livewire::test(OpeningBooks::class)
+        ->set('cutoverDate', '2026-07-01')
+        ->set('lines', [
+            ['accountId' => (string) $ap->id, 'debit' => '', 'credit' => '99.99'],
+            ['accountId' => (string) $capital->id, 'debit' => '99.99', 'credit' => ''],
+        ])
+        ->call('saveOpening')->assertHasNoErrors();
+
+    $this->actingAs($reviewer);
+    Livewire::test(OpeningBooks::class)->call('approveOpening')->assertHasErrors('opening');
+
+    expect(DB::table('accounting_journals')->where('status', 'posted')->count())->toBe(0)
+        ->and(DB::table('supplier_opening_invoices')->where('status', 'posted')->count())->toBe(0)
+        ->and(DB::table('supplier_opening_invoices')->where('status', 'draft')->count())->toBe(1);
 });
 
 test('supplier maintenance and opening invoice preparation require their own capabilities', function () {

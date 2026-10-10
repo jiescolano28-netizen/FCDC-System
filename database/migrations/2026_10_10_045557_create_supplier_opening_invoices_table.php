@@ -32,7 +32,7 @@ return new class extends Migration
             $table->foreignId('approved_by')->nullable()->constrained('employees')->nullOnDelete();
             $table->foreignId('reversal_of_id')->nullable()->constrained('supplier_opening_invoices')->restrictOnDelete();
             $table->timestamps();
-            $table->unique(['supplier_id', 'invoice_number_normalized'], 'supplier_invoice_normalized_unique');
+            $table->index(['supplier_id', 'invoice_number_normalized'], 'supplier_invoice_normalized_index');
             $table->index(['status', 'due_date']);
         });
     }
