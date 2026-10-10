@@ -108,7 +108,6 @@ test('livewire business actions require their dedicated permissions', function (
         ->call('recordStockIn')
         ->assertForbidden();
 
-
     Livewire::test(PointOfSale::class)
         ->call('checkout')
         ->assertForbidden();

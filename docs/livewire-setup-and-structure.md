@@ -52,15 +52,17 @@ Exact component boundaries and model names should follow existing Laravel conven
 
 ## Approval and prerequisite
 
-The approved accounting design is implemented incrementally. Approved chart accounts, cutover/opening books and manual GL journals are persisted, but the application is not ready for full production accounting: operational source posting, controlled Inventory/AP schedules, valuation policies, ledger/financial reports and activation gates remain.
+Production activation remains gated on approved accounts and mappings, cutover evidence, operational posting prerequisites and complete reporting rules. Accounting functionality described below is limited to the persisted records and supported coverage each workflow documents; it does not certify release readiness.
 
-## Accounting production limits
+## Accounting implementation status
 
-The approved chart and cutover/opening books are persisted. The Journal Entry page persists manual drafts and posted manual journals using active approved accounts; it supports exact-centavo posting and linked reversal/replacement corrections. These manual GL entries do not make operational source posting or production activation available, and bare Accounts Payable and Inventory lines remain blocked.
+Production activation remains gated on approved accounts, mappings, cutover evidence and other prerequisites. Chart of Accounts records and approvals persist in the accounting tables; the page does not use illustrative ReferenceAccounts fixtures.
+
+Journal Entry persists manual drafts, posted entries and linked corrections in the shared accounting journal tables. Drafts have no ledger effect; posted journals and lines are immutable and corrections preserve linked reversal/replacement history.
 
 ## Implemented authenticated shell and Settings slice
 
-Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The authenticated shell links to Dashboard, POS, Inventory, Tax Compliance, Accounting Overview, Chart of Accounts, Journal Entry, and Settings destinations.
+Migrated Livewire pages use `layouts.app` with the extracted shell assets in `resources/css/shell.css` and `resources/js/shell.js`. The authenticated shell links to the signed-in employee's Profile and to Dashboard, POS, Inventory, Tax Compliance, Accounting Overview, Chart of Accounts, Journal Entry, and Settings destinations.
 
 Settings values are temporary session state, not business settings. The session key `demo.settings.employee.{employee-id}` scopes values to both the authenticated employee and their session; logout invalidates the session. Later demo-only state should use the same `demo.{area}.employee.{employee-id}` ownership and session-lifetime convention. Do not add storage APIs or placeholder features for those future areas.
 
@@ -70,8 +72,11 @@ Employee create and update forms use a native dialog controlled by the Livewire 
 
 ## Activity log
 
-The authenticated `/activity-log` Livewire page is available only to employees with the `activity-log.view` permission; its sidebar link uses the same permission. It shows all employees' successful persisted Inventory, Employee, and Role changes newest-first, with paginated actor/action/record details and before/after values for changed fields. Passwords and tokens are never recorded. Session-only POS, Settings, and Journal Entry demonstrations and ordinary page views are excluded.
+The authenticated `/activity-log` Livewire page is available only to employees with the `activity-log.view` permission; its sidebar link uses the same permission. It shows all employees' successful persisted Inventory, Employee, and Role changes newest-first, with paginated actor/action/record details and before/after values for changed fields. Passwords and tokens are never recorded. Manual journal preparation, posting and correction have persisted actor/reason fields but are not included in this activity-log; session-only POS and Settings demonstrations and ordinary page views are excluded.
 
+## Employee profile
+
+The authenticated `/profile` Livewire page is available to every signed-in employee without an administrative permission. It updates only the current employee's username and password; password changes require the current password and keep the current session active. The page shows only audit events caused by that employee. Password changes add a safe event without recording password values.
 
 ## Dashboard
 
@@ -99,26 +104,30 @@ VAT Return Preparation requires `tax.view` and is a live, read-only worksheet ov
 
 The authenticated `/accounting` route uses the Accounting-grouped `AccountingOverview` Livewire page and shared application shell. It labels revenue, expenses, net income, and payables as unavailable; it does not calculate balances from posted journal lines or treat POS sales as accounting postings. Quick actions link only to registered destination routes; unavailable reports remain disabled until implemented. This page does not add accounting calculations and does not change the accounting release prerequisites above.
 
-## Cash Disbursements demonstration
+## Cash Disbursements
 
-The authenticated `/accounting/cash-disbursements` Livewire page uses the shared application shell and keeps reference/payee search and payment-method selection interactive over an empty dataset. Payment totals and counts remain unavailable; disbursement maintenance, payment processing, cash movement, and accounting postings are not implemented.
+The authenticated `/accounting/cash-disbursements` Livewire page supports direct non-inventory disbursements and supplier settlements allocated to posted received-purchase invoices or active posted opening invoices. Supplier settlements require explicit positive allocations totaling the payment and limited to one supplier; posting debits Accounts Payable and credits the selected Cash/Bank account atomically. Returned or voided released checks and other payment corrections use linked reversals that preserve evidence and allocation history. Both payable registers derive status and balances from posted allocations net of reversals and print invoice payment allocation/correction history. Production release still requires approved accounts, mappings, and cutover controls.
 
 ## Financial Statements demonstration
 
-The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; no account mapping, accounting policy, financial calculation, session journal, POS sale, or persisted business data is used. Print styles isolate the document from the application shell.
+The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; posted manual journals are persisted but are not yet included in financial calculations. Print styles isolate the document from the application shell.
 
 ## Trial Balance
 
 The authenticated `/accounting/trial-balance` Livewire page reads posted FCDC journal lines from the approved opening cutover through the inclusive Manila end date. It shows cumulative debit/credit closings, the prior opening balance and selected-period movement, including inactive accounts with posted balances. Centavo totals report unequal books without a balancing plug. The report separately compares Accounts Payable with posted supplier/invoice balances and Inventory with approved opening valuation plus valued stock movements at the same as-of date; unsupported inventory valuation is shown as an explicit coverage error. Dates before cutover and invalid ranges are unavailable rather than presented as zero.
 
+## General Ledger
+
+The authenticated `/accounting/general-ledger` page selects an approved account and inclusive Manila date range, reads posted FCDC journal lines, derives the opening balance from earlier posted activity, and displays deterministic running balances. Coverage starts at the approved opening-journal cutover; older arbitrary transaction-level ranges are unavailable. Journal detail links resolve through the Journal Entry page, and known operational source links target their existing detail pages only when the source record exists.
+
 ## Completed module-page cutover
 
-The authenticated application has 19 individually named Livewire page routes under the shared `layouts.app` shell: Dashboard and Reports; Inventory Overview and Management; Point of Sale; VAT Records, VAT Summary, Tax Report, and VAT Return Preparation; Accounting Overview, Chart of Accounts, Journal Entry, Accounts Payable, Cash Disbursements, General Ledger, Trial Balance, and Financial Statements; Settings; and Activity Log. The public homepage, login, logout, and Inventory JSON endpoints retain their existing route contracts.
+The authenticated application has 20 individually named Livewire page routes under the shared `layouts.app` shell: Profile; Dashboard and Reports; Inventory Overview and Management; Point of Sale; VAT Records, VAT Summary, Tax Report, and VAT Return Preparation; Accounting Overview, Chart of Accounts, Journal Entry, Accounts Payable, Cash Disbursements, General Ledger, Trial Balance, and Financial Statements; Settings; and Activity Log. The public homepage, login, logout, and Inventory JSON endpoints retain their existing route contracts.
 
 Navigation uses normal named-route links, route-derived active states, and route-derived parent dropdown expansion. There are no dashboard section switches or page mounts that include the other screens. The obsolete `resources/css/style.css` was removed after confirming it had no consumers; Vite's public and shared-shell entrypoints remain in use.
 
-Demo POS cart, sales, and simulated stock; journal drafts/history; and Settings values are scoped to the authenticated employee in the current session. Session-backed demonstrations are shared by tabs using the same authenticated session and are cleared when that session is invalidated at logout. POS stock changes never update persisted Inventory; Dashboard and Reports identify demo sales separately, while VAT Records, summaries, reports and preparation use saved VAT records.
+POS transactions and VAT records persist across sessions; approved POS accounting postings link completed sales and valued stock effects. Settings values remain session-scoped. Manual journal drafts, posted history and corrections persist in the accounting journal tables across logout. Inventory and POS behavior remains subject to approved operational and statutory rules; the presence of persisted activity does not establish production readiness.
 
-Inventory and POS remain demonstration boundaries, not substitutes for approved financial or statutory behavior. Accounting selectors, journals, ledgers, statements and related workflows remain explicitly non-operational. VAT Return Preparation is a live POS-only preparation aid, not an official return or filing. Do not interpret completion of the page migration as approval to release production accounting or tax functionality; retain the prerequisites above.
+Inventory and POS remain subject to approved operational and statutory rules. The General Ledger displays posted journal history within supported cutover coverage; Journal Entry and source workflows persist their documented records. Accounting Overview, Trial Balance and Financial Statements still have their explicitly documented calculation limitations. VAT Return Preparation remains a live POS-only preparation aid, not an official return or filing. Do not interpret these implementations as approval to release production accounting or tax functionality; retain the prerequisites above.
 
 Verification for this cutover: the authenticated browser smoke reached each of the 18 direct URLs and found the shared shell and one active navigation link on every page. Browser checks also confirmed Back/Forward, the active/expanded VAT Return Preparation navigation, mobile navigation without document overflow, and logout followed by guest redirection. `APP_ENV=testing SESSION_DRIVER=array DB_CONNECTION=sqlite DB_DATABASE=:memory: DB_URL= php artisan test` passed all 80 tests (680 assertions). `npm run build` completed; Vite noted that `/image/construction-bg.jpg` remains a runtime URL, served from `public/image/`.

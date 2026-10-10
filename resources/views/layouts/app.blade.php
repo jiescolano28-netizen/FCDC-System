@@ -32,6 +32,9 @@
             @endcan
 
             <nav class="nav" aria-label="Application navigation">
+                <a class="nav-item {{ request()->routeIs('profile') ? 'active' : '' }}" href="{{ route('profile') }}" @if (request()->routeIs('profile')) aria-current="page" @endif>
+                    <span class="nav-label">My profile</span>
+                </a>
                 @can('dashboard.view')
                     <a class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>
                         <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard Update</span>

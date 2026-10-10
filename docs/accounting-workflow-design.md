@@ -173,7 +173,7 @@ At initial design approval, no accounting implementation or runtime verification
 
 The chart-of-accounts issue adds persisted production account and source-account mapping records without seeding the demonstration reference accounts or journal history. Account maintenance (`accounting.maintain-accounts`) and approval (`accounting.approve-accounts`) are separate from viewing. New or changed accounts require approval; changed source mappings return to pending approval. These approval resets and used-account identity restrictions are enforced by the persisted models as well as the Livewire actions. Only active approved accounts and mappings with a source-compatible statement classification pass the posting-eligibility checks. Used accounts retain their records when deactivated, cannot be deleted, and cannot change code, type or statement classification.
 
-The chart/mapping increment did not implement journals or connect operational posting paths. The later opening-books increment below establishes persisted journal rules only for approved opening balances and YTD summaries; operational callers still do not post accounting entries.
+The chart/mapping increment did not implement journals or connect operational posting paths. Opening-books later establishes persisted rules for opening balances and YTD summaries. Supplier credit purchases and valued non-sale stock movements now post source-linked entries; POS, supplier payments, recoveries and other operational sources remain separate integrations.
 
 ## Implemented cutover and opening books
 
@@ -200,3 +200,9 @@ Cash Disbursements supports supplier settlements alongside existing direct payme
 Posted allocation rows remain linked to the immutable payment record. Paid, partially paid, unpaid, outstanding, and overdue amounts derive from posted allocations net of linked reversal rows. Payment corrections preserve the original payment and evidence, copy the original invoice allocations onto the linked reversal, and restore invoice balances without deleting history. The supplier-purchase and Accounts Payable registers show paid/outstanding/overdue totals and printable invoice allocation/correction history; the disbursement register searches payment references, evidence, supplier, and both invoice types.
 
 Invoice rows are locked in stable ID order during posting so competing drafts cannot oversettle an invoice. Allocation, journal and payment writes share one database transaction; failed posting leaves the draft, AP schedule and cash/bank journal effects unchanged. Settlements now cover posted received-purchase and active posted opening supplier invoices.
+
+## Implemented Income Statement
+
+The Financial Statements page now calculates an inclusive Manila-period Income Statement from posted FCDC journal lines and currently approved statement classifications. Sales, COGS, operating expenses, other income and other expenses remain separate; ordinary opening entries, tax accounts, drafts, fiscal-year closings and linked corrections of closing entries are excluded. Revenue and expenses use their actual debit/credit direction, with centavo-exact Gross Profit and Net Income/Loss.
+
+When a period begins before cutover, the report accepts only the current fiscal year's January 1-to-YTD/year range backed by the approved pre-cutover summary through the day before cutover. It labels that historical summary and distinguishes missing cutover/YTD approval or unsupported coverage from a genuinely empty period. It displays the selected period, FCDC scope and generation time. Access remains protected by `accounting.view`. Balance Sheet selection remains explicitly unavailable on this report page.
