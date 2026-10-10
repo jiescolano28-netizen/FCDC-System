@@ -85,6 +85,9 @@
                     @error('amountReceived') <p class="settings-error">{{ $message }}</p> @enderror
                     @error('paymentReference') <p class="settings-error">{{ $message }}</p> @enderror
                     @error('paymentMethod') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('accounting') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('mapping') <p class="settings-error">{{ $message }}</p> @enderror
+                    @error('payment_method') <p class="settings-error">{{ $message }}</p> @enderror
                     <button class="pos-checkout-button" type="button" wire:click="checkout" @disabled($lines->isEmpty())>Complete transaction · {{ $money($subtotal + $vat) }}</button>
                 </div>
             @endcan

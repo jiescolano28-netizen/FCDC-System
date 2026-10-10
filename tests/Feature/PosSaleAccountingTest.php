@@ -150,7 +150,8 @@ test('a missing posting mapping rolls back the completed sale and stock effects'
         ->call('addToCart', $item->id)
         ->set('amountReceived', '201.60')
         ->call('checkout')
-        ->assertHasErrors('mapping');
+        ->assertHasErrors('mapping')
+        ->assertSee('An active approved output_vat posting mapping is required.');
     expect(PosTransaction::query()->count())->toBe(0)
         ->and(StockMovement::query()->where('inventory_id', $item->id)->where('reason_category', 'sale')->count())->toBe(0)
         ->and($item->fresh()->qty)->toBe('10.00');
@@ -196,7 +197,8 @@ test('a closed accounting period prevents checkout without changing the sale or 
         ->call('addToCart', $item->id)
         ->set('amountReceived', '201.60')
         ->call('checkout')
-        ->assertHasErrors('accounting');
+        ->assertHasErrors('accounting')
+        ->assertSee('The sale date must be in an open accounting period.');
 
     expect(PosTransaction::query()->count())->toBe(0)
         ->and(StockMovement::query()->where('inventory_id', $item->id)->where('reason_category', 'sale')->count())->toBe(0)
