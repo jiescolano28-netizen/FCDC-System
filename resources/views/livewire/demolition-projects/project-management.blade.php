@@ -125,6 +125,12 @@
                                                 · journal {{ $history->stockMovement->accountingJournal->reference }}
                                             @endif
                                             @if ($history->stockMovement->reversal) · reversed by #{{ $history->stockMovement->reversal->id }} @endif
+                                            @foreach ($history->stockMovement->valuationCorrections as $valueCorrection)
+                                                <br>Valuation correction #{{ $valueCorrection->id }} · {{ $valueCorrection->correction_reason }}
+                                                · remaining change PHP {{ number_format(($valueCorrection->value_cents ?? 0) / 100, 2) }}
+                                                · total source-value change PHP {{ number_format(($valueCorrection->correction_total_delta_cents ?? 0) / 100, 2) }}
+                                                @if ($valueCorrection->accountingJournal) · journal {{ $valueCorrection->accountingJournal->reference }} @endif
+                                            @endforeach
                                         @endif
                                         @if ($history->supersedes_assessment_id) · reassesses #{{ $history->supersedes_assessment_id }} @endif
                                     </p>

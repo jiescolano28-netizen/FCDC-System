@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -24,6 +25,9 @@ class StockMovement extends Model
         'effective_date',
         'posted_at',
         'reverses_movement_id',
+        'correction_of_movement_id',
+        'correction_reason',
+        'correction_total_delta_cents',
         'value_cents',
         'carrying_value_after_cents',
         'accounting_journal_id',
@@ -33,6 +37,7 @@ class StockMovement extends Model
     protected $casts = [
         'quantity' => 'decimal:2',
         'value_cents' => 'integer',
+        'correction_total_delta_cents' => 'integer',
         'carrying_value_after_cents' => 'integer',
         'effective_date' => 'date',
         'posted_at' => 'datetime',
@@ -91,5 +96,14 @@ class StockMovement extends Model
     public function accountingJournal(): BelongsTo
     {
         return $this->belongsTo(AccountingJournal::class);
+    }
+    public function valuationCorrectionOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'correction_of_movement_id');
+    }
+
+    public function valuationCorrections(): HasMany
+    {
+        return $this->hasMany(self::class, 'correction_of_movement_id');
     }
 }

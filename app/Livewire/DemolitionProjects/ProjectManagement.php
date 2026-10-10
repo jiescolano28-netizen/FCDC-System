@@ -183,7 +183,7 @@ class ProjectManagement extends Component
     {
         return view('livewire.demolition-projects.project-management', [
             'projects' => DemolitionProject::query()
-                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal', 'recoveredMaterials.assessments.stockMovement.accountingJournal', 'recoveredMaterials.assessments.valuationCounterpart', 'recoveredMaterials.assessments.valuationApprover'])
+                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal', 'recoveredMaterials.assessments.stockMovement.accountingJournal', 'recoveredMaterials.assessments.stockMovement.valuationCorrections.accountingJournal', 'recoveredMaterials.assessments.valuationCounterpart', 'recoveredMaterials.assessments.valuationApprover'])
                 ->orderByDesc('id')
                 ->get(),
             'activeItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name', 'unit']),
