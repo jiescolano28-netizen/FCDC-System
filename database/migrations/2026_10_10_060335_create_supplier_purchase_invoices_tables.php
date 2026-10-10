@@ -31,7 +31,7 @@ return new class extends Migration
             $table->foreignId('accounting_journal_id')->nullable()->unique()->constrained('accounting_journals')->restrictOnDelete();
             $table->timestamps();
             $table->unique(['supplier_id', 'invoice_number_normalized'], 'supplier_purchase_invoice_unique');
-            $table->index(['recognition_date', 'due_date', 'status']);
+            $table->index(['recognition_date', 'due_date', 'status'], 'supplier_purchase_invoices_due_status_idx');
         });
         Schema::create('supplier_purchase_lines', function (Blueprint $table) {
             $table->id();

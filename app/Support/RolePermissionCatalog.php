@@ -40,6 +40,8 @@ class RolePermissionCatalog
                 'accounting.post-journal-entry' => 'Post manual journal entries and corrections',
                 'accounting.maintain-accounts' => 'Create and maintain accounts and posting mappings',
                 'accounting.approve-accounts' => 'Approve accounts and posting mappings',
+                'accounting.prepare-disbursements' => 'Prepare and maintain direct disbursement drafts',
+                'accounting.post-disbursements' => 'Post direct disbursements and corrections',
                 'accounting.maintain-suppliers' => 'Maintain supplier identities and details',
                 'accounting.prepare-supplier-purchases' => 'Prepare and maintain supplier purchase drafts',
                 'accounting.post-supplier-purchases' => 'Post received supplier purchases',

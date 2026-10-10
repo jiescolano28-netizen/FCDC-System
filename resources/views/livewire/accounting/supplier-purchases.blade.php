@@ -7,8 +7,9 @@
 
     <section class="accounting-balance-grid" aria-label="Posted supplier purchase totals">
         <article class="dashboard-card"><p class="dashboard-stat-label">Posted purchases</p><p>PHP {{ number_format($purchaseTotalCents / 100, 2) }}</p></article>
+        <article class="dashboard-card"><p class="dashboard-stat-label">Paid</p><p>PHP {{ number_format($paidTotalCents / 100, 2) }}</p></article>
         <article class="dashboard-card"><p class="dashboard-stat-label">Outstanding</p><p>PHP {{ number_format($outstandingCents / 100, 2) }}</p></article>
-        <article class="dashboard-card"><p class="dashboard-stat-label">Overdue</p><p>PHP {{ number_format($overdueCents / 100, 2) }}</p><p class="dashboard-stat-note">Purchase-register balances show posted invoice amounts; cash-disbursement settlements are not yet included.</p></article>
+        <article class="dashboard-card"><p class="dashboard-stat-label">Overdue outstanding</p><p>PHP {{ number_format($overdueCents / 100, 2) }}</p><p class="dashboard-stat-note">Posted invoice balances net of posted payments and linked reversals.</p></article>
     </section>
 
     @can('accounting.prepare-supplier-purchases')
@@ -46,18 +47,18 @@
             <label>Search supplier, invoice, or description<input type="search" wire:model.live.debounce.250ms="search"></label>
             <label>Supplier<select wire:model.live="supplierFilter"><option value="">All suppliers</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}">{{ $supplier->code }} — {{ $supplier->name }}</option>@endforeach</select></label>
             <label>From recognition date<input type="date" wire:model.live="fromDate"></label><label>To recognition date<input type="date" wire:model.live="toDate"></label>
-            <label>Status<select wire:model.live="status"><option>All</option><option>Draft</option><option>Outstanding</option><option>Overdue</option></select></label>
+            <label>Status<select wire:model.live="status"><option>All</option><option>Draft</option><option>Unpaid</option><option>Partially Paid</option><option>Paid</option><option>Overdue</option></select></label>
         </div>
-        <div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Supplier</th><th>Invoice</th><th>Recognition</th><th>Due</th><th class="numeric">Gross</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Supplier</th><th>Invoice</th><th>Recognition</th><th>Due</th><th class="numeric">Gross</th><th class="numeric">Paid</th><th class="numeric">Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>
             @forelse ($invoices as $invoice)
-                <tr wire:key="purchase-invoice-{{ $invoice->id }}"><td>{{ $invoice->supplier_name_snapshot }}</td><td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td><td class="numeric">{{ number_format($invoice->gross_amount_cents / 100, 2) }}</td><td>{{ $invoice->status === 'draft' ? 'Draft' : ($invoice->isOverdueOn($today) ? 'Overdue' : 'Outstanding') }}</td><td>
+                <tr wire:key="purchase-invoice-{{ $invoice->id }}"><td>{{ $invoice->supplier_name_snapshot }}</td><td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td><td class="numeric">{{ number_format($invoice->gross_amount_cents / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->paidAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->outstandingAmountCents() / 100, 2) }}</td><td>{{ $invoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $invoice->payableStatus() }}</td><td>
                     <button type="button" wire:click="showInvoice({{ $invoice->id }})">Detail / print</button>
                     @if ($invoice->status === 'draft')
                         @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
                         @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
                     @endif
                 </td></tr>
-            @empty<tr><td colspan="7">No supplier invoices match these filters.</td></tr>@endforelse
+            @empty<tr><td colspan="9">No supplier invoices match these filters.</td></tr>@endforelse
         </tbody></table></div>
     </section>
 
@@ -66,8 +67,14 @@
         <section id="supplier-purchase-print" class="chart-account-card" aria-labelledby="purchase-detail-heading">
             <h2 id="purchase-detail-heading">Supplier invoice {{ $selectedInvoice->invoice_number }} · {{ ucfirst($selectedInvoice->status) }}</h2>
             <p>{{ $selectedInvoice->supplier_name_snapshot }} ({{ $selectedInvoice->supplier_code_snapshot }})</p><p>{{ $selectedInvoice->description }}</p>
-            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Receipt confirmed</dt><dd>{{ $selectedInvoice->receipt_confirmed ? 'Yes' : 'No' }}</dd><dt>Gross amount</dt><dd>PHP {{ number_format($selectedInvoice->gross_amount_cents / 100, 2) }}</dd><dt>Accounting journal</dt><dd>{{ $selectedInvoice->journal?->reference ?? 'Not posted' }}</dd></dl>
+            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Receipt confirmed</dt><dd>{{ $selectedInvoice->receipt_confirmed ? 'Yes' : 'No' }}</dd><dt>Gross amount</dt><dd>PHP {{ number_format($selectedInvoice->gross_amount_cents / 100, 2) }}</dd><dt>Paid</dt><dd>PHP {{ number_format($selectedInvoice->paidAmountCents() / 100, 2) }}</dd><dt>Outstanding</dt><dd>PHP {{ number_format($selectedInvoice->outstandingAmountCents() / 100, 2) }}</dd><dt>Payable status</dt><dd>{{ $selectedInvoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $selectedInvoice->payableStatus() }}</dd><dt>Accounting journal</dt><dd>{{ $selectedInvoice->journal?->reference ?? 'Not posted' }}</dd></dl>
             <h3>Allocations and receipt history</h3><table class="reports-table"><thead><tr><th>Description</th><th>Allocation</th><th>Quantity</th><th class="numeric">Amount</th></tr></thead><tbody>@foreach ($selectedInvoice->lines as $line)<tr><td>{{ $line->description }} @if ($line->inventory) · {{ $line->inventory->name }} @elseif ($line->account) · {{ $line->account->code }} {{ $line->account->name }} @endif</td><td>{{ $line->inventory_id ? 'Inventory' : 'Asset / expense' }}</td><td>{{ $line->quantity ?? '—' }}</td><td class="numeric">{{ number_format($line->line_amount_cents / 100, 2) }}</td></tr>@endforeach</tbody></table>
+            <h3>Payment allocation and correction history</h3><table class="reports-table"><thead><tr><th>Date</th><th>Payment reference</th><th>Evidence</th><th>Journal</th><th>Actor</th><th class="numeric">Allocation</th><th>Correction</th></tr></thead><tbody>
+                @forelse ($selectedInvoice->paymentAllocations->filter(fn ($allocation) => $allocation->disbursement->status === 'posted')->sortBy(fn ($allocation) => [$allocation->disbursement->payment_date, $allocation->disbursement->id]) as $allocation)
+                    @php($payment = $allocation->disbursement)
+                    <tr><td>{{ $payment->payment_date->format('Y-m-d') }}</td><td>{{ $payment->reference }} · {{ $payment->method }}</td><td>{{ $payment->evidence_reference }}</td><td>{{ $payment->journal?->reference ?? 'Not posted' }}</td><td>{{ $payment->posted_by }}</td><td class="numeric">{{ $payment->reversal_of_id ? '−' : '' }}PHP {{ number_format($allocation->amount_cents / 100, 2) }}</td><td>@if ($payment->reversal_of_id) Reversal of {{ $payment->reversalOf?->reference }}: {{ $payment->correction_reason }} @elseif ($payment->reversals->isNotEmpty()) Reversed by {{ $payment->reversals->first()->reference }}: {{ $payment->reversals->first()->correction_reason }} @else — @endif</td></tr>
+                @empty<tr><td colspan="7">No posted payment allocations.</td></tr>@endforelse
+            </tbody></table>
             <h3>Valued receipt movements</h3><table class="reports-table"><thead><tr><th>Inventory item</th><th>Receipt date</th><th>Supplier reference</th><th>Quantity</th><th class="numeric">Receipt value</th><th class="numeric">Carrying value after</th></tr></thead><tbody>
                 @forelse ($receiptMovements as $movement)
                     <tr><td>{{ $movement->inventory?->name }}</td><td>{{ $movement->effective_date->format('Y-m-d') }}</td><td>{{ $movement->reference }}</td><td>{{ $movement->quantity }}</td><td class="numeric">{{ number_format($movement->value_cents / 100, 2) }}</td><td class="numeric">{{ number_format($movement->carrying_value_after_cents / 100, 2) }}</td></tr>

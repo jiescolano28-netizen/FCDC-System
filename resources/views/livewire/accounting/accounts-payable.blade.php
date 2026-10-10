@@ -10,8 +10,9 @@
     @if ($errors->any())<div role="alert"><ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
     <section class="accounting-balance-grid" aria-label="Posted opening payable balances">
-        <article class="dashboard-card"><p class="dashboard-stat-label">Posted opening outstanding</p><p class="accounting-unavailable">PHP {{ number_format($outstandingCents / 100, 2) }}</p><p class="dashboard-stat-note">Opening invoices only; payment allocation is not part of this workflow.</p></article>
-        <article class="dashboard-card"><p class="dashboard-stat-label">Posted opening overdue</p><p class="accounting-unavailable">PHP {{ number_format($overdueCents / 100, 2) }}</p><p class="dashboard-stat-note">Due date is authoritative; overdue requires a positive outstanding opening invoice.</p></article>
+        <article class="dashboard-card"><p class="dashboard-stat-label">Posted opening paid</p><p class="accounting-unavailable">PHP {{ number_format($paidCents / 100, 2) }}</p><p class="dashboard-stat-note">Net allocations from posted cash and bank payments.</p></article>
+        <article class="dashboard-card"><p class="dashboard-stat-label">Posted opening outstanding</p><p class="accounting-unavailable">PHP {{ number_format($outstandingCents / 100, 2) }}</p><p class="dashboard-stat-note">Opening invoice balances after posted payments and reversals.</p></article>
+        <article class="dashboard-card"><p class="dashboard-stat-label">Posted opening overdue</p><p class="accounting-unavailable">PHP {{ number_format($overdueCents / 100, 2) }}</p><p class="dashboard-stat-note">Due date is authoritative; overdue requires a positive outstanding balance.</p></article>
     </section>
 
     <section class="chart-account-card" aria-labelledby="supplier-maintenance-heading">
@@ -59,21 +60,23 @@
     </section>
 
     <section class="dashboard-card accounting-activity" aria-labelledby="payable-invoices-heading">
-        <header class="dashboard-card-heading"><div><h2 id="payable-invoices-heading">Supplier invoices</h2><p class="dashboard-chart-note">Outstanding and overdue totals include posted opening invoices only. Drafts remain outside the books.</p></div></header>
+        <header class="dashboard-card-heading"><div><h2 id="payable-invoices-heading">Supplier invoices</h2><p class="dashboard-chart-note">Opening payable status reflects posted payment allocations and linked reversals. Drafts remain outside the books.</p></div></header>
         <div class="payable-filters" aria-label="Filter supplier invoices">
             <label><span>Search supplier or invoice</span><input type="search" wire:model.live.debounce.250ms="search" placeholder="Search supplier or invoice number"></label>
-            <label><span>Invoice state</span><select wire:model.live="status"><option value="All">All states</option><option value="Draft">Draft</option><option value="Unpaid">Unpaid</option><option value="Overdue">Overdue</option></select></label>
+            <label><span>Invoice state</span><select wire:model.live="status"><option value="All">All states</option><option value="Draft">Draft</option><option value="Unpaid">Unpaid</option><option value="Partially Paid">Partially paid</option><option value="Paid">Paid</option><option value="Overdue">Overdue</option></select></label>
         </div>
         <div class="reports-table-wrap">
             <table class="reports-table">
-                <thead><tr><th scope="col">Supplier</th><th scope="col">Invoice</th><th scope="col">Recognition date</th><th scope="col">Due date</th><th scope="col" class="numeric">Amount</th><th scope="col">State</th><th scope="col">Actions</th></tr></thead>
+                <thead><tr><th scope="col">Supplier</th><th scope="col">Invoice</th><th scope="col">Recognition date</th><th scope="col">Due date</th><th scope="col" class="numeric">Amount</th><th scope="col" class="numeric">Paid</th><th scope="col" class="numeric">Outstanding</th><th scope="col">State</th><th scope="col">Actions</th></tr></thead>
                 <tbody>
                     @forelse ($invoices as $invoice)
                         <tr wire:key="payable-invoice-{{ $invoice->id }}">
                             <td>{{ $invoice->supplier_name_snapshot }} <small>({{ $invoice->supplier_code_snapshot }})</small></td>
                             <td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td>
                             <td class="numeric">{{ number_format($invoice->amount_cents / 100, 2) }}</td>
-                            <td>Opening · {{ $invoice->stateAsOf($today) }}</td>
+                            <td class="numeric">{{ number_format($invoice->paidAmountCents() / 100, 2) }}</td>
+                            <td class="numeric">{{ number_format($invoice->outstandingAmountCents() / 100, 2) }}</td>
+                            <td>Opening · {{ $invoice->isOverdueOn($today) ? 'Overdue' : $invoice->payableStatus() }}</td>
                             <td>
                                 <button type="button" wire:click="showInvoice({{ $invoice->id }})">Invoice detail / print</button>
                                 @if ($invoice->status === 'draft')
@@ -82,7 +85,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td class="reports-empty payable-empty" colspan="7">No supplier invoices match this search or state.</td></tr>
+                        <tr><td class="reports-empty payable-empty" colspan="9">No supplier invoices match this search or state.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -105,12 +108,28 @@
             @if ($selectedInvoice->supplier_tax_identifier_snapshot)<p>Tax identifier: {{ $selectedInvoice->supplier_tax_identifier_snapshot }}</p>@endif
             @if ($selectedInvoice->supplier_address_snapshot)<p>Supplier address at preparation: {{ $selectedInvoice->supplier_address_snapshot }}</p>@endif
             <p>{{ $selectedInvoice->description }}</p>
-            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Amount</dt><dd>PHP {{ number_format($selectedInvoice->amount_cents / 100, 2) }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Prepared by</dt><dd>{{ $selectedInvoice->preparer?->username ?? 'Unavailable' }}</dd><dt>Approved by</dt><dd>{{ $selectedInvoice->approver?->username ?? 'Unavailable' }} · {{ $selectedInvoice->approved_at?->timezone('UTC')->format('Y-m-d H:i:s') }} UTC</dd><dt>Opening journal</dt><dd>{{ $selectedInvoice->openingJournal?->reference ?? $selectedInvoice->opening_journal_id }}</dd></dl>
+            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Amount</dt><dd>PHP {{ number_format($selectedInvoice->amount_cents / 100, 2) }}</dd><dt>Paid</dt><dd>PHP {{ number_format($selectedInvoice->paidAmountCents() / 100, 2) }}</dd><dt>Outstanding</dt><dd>PHP {{ number_format($selectedInvoice->outstandingAmountCents() / 100, 2) }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Prepared by</dt><dd>{{ $selectedInvoice->preparer?->username ?? 'Unavailable' }}</dd><dt>Approved by</dt><dd>{{ $selectedInvoice->approver?->username ?? 'Unavailable' }} · {{ $selectedInvoice->approved_at?->timezone('UTC')->format('Y-m-d H:i:s') }} UTC</dd><dt>Opening journal</dt><dd>{{ $selectedInvoice->openingJournal?->reference ?? $selectedInvoice->opening_journal_id }}</dd></dl>
             @if ($selectedInvoice->reversal_of_id)<p>Linked historical reversal of invoice #{{ $selectedInvoice->reversal_of_id }}.</p>@endif
             @if ($selectedInvoice->reversals->isNotEmpty())
                 <p>Linked historical reversals:</p>
                 <ul>@foreach ($selectedInvoice->reversals as $reversal)<li>Invoice {{ $reversal->invoice_number }} · {{ ucfirst($reversal->status) }}</li>@endforeach</ul>
             @endif
+            <h3>Payment allocation and correction history</h3>
+            <ul>
+                @forelse ($selectedInvoice->paymentAllocations->filter(fn ($allocation) => $allocation->disbursement?->status === 'posted') as $allocation)
+                    <li>
+                        {{ $allocation->disbursement->reference }} · PHP {{ number_format($allocation->amount_cents / 100, 2) }}
+                        · {{ $allocation->disbursement->evidence_reference }} · posted by #{{ $allocation->disbursement->posted_by }}
+                        @if ($allocation->disbursement->reversal_of_id)
+                            · reversal of {{ $allocation->disbursement->reversalOf?->reference }}: {{ $allocation->disbursement->correction_reason }}
+                        @elseif ($allocation->disbursement->reversals->isNotEmpty())
+                            · reversed by {{ $allocation->disbursement->reversals->first()->reference }}: {{ $allocation->disbursement->reversals->first()->correction_reason }}
+                        @endif
+                    </li>
+                @empty
+                    <li>No posted payment allocations.</li>
+                @endforelse
+            </ul>
             <button type="button" onclick="window.print()">Print invoice</button>
         </section>
     @endif

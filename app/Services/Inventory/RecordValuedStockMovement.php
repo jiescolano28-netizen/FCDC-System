@@ -6,6 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\AccountingPostingPeriod;
+use App\Models\CashDisbursementLine;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
@@ -233,6 +234,100 @@ class RecordValuedStockMovement
         });
     }
 
+    public function handleDirectPurchaseReceipt(
+        int $inventoryId,
+        string $quantity,
+        string $sourceReference,
+        string $effectiveDate,
+        int $actorId,
+        int $purchaseValueCents,
+        int $disbursementLineId,
+        AccountingJournal $journal,
+    ): StockMovement {
+        $actor = Employee::query()->findOrFail($actorId);
+        if (! $actor->can('inventory.movements.record') || ! $actor->can('inventory.valuation.approve')) {
+            abort(403);
+        }
+        if (trim($sourceReference) === '' || strlen($sourceReference) > 255 || $purchaseValueCents <= 0) {
+            throw ValidationException::withMessages(['allocations' => 'A direct purchase receipt requires a reference and positive gross value.']);
+        }
+
+        return DB::transaction(function () use ($inventoryId, $quantity, $sourceReference, $effectiveDate, $actorId, $purchaseValueCents, $disbursementLineId, $journal): StockMovement {
+            $line = CashDisbursementLine::query()->lockForUpdate()->findOrFail($disbursementLineId);
+            if ($line->inventory_id !== $inventoryId || $line->stock_movement_id !== null
+                || StockMovement::query()->where('cash_disbursement_line_id', $line->id)->exists()) {
+                throw ValidationException::withMessages(['allocations' => 'This purchase allocation already has a physical receipt or no longer matches its item.']);
+            }
+            $item = Inventory::query()->lockForUpdate()->findOrFail($inventoryId);
+            if ($item->status !== 'active') {
+                throw ValidationException::withMessages(['inventoryId' => 'Inactive inventory items cannot be valued.']);
+            }
+            $date = $this->validPostingDate($effectiveDate);
+            $opening = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')
+                ->where('status', 'posted')->first();
+            $schedule = OpeningInventoryValuation::query()->where('book_key', 'FCDC')->where('status', 'approved')
+                ->with('lines')->first();
+            if (! $opening || ! $schedule || $date->toDateString() < $opening->accounting_date->toDateString()) {
+                throw ValidationException::withMessages(['effectiveDate' => 'Valued stock posting requires approved opening books and an effective date on or after cutover.']);
+            }
+            $openingLine = $schedule->lines->firstWhere('inventory_id', $item->id);
+            if (! $openingLine && ($item->created_at->timezone('Asia/Manila')->toDateString() < $opening->accounting_date->toDateString()
+                || $this->quantityHundredths((string) $item->qty) !== 0)) {
+                throw ValidationException::withMessages(['inventoryId' => 'This item has no approved opening valuation baseline.']);
+            }
+            $latest = StockMovement::query()->where('inventory_id', $item->id)->whereNotNull('value_cents')
+                ->orderByDesc('effective_date')->orderByDesc('posted_at')->orderByDesc('id')->first();
+            if ($latest && $date->toDateString() < $latest->effective_date->toDateString()) {
+                throw ValidationException::withMessages(['effectiveDate' => 'Valued movements cannot be backdated before the latest valued movement for this item.']);
+            }
+            $quantityHundredths = $this->quantityHundredths($quantity);
+            $previousQuantity = $latest ? $this->quantityHundredths((string) $item->qty) : $this->quantityHundredths((string) ($openingLine?->quantity ?? '0'));
+            $previousValue = $latest ? (int) $latest->carrying_value_after_cents : (int) ($openingLine?->carrying_value_cents ?? 0);
+            if ($quantityHundredths <= 0 || $previousQuantity > PHP_INT_MAX - $quantityHundredths
+                || $previousValue > PHP_INT_MAX - $purchaseValueCents) {
+                throw ValidationException::withMessages(['quantity' => 'Purchase quantity and carrying value must be positive and supported.']);
+            }
+            $inventoryMapping = AccountingPostingMapping::query()->where('source', 'inventory')->with('account')->first();
+            if (! $inventoryMapping?->isApprovedForPosting() || (int) $inventoryMapping->accounting_account_id !== (int) $line->accounting_account_id
+                || $inventoryMapping->account->classification !== 'inventory') {
+                throw ValidationException::withMessages(['accounting' => 'The approved Inventory mapping must match every inventory allocation.']);
+            }
+            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
+                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
+                ->lockForUpdate()->first();
+            if (! $period || $period->status !== 'open' || (int) $journal->posting_period_id !== (int) $period->id) {
+                throw ValidationException::withMessages(['effectiveDate' => 'The purchase date must be in the payment journal open period.']);
+            }
+
+            $nextQuantity = $previousQuantity + $quantityHundredths;
+            $nextValue = $previousValue + $purchaseValueCents;
+            $movement = StockMovement::query()->create([
+                'inventory_id' => $item->id,
+                'cash_disbursement_line_id' => $line->id,
+                'posted_by' => $actorId,
+                'type' => 'stock_in',
+                'quantity' => number_format($quantityHundredths / 100, 2, '.', ''),
+                'reason_category' => 'purchase_receipt',
+                'notes' => $line->description,
+                'reference' => 'PURCHASE-'.$line->id,
+                'source_reference' => $sourceReference,
+                'effective_date' => $date->toDateString(),
+                'posted_at' => now('UTC'),
+                'value_cents' => $purchaseValueCents,
+                'carrying_value_after_cents' => $nextValue,
+                'accounting_journal_id' => $journal->id,
+            ]);
+            $line->forceFill(['stock_movement_id' => $movement->id])->save();
+            Inventory::query()->whereKey($item->id)->update([
+                'qty' => number_format($nextQuantity / 100, 2, '.', ''),
+                'unit_cost' => number_format($nextValue / $nextQuantity, 2, '.', ''),
+                'carrying_value_cents' => $nextValue,
+            ]);
+            $inventoryMapping->account->markUsed();
+
+            return $movement;
+        });
+    }
 
     private function validPostingDate(string $date): CarbonImmutable
     {

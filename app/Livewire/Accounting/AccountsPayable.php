@@ -142,13 +142,15 @@ class AccountsPayable extends Component
             ->orderBy('due_date')->orderBy('id')->get();
         $invoices = $matchingInvoices->filter(fn (SupplierOpeningInvoice $invoice) => match ($this->status) {
             'Draft' => $invoice->status === 'draft',
-            'Unpaid' => $invoice->isActivePosted() && ! $invoice->isOverdueOn($today),
+            'Unpaid' => $invoice->payableStatus() === 'Unpaid' && ! $invoice->isOverdueOn($today),
+            'Partially Paid' => $invoice->payableStatus() === 'Partially paid',
+            'Paid' => $invoice->payableStatus() === 'Paid',
             'Overdue' => $invoice->isOverdueOn($today),
             default => true,
         })->values();
         $postedInvoices = SupplierOpeningInvoice::activePosted()->with('reversals')->get();
         $selectedInvoice = $this->selectedInvoiceId
-            ? SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals', 'openingJournal'])->find($this->selectedInvoiceId)
+            ? SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals', 'openingJournal', 'paymentAllocations.disbursement.reversalOf', 'paymentAllocations.disbursement.reversals'])->find($this->selectedInvoiceId)
             : null;
 
         return view('livewire.accounting.accounts-payable', [
@@ -157,8 +159,10 @@ class AccountsPayable extends Component
             'invoices' => $invoices,
             'selectedInvoice' => $selectedInvoice,
             'today' => $today,
-            'outstandingCents' => $postedInvoices->sum('amount_cents'),
-            'overdueCents' => $postedInvoices->filter(fn (SupplierOpeningInvoice $invoice) => $invoice->isOverdueOn($today))->sum('amount_cents'),
+            'paidCents' => $postedInvoices->sum(fn (SupplierOpeningInvoice $invoice) => $invoice->paidAmountCents()),
+            'outstandingCents' => $postedInvoices->sum(fn (SupplierOpeningInvoice $invoice) => $invoice->outstandingAmountCents()),
+            'overdueCents' => $postedInvoices->filter(fn (SupplierOpeningInvoice $invoice) => $invoice->isOverdueOn($today))
+                ->sum(fn (SupplierOpeningInvoice $invoice) => $invoice->outstandingAmountCents()),
         ])->layout('layouts.app', ['title' => 'Accounts Payable']);
     }
 

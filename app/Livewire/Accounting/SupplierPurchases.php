@@ -150,12 +150,15 @@ class SupplierPurchases extends Component
         $invoices = $all->filter(fn (SupplierPurchaseInvoice $invoice) => match ($this->status) {
             'Draft' => $invoice->status === 'draft',
             'Overdue' => $invoice->isOverdueOn($today),
-            'Outstanding' => $invoice->status === 'posted',
+            'Paid' => $invoice->payableStatus() === 'Paid',
+            'Partially Paid' => $invoice->payableStatus() === 'Partially paid',
+            'Unpaid' => $invoice->payableStatus() === 'Unpaid',
+            'Outstanding' => $invoice->status === 'posted' && $invoice->outstandingAmountCents() > 0,
             default => true,
         })->values();
-        $posted = SupplierPurchaseInvoice::query()->where('status', 'posted')->get();
+        $posted = $all->where('status', 'posted');
         $selected = $this->selectedId
-            ? SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal.lines.account'])->find($this->selectedId)
+            ? SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal.lines.account', 'paymentAllocations.disbursement.reversalOf', 'paymentAllocations.disbursement.reversals'])->find($this->selectedId)
             : null;
         $receiptMovements = $selected
             ? StockMovement::query()->where('source_reference', 'supplier_purchase:'.$selected->id)
@@ -174,8 +177,10 @@ class SupplierPurchases extends Component
             'inventoryItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(),
             'today' => $today,
             'purchaseTotalCents' => $posted->sum('gross_amount_cents'),
-            'outstandingCents' => $posted->sum('gross_amount_cents'),
-            'overdueCents' => $posted->filter(fn (SupplierPurchaseInvoice $invoice) => $invoice->isOverdueOn($today))->sum('gross_amount_cents'),
+            'paidTotalCents' => $posted->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->paidAmountCents()),
+            'outstandingCents' => $posted->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->outstandingAmountCents()),
+            'overdueCents' => $posted->filter(fn (SupplierPurchaseInvoice $invoice) => $invoice->isOverdueOn($today))
+                ->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->outstandingAmountCents()),
         ])->layout('layouts.app', ['title' => 'Supplier Purchases']);
     }
 

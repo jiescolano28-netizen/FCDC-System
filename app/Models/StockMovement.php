@@ -14,6 +14,7 @@ class StockMovement extends Model
         'inventory_id',
         'demolition_project_id',
         'recovered_material_id',
+        'cash_disbursement_line_id',
         'posted_by',
         'type',
         'quantity',
@@ -80,6 +81,11 @@ class StockMovement extends Model
     public function reversedMovement(): BelongsTo
     {
         return $this->belongsTo(self::class, 'reverses_movement_id');
+    }
+
+    public function cashDisbursementLine(): BelongsTo
+    {
+        return $this->belongsTo(CashDisbursementLine::class);
     }
 
     public function accountingJournal(): BelongsTo

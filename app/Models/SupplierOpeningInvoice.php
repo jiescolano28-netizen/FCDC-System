@@ -84,7 +84,43 @@ class SupplierOpeningInvoice extends Model
 
     public function isOverdueOn(string $date): bool
     {
-        return $this->isActivePosted() && $this->due_date->toDateString() < $date;
+        return $this->isActivePosted() && $this->outstandingAmountCents() > 0 && $this->due_date->toDateString() < $date;
+    }
+
+    public function paymentAllocations(): HasMany
+    {
+        return $this->hasMany(CashDisbursementLine::class, 'supplier_opening_invoice_id');
+    }
+
+    public function paidAmountCents(): int
+    {
+        return (int) DB::table('cash_disbursement_lines')
+            ->join('cash_disbursements', 'cash_disbursements.id', '=', 'cash_disbursement_lines.cash_disbursement_id')
+            ->where('cash_disbursement_lines.supplier_opening_invoice_id', $this->id)
+            ->where('cash_disbursements.status', 'posted')
+            ->selectRaw('COALESCE(SUM(CASE WHEN cash_disbursements.reversal_of_id IS NULL THEN cash_disbursement_lines.amount_cents ELSE -cash_disbursement_lines.amount_cents END), 0) as paid_cents')
+            ->value('paid_cents');
+    }
+
+    public function outstandingAmountCents(): int
+    {
+        return max(0, (int) $this->amount_cents - $this->paidAmountCents());
+    }
+
+    public function payableStatus(): string
+    {
+        if ($this->status !== 'posted') {
+            return ucfirst($this->status);
+        }
+        if ($this->reversal_of_id !== null) {
+            return 'Reversal · Posted';
+        }
+        if ($this->hasPostedReversal()) {
+            return 'Reversed';
+        }
+        $paid = $this->paidAmountCents();
+
+        return $paid >= (int) $this->amount_cents ? 'Paid' : ($paid > 0 ? 'Partially paid' : 'Unpaid');
     }
 
     public function stateAsOf(string $date): string
