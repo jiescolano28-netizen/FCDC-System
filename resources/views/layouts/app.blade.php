@@ -69,7 +69,7 @@
                 @endcan
                 @can('demolition-projects.view')
                     <a class="nav-item {{ request()->routeIs('demolition-projects.*') ? 'active' : '' }}" href="{{ route('demolition-projects.index') }}" @if (request()->routeIs('demolition-projects.*')) aria-current="page" @endif>
-                        <span class="nav-label">Demolition Projects</span>
+                        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V5.5L12 3l8 2.5V20M4 9h16M9 20v-5h6v5M11 9l-1 4 2 1-1 3"/></svg></span><span class="nav-label">Demolition Projects</span>
                     </a>
                 @endcan
 
