@@ -57,5 +57,10 @@ test('supplier and invoice search with status filters handles an empty schedule'
         ->assertSet('status', 'Overdue')
         ->set('status', 'All')
         ->assertSet('status', 'All')
+        ->set('search', 'Northwind')
+        ->set('status', 'Overdue')
+        ->call('clearFilters')
+        ->assertSet('search', '')
+        ->assertSet('status', 'All')
         ->assertSee('No supplier invoices match this search or state.');
 });

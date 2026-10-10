@@ -13,6 +13,12 @@ class AccountsPayable extends Component
 
     public string $status = 'All';
 
+    public function clearFilters(): void
+    {
+        $this->reset('search');
+        $this->status = 'All';
+    }
+
     public ?int $supplierId = null;
 
     public ?int $supplierEditId = null;

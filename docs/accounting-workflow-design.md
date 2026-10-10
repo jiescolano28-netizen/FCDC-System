@@ -197,6 +197,8 @@ Cash Disbursements supports supplier settlements alongside existing direct payme
 
 Posted allocation rows remain linked to the immutable payment record. Paid, partially paid, unpaid, outstanding, and overdue amounts derive from posted allocations net of linked reversal rows. Payment corrections preserve the original payment and evidence, copy the original invoice allocations onto the linked reversal, and restore invoice balances without deleting history. The supplier-purchase and Accounts Payable registers show paid/outstanding/overdue totals and printable invoice allocation/correction history; the disbursement register searches payment references, evidence, supplier, and both invoice types.
 
+The Accounts Payable page foregrounds the posted opening-balance summaries and invoice register; supplier management and opening-invoice preparation are collapsible sections. Search and state filters can be reset together, and the invoice table remains horizontally scrollable on narrow screens.
+
 Invoice rows are locked in stable ID order during posting so competing drafts cannot oversettle an invoice. Allocation, journal and payment writes share one database transaction; failed posting leaves the draft, AP schedule and cash/bank journal effects unchanged. Settlements now cover posted received-purchase and active posted opening supplier invoices.
 
 ## Implemented financial statements

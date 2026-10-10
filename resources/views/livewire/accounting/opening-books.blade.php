@@ -18,7 +18,7 @@
         <dl>
             @foreach ($readiness as $name => $state)
                 @if (is_string($state))
-                    <dt>{{ ucfirst($name) }}</dt><dd>{{ $state }}</dd>
+                    <dt>{{ ucfirst(str_replace('_', ' ', $name)) }}</dt><dd>{{ $state }}</dd>
                 @endif
             @endforeach
         </dl>
@@ -27,7 +27,7 @@
 
     <section class="chart-account-card" aria-labelledby="production-activation-heading">
         <h2 id="production-activation-heading">Production accounting activation</h2>
-        <p role="status">{{ $readiness['production'] }}</p>
+        <p @class(['opening-production-status' => true, 'is-ready' => $readiness['production_activated'] || $readiness['production_ready'], 'is-blocked' => ! $readiness['production_activated'] && ! $readiness['production_ready']]) role="status">{{ $readiness['production'] }}</p>
         @if (! $readiness['production_activated'])
             @can('accounting.activate-books')
                 @if ($readiness['production_ready'])
