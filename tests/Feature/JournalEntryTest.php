@@ -41,11 +41,13 @@ function prepareJournalBook(?string $cutoverDate = null): array
 {
     $cash = approvedJournalAccount('1000', 'Asset', 'cash', 'debit');
     $revenue = approvedJournalAccount('4000', 'Revenue', 'sales', 'credit');
+    $month = now('Asia/Manila')->startOfMonth();
     $period = AccountingPostingPeriod::create([
         'book_key' => 'FCDC',
-        'fiscal_year' => now('Asia/Manila')->year,
-        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
-        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(),
+        'fiscal_year' => $month->year,
+        'period_month' => $month->month,
+        'starts_on' => $month->toDateString(),
+        'ends_on' => $month->endOfMonth()->toDateString(),
         'status' => 'open',
     ]);
     AccountingJournal::create([

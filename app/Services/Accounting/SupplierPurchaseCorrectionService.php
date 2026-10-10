@@ -535,17 +535,13 @@ class SupplierPurchaseCorrectionService
         if (! $opening || $date->lt(CarbonImmutable::parse($opening->accounting_date, 'Asia/Manila'))) {
             throw ValidationException::withMessages(['date' => 'Supplier corrections and refunds require an accounting date on or after approved cutover.']);
         }
-        $period = AccountingPostingPeriod::query()->firstOrCreate(
-            ['book_key' => 'FCDC', 'fiscal_year' => $date->year],
-            ['starts_on' => $date->startOfYear()->toDateString(), 'ends_on' => $date->endOfYear()->toDateString(), 'status' => 'open'],
+        return app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+            $date->toDateString(),
+            'date',
+            'The supplier correction/refund date is in a closed accounting period.',
         );
-        $period = AccountingPostingPeriod::query()->lockForUpdate()->findOrFail($period->id);
-        if ($period->status !== 'open') {
-            throw ValidationException::withMessages(['date' => 'The supplier correction/refund date is in a closed accounting period.']);
-        }
-
-        return $period;
     }
+
 
     private function mappedAccount(string $source): AccountingAccount
     {

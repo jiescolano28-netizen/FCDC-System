@@ -5,7 +5,6 @@ namespace App\Services\Inventory;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
-use App\Models\AccountingPostingPeriod;
 use App\Models\CashDisbursementLine;
 use App\Models\Employee;
 use App\Models\Inventory;
@@ -13,6 +12,7 @@ use App\Models\OpeningInventoryValuation;
 use App\Models\RecoveredMaterial;
 use App\Models\RecoveredMaterialAssessment;
 use App\Models\StockMovement;
+use App\Services\Accounting\AccountingPeriodService;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -160,12 +160,11 @@ class RecordValuedStockMovement
                 throw ValidationException::withMessages(['accounting' => 'The approved counterpart cannot be Inventory, AP, Sales, COGS or Output VAT; decreases must use an Expense account.']);
             }
 
-            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
-                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
-                ->lockForUpdate()->first();
-            if (! $period || $period->status !== 'open') {
-                throw ValidationException::withMessages(['effectiveDate' => 'The effective date must be in an open accounting period.']);
-            }
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date->toDateString(),
+                'effectiveDate',
+                'The effective date must be in an open accounting period.',
+            );
 
             $movement = StockMovement::create([
                 'inventory_id' => $item->id,
@@ -292,10 +291,12 @@ class RecordValuedStockMovement
                 || $inventoryMapping->account->classification !== 'inventory') {
                 throw ValidationException::withMessages(['accounting' => 'The approved Inventory mapping must match every inventory allocation.']);
             }
-            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
-                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
-                ->lockForUpdate()->first();
-            if (! $period || $period->status !== 'open' || (int) $journal->posting_period_id !== (int) $period->id) {
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date->toDateString(),
+                'effectiveDate',
+                'The purchase date must be in the payment journal open period.',
+            );
+            if ((int) $journal->posting_period_id !== (int) $period->id) {
                 throw ValidationException::withMessages(['effectiveDate' => 'The purchase date must be in the payment journal open period.']);
             }
 

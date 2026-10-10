@@ -4,6 +4,7 @@ use App\Http\Controllers\EmployeePasswordResetController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\PasswordResetLinkController;
+use App\Livewire\Accounting\AccountingPeriods;
 use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\AccountsPayable;
 use App\Livewire\Accounting\CashDisbursements;
@@ -63,6 +64,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', ProfilePage::class)->name('profile');
     Route::get('/dashboard', DashboardPage::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/dashboard/reports', ReportsPage::class)->middleware('permission:reports.view')->name('reports');
+    Route::get('/accounting/periods', AccountingPeriods::class)->middleware('permission:accounting.view')->name('accounting.periods');
     Route::get('/accounting', AccountingOverview::class)->middleware('permission:accounting.view')->name('accounting.overview');
     Route::get('/accounting/chart-of-accounts', ChartOfAccounts::class)->middleware('permission:accounting.view')->name('accounting.chart-of-accounts');
     Route::get('/accounting/opening-books', OpeningBooks::class)->middleware('permission:accounting.view')->name('accounting.opening-books');

@@ -147,14 +147,11 @@ class SupplierPurchaseService
             if (! $cutover || $dateValue->lt(CarbonImmutable::parse($cutover, 'Asia/Manila'))) {
                 throw ValidationException::withMessages(['recognition_date' => 'Purchase date is outside approved accounting cutover coverage.']);
             }
-            $period = AccountingPostingPeriod::query()->firstOrCreate(
-                ['book_key' => 'FCDC', 'fiscal_year' => (int) $dateValue->format('Y')],
-                ['starts_on' => $dateValue->startOfYear()->toDateString(), 'ends_on' => $dateValue->endOfYear()->toDateString(), 'status' => 'open'],
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date,
+                'recognition_date',
+                'The purchase recognition date is in a closed accounting period.',
             );
-            $period = AccountingPostingPeriod::query()->lockForUpdate()->findOrFail($period->id);
-            if ($period->status !== 'open') {
-                throw ValidationException::withMessages(['recognition_date' => 'The purchase recognition date is in a closed accounting period.']);
-            }
             $ap = $this->mappedAccount('accounts_payable');
             $inventoryAccount = $invoice->lines->contains(fn ($line) => $line->inventory_id !== null)
                 ? $this->mappedAccount('inventory')

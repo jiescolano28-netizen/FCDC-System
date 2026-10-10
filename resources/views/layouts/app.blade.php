@@ -111,6 +111,9 @@
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.opening-books') ? 'active' : '' }}" href="{{ route('accounting.opening-books') }}" @if (request()->routeIs('accounting.opening-books')) aria-current="page" @endif>
                                 <span class="nav-label">Opening Books &amp; Cutover</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.periods') ? 'active' : '' }}" href="{{ route('accounting.periods') }}" @if (request()->routeIs('accounting.periods')) aria-current="page" @endif>
+                                <span class="nav-label">Accounting Periods</span>
+                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.journal-entry') ? 'active' : '' }}" href="{{ route('accounting.journal-entry') }}" @if (request()->routeIs('accounting.journal-entry')) aria-current="page" @endif>
                                 <span class="nav-label">Journal Entry</span>
                             </a>

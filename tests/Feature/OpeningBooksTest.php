@@ -203,8 +203,8 @@ test('an authorized reviewer approves one balanced cash and capital opening at a
         ->and(DB::table('accounting_journal_lines')->sum('debit_cents'))->toBe(10000)
         ->and(DB::table('accounting_journal_lines')->sum('credit_cents'))->toBe(10000)
         ->and(DB::table('accounting_journals')->value('approved_by'))->toBe($reviewer->id)
-        ->and(DB::table('accounting_posting_periods')->value('starts_on'))->toBe('2026-01-01')
-        ->and(DB::table('accounting_posting_periods')->value('ends_on'))->toBe('2026-12-31');
+        ->and(DB::table('accounting_posting_periods')->value('starts_on'))->toBe('2026-07-01')
+        ->and(DB::table('accounting_posting_periods')->value('ends_on'))->toBe('2026-07-31');
 });
 
 test('opening approval rejects unequal and empty lines, unapproved accounts, duplicate posting and unauthorized reviewers', function () {

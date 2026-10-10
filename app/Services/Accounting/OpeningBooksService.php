@@ -21,13 +21,8 @@ class OpeningBooksService
     {
         $date = $this->validBusinessDate($date);
         $validatedLines = $this->validatedOpeningLines($lines);
-        $year = (int) substr($date, 0, 4);
-
-        return DB::transaction(function () use ($date, $validatedLines, $actorId, $year): AccountingJournal {
-            $period = AccountingPostingPeriod::firstOrCreate(
-                ['book_key' => 'FCDC', 'fiscal_year' => $year],
-                ['starts_on' => "$year-01-01", 'ends_on' => "$year-12-31", 'status' => 'open'],
-            );
+        return DB::transaction(function () use ($date, $validatedLines, $actorId): AccountingJournal {
+            $period = AccountingPostingPeriod::firstOrCreateForDate($date);
             $journal = AccountingJournal::where('source_type', 'opening')
                 ->where('source_id', 'FCDC')
                 ->lockForUpdate()
@@ -39,7 +34,7 @@ class OpeningBooksService
             $journal ??= new AccountingJournal(['source_type' => 'opening', 'source_id' => 'FCDC']);
             $journal->fill([
                 'book_key' => 'FCDC',
-                'reference' => 'OPENING-FCDC-'.$year,
+                'reference' => 'OPENING-FCDC-'.substr($date, 0, 4),
                 'accounting_date' => $date,
                 'posting_period_id' => $period->id,
                 'description' => 'Approved opening balances at accounting cutover',
@@ -132,6 +127,11 @@ class OpeningBooksService
             if ($journal->status !== 'draft') {
                 throw ValidationException::withMessages(['opening' => 'This opening journal is already approved and immutable.']);
             }
+            app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $journal->accounting_date->toDateString(),
+                'opening',
+                'The opening date is in a closed accounting month.',
+            );
             $this->assertBalancedLines($journal->lines->map(fn ($line) => [
                 'accountId' => $line->accounting_account_id,
                 'debitCents' => $line->debit_cents,

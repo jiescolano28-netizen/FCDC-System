@@ -354,9 +354,12 @@ class CashDisbursementService
         if (! $cutover || $date->toDateString() < $cutoverDate) {
             throw ValidationException::withMessages(['paymentDate' => 'Payment date is outside approved accounting cutover coverage.']);
         }
-        $period = $this->periodFor($date->toDateString());
-        $period = AccountingPostingPeriod::query()->whereKey($period->id)->lockForUpdate()->firstOrFail();
-        if ($period->status !== 'open' || $date->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
+        $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+            $date->toDateString(),
+            'paymentDate',
+            'Payment date is not in an open accounting period.',
+        );
+        if ($date->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
             || $date->gt(CarbonImmutable::parse($period->ends_on, 'Asia/Manila'))) {
             throw ValidationException::withMessages(['paymentDate' => 'Payment date is not in an open accounting period.']);
         }
@@ -469,12 +472,7 @@ class CashDisbursementService
 
     private function periodFor(string $date): AccountingPostingPeriod
     {
-        $year = (int) substr($date, 0, 4);
-
-        return AccountingPostingPeriod::query()->firstOrCreate(
-            ['book_key' => 'FCDC', 'fiscal_year' => $year],
-            ['starts_on' => "$year-01-01", 'ends_on' => "$year-12-31", 'status' => 'open'],
-        );
+        return AccountingPostingPeriod::firstOrCreateForDate($date);
     }
 
     private function cents(mixed $amount, string $field): int

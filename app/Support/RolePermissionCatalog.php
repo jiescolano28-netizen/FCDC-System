@@ -48,6 +48,8 @@ class RolePermissionCatalog
                 'accounting.correct-supplier-purchases' => 'Correct posted supplier purchases with reviewed allocations',
                 'accounting.post-supplier-refunds' => 'Post actual supplier refund receipts',
                 'accounting.maintain-opening-books' => 'Prepare accounting cutover and opening schedules',
+                'accounting.close-period' => 'Close reconciled accounting months',
+                'accounting.reopen-period' => 'Reopen accounting months and dependent periods',
                 'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
             ],
             'Settings' => [
