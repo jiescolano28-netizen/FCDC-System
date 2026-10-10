@@ -140,16 +140,35 @@ class GeneralLedger extends Component
     {
         return match ($journal->source_type) {
             'opening' => $journal->source_id === 'FCDC' ? route('accounting.opening-books') : null,
-            'supplier_purchase' => SupplierPurchaseInvoice::query()->whereKey($journal->source_id)->exists()
+            'supplier_purchase', 'supplier_purchase_correction' => SupplierPurchaseInvoice::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.supplier-purchases', ['invoice' => $journal->source_id]) : null,
-            'cash_disbursement', 'cash_disbursement_reversal' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
+            'cash_disbursement', 'cash_disbursement_reversal', 'direct_purchase_correction' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.cash-disbursements', ['disbursement' => $journal->source_id]) : null,
+            'supplier_refund_receipt' => $this->refundCorrectionUrl($journal),
             'pos_sale' => auth()->user()?->can('pos.view') && PosTransaction::query()->whereKey($journal->source_id)->where('status', 'completed')->exists()
                 ? route('pos', ['receipt' => $journal->source_id]) : null,
             'stock_movement' => auth()->user()?->can('inventory.view') && StockMovement::query()->whereKey($journal->source_id)->exists()
                 ? $this->stockHistoryUrl($journal->source_id) : null,
             default => null,
         };
+    }
+
+    private function refundCorrectionUrl(AccountingJournal $journal): ?string
+    {
+        $correction = AccountingJournal::query()->whereKey($journal->correction_of_id)->first();
+        if (! $correction) {
+            return null;
+        }
+        if ($correction->source_type === 'supplier_purchase_correction'
+            && SupplierPurchaseInvoice::query()->whereKey($correction->source_id)->exists()) {
+            return route('accounting.supplier-purchases', ['invoice' => $correction->source_id]);
+        }
+        if ($correction->source_type === 'direct_purchase_correction'
+            && CashDisbursement::query()->whereKey($correction->source_id)->exists()) {
+            return route('accounting.cash-disbursements', ['disbursement' => $correction->source_id]);
+        }
+
+        return null;
     }
 
     private function stockHistoryUrl(string $movementId): string

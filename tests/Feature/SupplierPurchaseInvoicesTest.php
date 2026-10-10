@@ -10,6 +10,8 @@ use App\Models\OpeningInventoryValuation;
 use App\Models\OpeningInventoryValuationLine;
 use App\Models\Supplier;
 use App\Services\Accounting\SupplierPurchaseService;
+use App\Services\Accounting\CashDisbursementService;
+use App\Services\Accounting\SupplierPurchaseCorrectionService;
 use App\Services\Inventory\RecordStockIn;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -215,4 +217,265 @@ test('supplier purchase register is available to accounting viewers and filters 
         ->assertSee('Supplier Credit Purchases')
         ->assertSee('Supplier invoice register')
         ->assertSee('Status');
+});
+test('a fully paid PHP 50,000 purchase correction creates and clears a linked PHP 10,000 supplier refund receivable', function () {
+    $actor = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'correct.'.fake()->unique()->numerify('####'),
+        'password' => Hash::make('password'),
+        'first_name' => 'Purchase',
+        'last_name' => 'Corrector',
+        'email' => fake()->unique()->safeEmail(),
+    ]), [
+        'accounting.prepare-supplier-purchases', 'accounting.post-supplier-purchases',
+        'accounting.correct-supplier-purchases', 'accounting.post-supplier-refunds',
+        'accounting.prepare-disbursements', 'accounting.post-disbursements',
+    ]);
+    $period = AccountingPostingPeriod::create([
+        'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
+        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
+        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(), 'status' => 'open',
+    ]);
+    AccountingJournal::create([
+        'book_key' => 'FCDC', 'reference' => 'OPEN-CORR-'.$actor->id, 'source_type' => 'opening',
+        'source_id' => 'FCDC', 'accounting_date' => $period->starts_on, 'posting_period_id' => $period->id,
+        'description' => 'Approved cutover', 'status' => 'posted', 'prepared_by' => $actor->id,
+        'posted_by' => $actor->id, 'posted_at' => now(),
+    ]);
+    $ap = AccountingAccount::create([
+        'code' => '2C'.$actor->id, 'name' => 'Accounts Payable', 'type' => 'Liability',
+        'classification' => 'accounts_payable', 'normal_balance' => 'credit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $expense = AccountingAccount::create([
+        'code' => '6C'.$actor->id, 'name' => 'Repairs Expense', 'type' => 'Expense',
+        'classification' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $bank = AccountingAccount::create([
+        'code' => '1C'.$actor->id, 'name' => 'Operating Bank', 'type' => 'Asset',
+        'classification' => 'bank', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $receivable = AccountingAccount::create([
+        'code' => 'AR'.$actor->id, 'name' => 'Accounts Receivable', 'type' => 'Asset',
+        'classification' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    AccountingPostingMapping::create([
+        'source' => 'accounts_payable', 'accounting_account_id' => $ap->id,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $supplier = Supplier::create(['code' => 'COR-'.$actor->id, 'name' => 'Correction Supplier', 'created_by' => $actor->id]);
+    $invoice = app(SupplierPurchaseService::class)->saveDraft([
+        'supplier_id' => $supplier->id, 'invoice_number' => 'COR-INV-'.$actor->id,
+        'recognition_date' => now('Asia/Manila')->toDateString(), 'due_date' => now('Asia/Manila')->toDateString(),
+        'description' => 'Purchase to correct', 'receipt_confirmed' => true,
+        'lines' => [['inventory_id' => '', 'accounting_account_id' => $expense->id, 'description' => 'Repairs', 'quantity' => '', 'amount' => '50000.00']],
+    ], $actor->id);
+    $posted = app(SupplierPurchaseService::class)->post($invoice->id, $actor->id);
+    $payment = app(CashDisbursementService::class)->saveDraft([
+        'payee' => $supplier->name, 'supplierId' => (string) $supplier->id,
+        'paymentDate' => now('Asia/Manila')->toDateString(), 'method' => 'Bank Transfer',
+        'moneyAccountId' => (string) $bank->id, 'reference' => 'PAY-COR-'.$actor->id,
+        'checkNumber' => '', 'description' => 'Settle corrected purchase',
+        'evidenceReference' => 'Bank advice COR-'.$actor->id, 'amount' => '50000.00',
+        'allocations' => [['invoice_id' => 'purchase:'.$invoice->id, 'description' => 'Invoice settlement', 'amount' => '50000.00']],
+    ], $actor->id);
+    $payment = app(CashDisbursementService::class)->post($payment->id, $actor->id);
+
+    expect(fn () => app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
+        'reason' => 'Supplier issued corrected invoice',
+        'allocations' => [['line_id' => $invoice->lines->first()->id, 'corrected_amount_cents' => 5_000_000]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    expect($invoice->fresh()->gross_amount_cents)->toBe(5_000_000)
+        ->and($payment->fresh()->status)->toBe('posted')
+        ->and(DB::table('supplier_purchase_corrections')->count())->toBe(0)
+        ->and(DB::table('accounting_journals')->where('source_type', 'supplier_purchase_correction')->count())->toBe(0);
+
+    $correction = app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
+        'reason' => 'Supplier issued corrected invoice',
+        'allocations' => [['line_id' => $invoice->lines->first()->id, 'corrected_amount_cents' => 4_000_000]],
+    ], $actor->id);
+    $replacement = $correction->replacementInvoice;
+
+    expect($invoice->fresh()->gross_amount_cents)->toBe(5_000_000)
+        ->and($invoice->fresh()->paidAmountCents())->toBe(5_000_000)
+        ->and($invoice->fresh()->outstandingAmountCents())->toBe(0)
+        ->and($invoice->fresh()->supplierRefundDueCents())->toBe(1_000_000)
+        ->and($replacement->gross_amount_cents)->toBe(4_000_000)
+        ->and($replacement->correction_of_id)->toBe($invoice->id)
+        ->and($payment->fresh()->lines)->toHaveCount(1)
+        ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $receivable->id)->debit_cents)->toBe(1_000_000);
+
+    $receipt = app(SupplierPurchaseCorrectionService::class)->receiveRefund($correction->id, [
+        'amount_cents' => 1_000_000, 'money_account_id' => $bank->id,
+        'reference' => 'REF-COR-'.$actor->id, 'evidence_reference' => 'Supplier bank refund',
+        'receipt_date' => now('Asia/Manila')->toDateString(),
+    ], $actor->id);
+
+    expect($receipt->amount_cents)->toBe(1_000_000)
+        ->and($invoice->fresh()->supplierRefundDueCents())->toBe(0)
+        ->and($receipt->journal->correction_of_id)->toBe($correction->journal_id)
+        ->and((int) $receipt->journal->lines->firstWhere('accounting_account_id', $bank->id)->debit_cents)->toBe(1_000_000)
+        ->and($invoice->fresh()->accounting_journal_id)->toBe($posted->accounting_journal_id);
+});
+test('purchase correction allocates reviewed cost between remaining and consumed stock without changing quantity', function () {
+    $actor = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'stockcorrect.'.fake()->unique()->numerify('####'),
+        'password' => Hash::make('password'), 'first_name' => 'Stock', 'last_name' => 'Corrector',
+        'email' => fake()->unique()->safeEmail(),
+    ]), [
+        'accounting.prepare-supplier-purchases', 'accounting.post-supplier-purchases',
+        'accounting.correct-supplier-purchases', 'accounting.post-disbursements',
+        'accounting.prepare-disbursements', 'inventory.movements.record', 'inventory.valuation.approve',
+    ]);
+    $period = AccountingPostingPeriod::create([
+        'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
+        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
+        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(), 'status' => 'open',
+    ]);
+    $openingJournal = AccountingJournal::create([
+        'book_key' => 'FCDC', 'reference' => 'OPEN-STOCK-CORR-'.$actor->id, 'source_type' => 'opening',
+        'source_id' => 'FCDC', 'accounting_date' => $period->starts_on, 'posting_period_id' => $period->id,
+        'description' => 'Approved cutover', 'status' => 'draft', 'prepared_by' => $actor->id,
+    ]);
+    $inventoryAccount = AccountingAccount::create([
+        'code' => '12'.$actor->id, 'name' => 'Inventory', 'type' => 'Asset',
+        'classification' => 'inventory', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $ap = AccountingAccount::create([
+        'code' => '21'.$actor->id, 'name' => 'Accounts Payable', 'type' => 'Liability',
+        'classification' => 'accounts_payable', 'normal_balance' => 'credit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $adjustment = AccountingAccount::create([
+        'code' => '62'.$actor->id, 'name' => 'Inventory Cost Adjustment', 'type' => 'Expense',
+        'classification' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    foreach ([['inventory', $inventoryAccount], ['accounts_payable', $ap], ['adjustment', $adjustment]] as [$source, $account]) {
+        AccountingPostingMapping::create([
+            'source' => $source, 'accounting_account_id' => $account->id,
+            'approved_at' => now(), 'approved_by' => $actor->id,
+        ]);
+    }
+    $item = Inventory::create([
+        'name' => 'Correction stock', 'category' => 'Materials', 'qty' => '0.00',
+        'unit' => 'bag', 'unit_cost' => '0.00', 'reorder_level' => '0',
+    ]);
+    $valuation = OpeningInventoryValuation::create([
+        'book_key' => 'FCDC', 'cutover_date' => $period->starts_on,
+        'evidence_reference' => 'Opening stock count', 'status' => 'draft', 'prepared_by' => $actor->id,
+    ]);
+    OpeningInventoryValuationLine::forceCreate([
+        'opening_inventory_valuation_id' => $valuation->id, 'inventory_id' => $item->id,
+        'quantity' => '0.00', 'carrying_value_cents' => 0,
+    ]);
+    $valuation->forceFill(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now()])->save();
+    $openingJournal->forceFill([
+        'status' => 'posted', 'posted_by' => $actor->id, 'posted_at' => now(),
+        'approved_by' => $actor->id, 'approved_at' => now(),
+    ])->save();
+    $supplier = Supplier::create(['code' => 'STK-'.$actor->id, 'name' => 'Stock Supplier', 'created_by' => $actor->id]);
+    $invoice = app(SupplierPurchaseService::class)->saveDraft([
+        'supplier_id' => $supplier->id, 'invoice_number' => 'STK-INV-'.$actor->id,
+        'recognition_date' => now('Asia/Manila')->toDateString(), 'due_date' => now('Asia/Manila')->toDateString(),
+        'description' => 'Ten bags', 'receipt_confirmed' => true,
+        'lines' => [['inventory_id' => $item->id, 'accounting_account_id' => '', 'description' => 'Ten bags', 'quantity' => '10.00', 'amount' => '50000.00']],
+    ], $actor->id);
+    app(SupplierPurchaseService::class)->post($invoice->id, $actor->id);
+    app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '2.00', 'damage_loss', 'DAMAGED-CORR-'.$actor->id,
+        now('Asia/Manila')->toDateString(), $actor->id, null, 'Consumed stock before price correction',
+    );
+
+    expect($item->fresh()->qty)->toBe('8.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(4_000_000);
+    $correction = app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
+        'reason' => 'Supplier credited the purchase price',
+        'allocations' => [[
+            'line_id' => $invoice->lines->first()->id, 'corrected_amount_cents' => 4_000_000,
+            'remaining_inventory_cents' => 800_000, 'consumed_cost_cents' => 200_000,
+            'consumed_accounting_account_id' => $adjustment->id,
+        ]],
+    ], $actor->id);
+
+    expect($item->fresh()->qty)->toBe('8.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(3_200_000)
+        ->and((int) DB::table('supplier_purchase_correction_lines')->where('supplier_purchase_correction_id', $correction->id)->value('remaining_inventory_cents'))->toBe(800_000)
+        ->and((int) DB::table('supplier_purchase_correction_lines')->where('supplier_purchase_correction_id', $correction->id)->value('consumed_cost_cents'))->toBe(200_000)
+        ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $inventoryAccount->id)->credit_cents)->toBe(800_000)
+        ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $adjustment->id)->credit_cents)->toBe(200_000)
+        ->and(DB::table('stock_movements')->where('source_reference', 'supplier_purchase:'.$invoice->id)->count())->toBe(1)
+        ->and($openingJournal->fresh()->status)->toBe('posted');
+});
+test('direct supplier purchases preserve the disbursement and post a linked refund receivable', function () {
+    $actor = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'directcorrect.'.fake()->unique()->numerify('####'),
+        'password' => Hash::make('password'), 'first_name' => 'Direct', 'last_name' => 'Corrector',
+        'email' => fake()->unique()->safeEmail(),
+    ]), [
+        'accounting.prepare-disbursements', 'accounting.post-disbursements',
+        'accounting.correct-supplier-purchases', 'accounting.post-supplier-refunds',
+    ]);
+    $period = AccountingPostingPeriod::create([
+        'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
+        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
+        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(), 'status' => 'open',
+    ]);
+    AccountingJournal::create([
+        'book_key' => 'FCDC', 'reference' => 'OPEN-DIRECT-CORR-'.$actor->id, 'source_type' => 'opening',
+        'source_id' => 'FCDC', 'accounting_date' => $period->starts_on, 'posting_period_id' => $period->id,
+        'description' => 'Approved cutover', 'status' => 'posted', 'prepared_by' => $actor->id,
+        'posted_by' => $actor->id, 'posted_at' => now(),
+    ]);
+    $expense = AccountingAccount::create([
+        'code' => '6D'.$actor->id, 'name' => 'Direct Purchase Expense', 'type' => 'Expense',
+        'classification' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $bank = AccountingAccount::create([
+        'code' => '1D'.$actor->id, 'name' => 'Direct Purchase Bank', 'type' => 'Asset',
+        'classification' => 'bank', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $receivable = AccountingAccount::create([
+        'code' => 'AR-D'.$actor->id, 'name' => 'Accounts Receivable', 'type' => 'Asset',
+        'classification' => 'accounts_receivable', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $supplier = Supplier::create(['code' => 'DIR-'.$actor->id, 'name' => 'Direct Purchase Supplier', 'created_by' => $actor->id]);
+    $payment = app(CashDisbursementService::class)->saveDraft([
+        'payee' => $supplier->name, 'supplierId' => null, 'paymentDate' => now('Asia/Manila')->toDateString(),
+        'method' => 'Bank Transfer', 'moneyAccountId' => (string) $bank->id,
+        'reference' => 'DIRECT-PUR-'.$actor->id, 'checkNumber' => '',
+        'description' => 'Direct paid purchase', 'evidenceReference' => 'Supplier invoice DIR-'.$actor->id,
+        'amount' => '50000.00',
+        'allocations' => [['accounting_account_id' => (string) $expense->id, 'description' => 'Direct equipment purchase', 'amount' => '50000.00']],
+    ], $actor->id);
+    $payment = app(CashDisbursementService::class)->post($payment->id, $actor->id);
+    $correction = app(SupplierPurchaseCorrectionService::class)->correctDirectPurchase($payment->id, [
+        'supplier_id' => $supplier->id, 'reason' => 'Supplier issued a direct-purchase credit',
+        'allocations' => [[
+            'line_id' => $payment->lines->first()->id, 'corrected_amount_cents' => 4_000_000,
+        ]],
+    ], $actor->id);
+
+    expect($correction->source_type)->toBe('direct_purchase')
+        ->and($correction->refund_due_cents)->toBe(1_000_000)
+        ->and($payment->fresh()->status)->toBe('posted')
+        ->and($payment->fresh()->amount_cents)->toBe(5_000_000)
+        ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $receivable->id)->debit_cents)->toBe(1_000_000)
+        ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $expense->id)->credit_cents)->toBe(1_000_000);
+
+    $receipt = app(SupplierPurchaseCorrectionService::class)->receiveRefund($correction->id, [
+        'amount_cents' => 1_000_000, 'money_account_id' => $bank->id,
+        'reference' => 'DIRECT-REF-'.$actor->id, 'evidence_reference' => 'Supplier credit bank receipt',
+        'receipt_date' => now('Asia/Manila')->toDateString(),
+    ], $actor->id);
+
+    expect($receipt->amount_cents)->toBe(1_000_000)
+        ->and((int) DB::table('supplier_refund_receipts')->where('supplier_purchase_correction_id', $correction->id)->sum('amount_cents'))->toBe(1_000_000)
+        ->and($payment->fresh()->journal_id)->not->toBe($correction->journal_id);
 });

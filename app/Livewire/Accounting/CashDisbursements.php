@@ -10,6 +10,8 @@ use App\Models\Supplier;
 use App\Models\SupplierOpeningInvoice;
 use App\Models\SupplierPurchaseInvoice;
 use App\Services\Accounting\CashDisbursementService;
+use App\Models\SupplierPurchaseCorrection;
+use App\Services\Accounting\SupplierPurchaseCorrectionService;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -56,10 +58,27 @@ class CashDisbursements extends Component
 
     public string $reversalReason = '';
 
+    public string $directCorrectionReason = '';
+
+    public string $directCorrectionSupplierId = '';
+
+    public array $directCorrectionLines = [];
+
+    public string $refundAmount = '';
+
+    public string $refundMoneyAccountId = '';
+
+    public string $refundReference = '';
+
+    public string $refundEvidenceReference = '';
+
+    public string $refundDate = '';
+
     public function mount(): void
     {
         $this->paymentDate = now('Asia/Manila')->toDateString();
         $this->allocations = [$this->emptyAllocation()];
+        $this->refundDate = now('Asia/Manila')->toDateString();
     }
 
     public function addAllocation(): void
@@ -164,6 +183,58 @@ class CashDisbursements extends Component
         session()->flash('disbursement-message', 'Linked disbursement reversal posted; original payment history is unchanged.');
     }
 
+    public function startDirectPurchaseCorrection(int $disbursementId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $payment = CashDisbursementRecord::query()->with('lines')->findOrFail($disbursementId);
+        abort_unless($payment->status === 'posted' && $payment->supplier_id === null, 404);
+        abort_unless(! SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $payment->id)->exists(), 404);
+        $this->selectedId = $payment->id;
+        $this->directCorrectionSupplierId = '';
+        $this->directCorrectionReason = '';
+        $this->directCorrectionLines = $payment->lines->map(fn ($line) => [
+            'line_id' => $line->id,
+            'corrected_amount' => number_format($line->amount_cents / 100, 2, '.', ''),
+            'remaining_inventory' => '0.00',
+            'consumed_cost' => '0.00',
+            'consumed_accounting_account_id' => '',
+        ])->all();
+    }
+
+    public function postDirectPurchaseCorrection(int $disbursementId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $allocations = array_map(fn (array $line): array => [
+            'line_id' => $line['line_id'],
+            'corrected_amount_cents' => $this->amountCents($line['corrected_amount']),
+            'remaining_inventory_cents' => $this->amountCents($line['remaining_inventory'] ?: '0'),
+            'consumed_cost_cents' => $this->amountCents($line['consumed_cost'] ?: '0'),
+            'consumed_accounting_account_id' => $line['consumed_accounting_account_id'] ?: null,
+        ], $this->directCorrectionLines);
+        app(SupplierPurchaseCorrectionService::class)->correctDirectPurchase($disbursementId, [
+            'supplier_id' => $this->directCorrectionSupplierId,
+            'reason' => $this->directCorrectionReason,
+            'allocations' => $allocations,
+        ], (int) auth()->id());
+        $this->reset(['directCorrectionReason', 'directCorrectionSupplierId', 'directCorrectionLines']);
+        session()->flash('disbursement-message', 'Posted linked direct-purchase cost correction and Supplier Refund Receivable; the payment and receipt history remain unchanged.');
+    }
+
+    public function receiveSupplierRefund(int $correctionId): void
+    {
+        $this->authorizePermission('accounting.post-supplier-refunds');
+        app(SupplierPurchaseCorrectionService::class)->receiveRefund($correctionId, [
+            'amount_cents' => $this->amountCents($this->refundAmount),
+            'money_account_id' => $this->refundMoneyAccountId,
+            'reference' => $this->refundReference,
+            'evidence_reference' => $this->refundEvidenceReference,
+            'receipt_date' => $this->refundDate ?: now('Asia/Manila')->toDateString(),
+        ], (int) auth()->id());
+        $this->reset(['refundAmount', 'refundMoneyAccountId', 'refundReference', 'refundEvidenceReference']);
+        $this->refundDate = now('Asia/Manila')->toDateString();
+        session()->flash('disbursement-message', 'Supplier refund receipt posted to Cash/Bank and cleared against the linked refund receivable.');
+    }
+
     public function showDisbursement(int $disbursementId): void
     {
         $this->authorizePermission('accounting.view');
@@ -193,13 +264,16 @@ class CashDisbursements extends Component
         $selected = $this->selectedId
             ? CashDisbursementRecord::query()->with(['lines.account', 'lines.invoice', 'lines.openingInvoice', 'lines.inventory', 'lines.stockMovement', 'supplier', 'moneyAccount', 'journal.lines.account', 'reversalOf', 'reversals.journal'])->find($this->selectedId)
             : null;
+        $directCorrections = $selected
+            ? SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $selected->id)
+                ->with(['journal.lines.account', 'refundReceipts.journal'])->orderBy('id')->get()
+            : collect();
         $otherMethods = AccountingPostingMapping::query()->where('source', 'like', 'disbursement_method:%')
             ->with('account')->get()->filter(fn ($mapping) => $mapping->isApprovedForPosting())
             ->map(fn ($mapping) => substr($mapping->source, strlen('disbursement_method:')))->values();
 
         $suppliers = Supplier::query()->orderBy('name')->get();
-        $eligibleInvoices = SupplierPurchaseInvoice::query()->where('status', 'posted')
-            ->when($this->supplierId !== '', fn ($query) => $query->where('supplier_id', $this->supplierId))
+        $eligibleInvoices = SupplierPurchaseInvoice::query()->where('status', 'posted')->whereNull('correction_of_id')
             ->orderBy('due_date')->get()
             ->filter(fn (SupplierPurchaseInvoice $invoice) => $invoice->outstandingAmountCents() > 0)
             ->map(fn (SupplierPurchaseInvoice $invoice) => [
@@ -227,21 +301,46 @@ class CashDisbursements extends Component
             ? Inventory::query()->where('status', 'active')->orderBy('name')->get()
             : collect();
 
+        $moneyAccounts = AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
+            ->where('type', 'Asset')->whereIn('classification', ['cash', 'bank'])->orderBy('code')->get();
         return view('livewire.accounting.cash-disbursements', [
             'disbursements' => $disbursements,
             'selectedDisbursement' => $selected,
             'suppliers' => $suppliers,
             'eligibleInvoices' => $eligibleInvoices,
-            'moneyAccounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
-                ->where('type', 'Asset')->whereIn('classification', ['cash', 'bank'])->orderBy('code')->get(),
+            'moneyAccounts' => $moneyAccounts,
             'debitAccounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
                 ->whereIn('type', ['Asset', 'Expense'])
                 ->whereNotIn('classification', ['cash', 'bank', 'accounts_receivable', 'card_clearing', 'accounts_payable', 'inventory', 'input_vat', 'output_vat', 'cost_of_goods_sold'])
                 ->orderBy('code')->get(),
             'inventoryItems' => $inventoryItems,
+
+            'directCorrections' => $directCorrections,
+            'canCorrectPurchases' => auth()->user()?->can('accounting.correct-supplier-purchases'),
+            'canPostRefunds' => auth()->user()?->can('accounting.post-supplier-refunds'),
             'otherMethods' => $otherMethods,
+            'correctionExpenseAccounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
+                ->where('type', 'Expense')->orderBy('code')->get(),
             'postedTotalCents' => $disbursements->where('status', 'posted')->whereNull('reversal_of_id')->sum('amount_cents'),
         ])->layout('layouts.app', ['title' => 'Cash Disbursements']);
+    }
+
+    private function amountCents(string $amount): int
+    {
+        $amount = trim($amount);
+        if (! preg_match('/^\d+(?:\.\d{1,2})?$/D', $amount)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['correctionLines' => 'Enter PHP amounts with no more than two decimal places.']);
+        }
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+        $whole = ltrim($whole, '0') ?: '0';
+        $maximumWhole = (string) intdiv(PHP_INT_MAX, 100);
+        if (strlen($whole) > strlen($maximumWhole)
+            || (strlen($whole) === strlen($maximumWhole) && strcmp($whole, $maximumWhole) > 0)
+            || ($whole === $maximumWhole && (int) str_pad($fraction, 2, '0') > PHP_INT_MAX % 100)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['correctionLines' => 'Amount exceeds the supported PHP-centavo range.']);
+        }
+
+        return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
     }
 
     private function emptyAllocation(): array

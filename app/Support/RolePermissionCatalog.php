@@ -45,6 +45,8 @@ class RolePermissionCatalog
                 'accounting.maintain-suppliers' => 'Maintain supplier identities and details',
                 'accounting.prepare-supplier-purchases' => 'Prepare and maintain supplier purchase drafts',
                 'accounting.post-supplier-purchases' => 'Post received supplier purchases',
+                'accounting.correct-supplier-purchases' => 'Correct posted supplier purchases with reviewed allocations',
+                'accounting.post-supplier-refunds' => 'Post actual supplier refund receipts',
                 'accounting.maintain-opening-books' => 'Prepare accounting cutover and opening schedules',
                 'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
             ],

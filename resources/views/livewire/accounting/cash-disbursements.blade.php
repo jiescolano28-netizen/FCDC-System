@@ -123,6 +123,50 @@
             </ul>
             @if ($selectedDisbursement->reversal_of_id)<p>Linked reversal of {{ $selectedDisbursement->reversalOf?->reference }}. Reason: {{ $selectedDisbursement->correction_reason }}</p>@endif
             @if ($selectedDisbursement->reversals->isNotEmpty())<p>Reversed by {{ $selectedDisbursement->reversals->first()->reference }}. Reason: {{ $selectedDisbursement->reversals->first()->correction_reason }}</p>@endif
+            @if ($directCorrections->isEmpty() && $selectedDisbursement->status === 'posted' && ! $selectedDisbursement->supplier_id && ! $selectedDisbursement->reversal_of_id && $selectedDisbursement->reversals->isEmpty() && $canCorrectPurchases)
+                <button type="button" wire:click="startDirectPurchaseCorrection({{ $selectedDisbursement->id }})">Correct directly paid purchase</button>
+            @endif
+            @if ($directCorrectionLines && $selectedDisbursement->id === $this->selectedId)
+                <form wire:submit="postDirectPurchaseCorrection({{ $selectedDisbursement->id }})">
+                    <h3>Correct directly paid purchase</h3>
+                    <label>Supplier<select wire:model="directCorrectionSupplierId" required><option value="">Select supplier</option>@foreach ($suppliers as $supplier)<option value="{{ $supplier->id }}">{{ $supplier->code }} — {{ $supplier->name }}</option>@endforeach</select></label>
+                    <label>Reason<textarea wire:model="directCorrectionReason" maxlength="4000" required></textarea></label>
+                    @foreach ($directCorrectionLines as $index => $correctionLine)
+                        @php($sourceLine = $selectedDisbursement->lines->firstWhere('id', $correctionLine['line_id']))
+                        <fieldset wire:key="direct-correction-line-{{ $sourceLine->id }}">
+                            <legend>{{ $sourceLine->description }} — original PHP {{ number_format($sourceLine->amount_cents / 100, 2) }}</legend>
+                            <label>Corrected line value (PHP)<input inputmode="decimal" wire:model="directCorrectionLines.{{ $index }}.corrected_amount" required></label>
+                            @if ($sourceLine->inventory_id)
+                                <p>Physical quantity remains {{ $sourceLine->quantity }}; value corrections do not reverse stock.</p>
+                                <label>Reviewed remaining inventory reduction (PHP)<input inputmode="decimal" wire:model="directCorrectionLines.{{ $index }}.remaining_inventory"></label>
+                                <label>Reviewed consumed cost reduction (PHP)<input inputmode="decimal" wire:model="directCorrectionLines.{{ $index }}.consumed_cost"></label>
+                                <label>Consumed cost account<select wire:model="directCorrectionLines.{{ $index }}.consumed_accounting_account_id"><option value="">Select approved expense account</option>@foreach ($correctionExpenseAccounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @endif
+                        </fieldset>
+                    @endforeach
+                    <button type="submit">Post direct purchase correction</button>
+                </form>
+            @endif
+            @foreach ($directCorrections as $correction)
+                <article>
+                    <h3>Direct purchase correction {{ $correction->id }}</h3>
+                    <p>{{ $correction->reason }} · Supplier {{ $correction->supplier?->name }} · Original PHP {{ number_format($correction->original_amount_cents / 100, 2) }} · Corrected PHP {{ number_format($correction->corrected_amount_cents / 100, 2) }} · Refund due PHP {{ number_format(max(0, $correction->refund_due_cents - $correction->refundReceipts->sum('amount_cents')) / 100, 2) }}</p>
+                    <p>Journal {{ $correction->journal?->reference }}</p>
+                    @foreach ($correction->refundReceipts as $refundReceipt)
+                        <p>Refund received {{ $refundReceipt->receipt_date->format('Y-m-d') }} · {{ $refundReceipt->reference }} · PHP {{ number_format($refundReceipt->amount_cents / 100, 2) }} · Journal {{ $refundReceipt->journal?->reference }}</p>
+                    @endforeach
+                    @if ($canPostRefunds && $correction->refund_due_cents > $correction->refundReceipts->sum('amount_cents'))
+                        <form wire:submit="receiveSupplierRefund({{ $correction->id }})">
+                            <label>Actual refund received (PHP)<input inputmode="decimal" wire:model="refundAmount" required></label>
+                            <label>Cash/Bank account<select wire:model="refundMoneyAccountId" required><option value="">Select account</option>@foreach ($moneyAccounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            <label>Receipt reference<input wire:model="refundReference" maxlength="100" required></label>
+                            <label>Evidence reference<input wire:model="refundEvidenceReference" maxlength="255" required></label>
+                            <label>Receipt date<input type="date" wire:model="refundDate" required></label>
+                            <button type="submit">Post linked refund receipt</button>
+                        </form>
+                    @endif
+                </article>
+            @endforeach
             @if ($selectedDisbursement->status === 'posted' && ! $selectedDisbursement->reversal_of_id && $selectedDisbursement->reversals->isEmpty() && ! $selectedDisbursement->lines->contains(fn ($line) => $line->inventory_id !== null))
                 @can('accounting.post-disbursements')
                     <form wire:submit="reverseDisbursement({{ $selectedDisbursement->id }})"><label>Reason for returned / voided payment<textarea wire:model="reversalReason" maxlength="4000" required></textarea></label><button type="submit">Post linked reversal</button></form>

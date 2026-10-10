@@ -147,9 +147,19 @@ class TrialBalance extends Component
     {
         $openingInvoices = SupplierOpeningInvoice::query()->where('status', 'posted')->with('openingJournal')
             ->get()->filter(fn (SupplierOpeningInvoice $invoice) => $invoice->openingJournal?->accounting_date?->toDateString() <= $date);
-        $purchaseInvoices = SupplierPurchaseInvoice::query()->where('status', 'posted')->whereDate('recognition_date', '<=', $date)->get();
+        $purchaseInvoices = SupplierPurchaseInvoice::query()->where('status', 'posted')->whereNull('correction_of_id')
+            ->whereNull('supplier_purchase_correction_id')->whereDate('recognition_date', '<=', $date)->get();
         $invoiceCents = (int) $openingInvoices->sum(fn ($invoice) => $invoice->reversal_of_id ? -(int) $invoice->amount_cents : (int) $invoice->amount_cents)
             + (int) $purchaseInvoices->sum('gross_amount_cents');
+        $apAccountIds = AccountingAccount::query()->where('classification', 'accounts_payable')->pluck('id');
+        $correctionApCents = (int) DB::table('accounting_journals')
+            ->join('accounting_journal_lines', 'accounting_journal_lines.accounting_journal_id', '=', 'accounting_journals.id')
+            ->whereIn('accounting_journals.source_type', ['supplier_purchase_correction', 'direct_purchase_correction'])
+            ->where('accounting_journals.status', 'posted')->whereDate('accounting_journals.accounting_date', '<=', $date)
+            ->whereIn('accounting_journal_lines.accounting_account_id', $apAccountIds)
+            ->selectRaw('COALESCE(SUM(accounting_journal_lines.credit_cents - accounting_journal_lines.debit_cents), 0) as ap_change')
+            ->value('ap_change');
+        $invoiceCents += $correctionApCents;
         $paymentsCents = (int) DB::table('cash_disbursement_lines')
             ->join('cash_disbursements', 'cash_disbursements.id', '=', 'cash_disbursement_lines.cash_disbursement_id')
             ->where('cash_disbursements.status', 'posted')

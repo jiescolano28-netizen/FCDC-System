@@ -259,7 +259,8 @@ class CashDisbursementService
                     throw ValidationException::withMessages(["allocations.$index.invoice_id" => 'Select a posted invoice belonging to this supplier.']);
                 }
                 $invoice = $invoiceType === 'purchase'
-                    ? SupplierPurchaseInvoice::query()->whereKey($invoiceId)->where('supplier_id', $supplierId)->where('status', 'posted')->first()
+                    ? SupplierPurchaseInvoice::query()->whereKey($invoiceId)->where('supplier_id', $supplierId)
+                        ->where('status', 'posted')->whereNull('correction_of_id')->first()
                     : SupplierOpeningInvoice::activePosted()->whereKey($invoiceId)->where('supplier_id', $supplierId)->first();
                 if (! $invoice) {
                     throw ValidationException::withMessages(["allocations.$index.invoice_id" => 'Select a posted invoice belonging to this supplier.']);
@@ -376,7 +377,7 @@ class CashDisbursementService
                 throw ValidationException::withMessages(['allocations' => 'Supplier payments require explicit invoice allocations only.']);
             }
             $purchaseInvoices = SupplierPurchaseInvoice::query()->whereIn('id', $purchaseInvoiceIds)
-                ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+                ->whereNull('correction_of_id')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $openingInvoices = SupplierOpeningInvoice::activePosted()->whereIn('id', $openingInvoiceIds)
                 ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             if ($purchaseInvoices->count() !== $purchaseInvoiceIds->count()

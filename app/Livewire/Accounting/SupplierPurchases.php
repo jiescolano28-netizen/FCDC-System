@@ -7,7 +7,9 @@ use App\Models\Inventory;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierPurchaseInvoice;
+use App\Models\SupplierPurchaseCorrection;
 use App\Services\Accounting\SupplierPurchaseService;
+use App\Services\Accounting\SupplierPurchaseCorrectionService;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -43,6 +45,20 @@ class SupplierPurchases extends Component
     public string $fromDate = '';
 
     public string $toDate = '';
+
+    public string $correctionReason = '';
+
+    public array $correctionLines = [];
+
+    public string $refundAmount = '';
+
+    public string $refundMoneyAccountId = '';
+
+    public string $refundReference = '';
+
+    public string $refundEvidenceReference = '';
+
+    public string $refundDate = '';
 
     public function mount(): void
     {
@@ -122,6 +138,57 @@ class SupplierPurchases extends Component
         session()->flash('purchase-message', 'Supplier purchase, payable, valued receipts, and journal posted atomically.');
     }
 
+    public function startCorrection(int $invoiceId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $invoice = SupplierPurchaseInvoice::query()->with('lines')->findOrFail($invoiceId);
+        abort_unless($invoice->status === 'posted' && $invoice->correction_of_id === null && ! $invoice->corrections()->exists(), 404);
+        $this->selectedId = $invoice->id;
+        $this->correctionReason = '';
+        $this->correctionLines = $invoice->lines->map(fn ($line) => [
+            'line_id' => $line->id,
+            'corrected_amount' => number_format($line->line_amount_cents / 100, 2, '.', ''),
+            'remaining_inventory' => '0.00',
+            'consumed_cost' => '0.00',
+            'consumed_accounting_account_id' => '',
+        ])->all();
+    }
+
+    public function postCorrection(int $invoiceId): void
+    {
+        $this->authorizePermission('accounting.correct-supplier-purchases');
+        $allocations = array_map(function (array $line): array {
+            return [
+                'line_id' => $line['line_id'],
+                'corrected_amount_cents' => $this->amountCents($line['corrected_amount']),
+                'remaining_inventory_cents' => $this->amountCents($line['remaining_inventory'] ?: '0'),
+                'consumed_cost_cents' => $this->amountCents($line['consumed_cost'] ?: '0'),
+                'consumed_accounting_account_id' => $line['consumed_accounting_account_id'] ?: null,
+            ];
+        }, $this->correctionLines);
+        app(SupplierPurchaseCorrectionService::class)->correct($invoiceId, [
+            'reason' => $this->correctionReason,
+            'allocations' => $allocations,
+        ], (int) auth()->id());
+        $this->reset(['correctionReason', 'correctionLines']);
+        session()->flash('purchase-message', 'Posted linked purchase correction; original invoice, payments, and stock history remain intact.');
+    }
+
+    public function receiveSupplierRefund(int $correctionId): void
+    {
+        $this->authorizePermission('accounting.post-supplier-refunds');
+        app(SupplierPurchaseCorrectionService::class)->receiveRefund($correctionId, [
+            'amount_cents' => $this->amountCents($this->refundAmount),
+            'money_account_id' => $this->refundMoneyAccountId,
+            'reference' => $this->refundReference,
+            'evidence_reference' => $this->refundEvidenceReference,
+            'receipt_date' => $this->refundDate ?: now('Asia/Manila')->toDateString(),
+        ], (int) auth()->id());
+        $this->reset(['refundAmount', 'refundMoneyAccountId', 'refundReference', 'refundEvidenceReference']);
+        $this->refundDate = now('Asia/Manila')->toDateString();
+        session()->flash('purchase-message', 'Supplier refund receipt posted to Cash/Bank and cleared against the linked refund receivable.');
+    }
+
     public function showInvoice(int $invoiceId): void
     {
         $this->authorizePermission('accounting.view');
@@ -132,7 +199,7 @@ class SupplierPurchases extends Component
     {
         $this->authorizePermission('accounting.view');
         $today = now('Asia/Manila')->toDateString();
-        $query = SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal'])
+        $query = SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal', 'correctionParent'])
             ->when(trim($this->search) !== '', function ($query): void {
                 $term = '%'.trim($this->search).'%';
                 $query->where(function ($query) use ($term): void {
@@ -156,14 +223,32 @@ class SupplierPurchases extends Component
             'Outstanding' => $invoice->status === 'posted' && $invoice->outstandingAmountCents() > 0,
             default => true,
         })->values();
-        $posted = $all->where('status', 'posted');
+        $posted = $all->where('status', 'posted')->whereNull('correction_of_id');
         $selected = $this->selectedId
-            ? SupplierPurchaseInvoice::query()->with(['lines.inventory', 'lines.account', 'journal.lines.account', 'paymentAllocations.disbursement.reversalOf', 'paymentAllocations.disbursement.reversals'])->find($this->selectedId)
+            ? SupplierPurchaseInvoice::query()->with([
+                'lines.inventory', 'lines.account', 'journal.lines.account',
+                'paymentAllocations.disbursement.reversalOf', 'paymentAllocations.disbursement.reversals',
+                'corrections.journal.lines.account', 'corrections.refundReceipts.journal',
+                'correctionChildren.corrections', 'correctionParent.corrections',
+            ])->find($this->selectedId)
             : null;
-        $receiptMovements = $selected
-            ? StockMovement::query()->where('source_reference', 'supplier_purchase:'.$selected->id)
-                ->with('inventory')->orderBy('effective_date')->orderBy('id')->get()
-            : collect();
+        $receiptMovements = collect();
+        if ($selected) {
+            $receiptMovements = StockMovement::query()
+                ->where(function ($query) use ($selected): void {
+                    $query->where('source_reference', 'supplier_purchase:'.$selected->id);
+                    if ($selected->correction_of_id) {
+                        $query->orWhere('source_reference', 'supplier_purchase:'.$selected->correction_of_id);
+                    }
+                    $correctionIds = SupplierPurchaseCorrection::query()
+                        ->where('supplier_purchase_invoice_id', $selected->correction_of_id ?? $selected->id)->pluck('id');
+                    if ($correctionIds->isNotEmpty()) {
+                        $query->orWhereIn('source_reference', $correctionIds->map(fn ($id) => 'supplier_purchase_correction:'.$id));
+                    }
+                })->with('inventory')->orderBy('effective_date')->orderBy('id')->get();
+        }
+        $cashAccounts = AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')
+            ->where('type', 'Asset')->whereIn('classification', ['cash', 'bank'])->orderBy('code')->get();
 
         return view('livewire.accounting.supplier-purchases', [
             'invoices' => $invoices,
@@ -176,11 +261,14 @@ class SupplierPurchases extends Component
                 ->orderBy('code')->get(),
             'inventoryItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(),
             'today' => $today,
-            'purchaseTotalCents' => $posted->sum('gross_amount_cents'),
+            'purchaseTotalCents' => $posted->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->activeCorrectedAmountCents()),
             'paidTotalCents' => $posted->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->paidAmountCents()),
             'outstandingCents' => $posted->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->outstandingAmountCents()),
             'overdueCents' => $posted->filter(fn (SupplierPurchaseInvoice $invoice) => $invoice->isOverdueOn($today))
                 ->sum(fn (SupplierPurchaseInvoice $invoice) => $invoice->outstandingAmountCents()),
+            'cashAccounts' => $cashAccounts,
+            'canCorrectPurchases' => auth()->user()?->can('accounting.correct-supplier-purchases'),
+            'canPostRefunds' => auth()->user()?->can('accounting.post-supplier-refunds'),
         ])->layout('layouts.app', ['title' => 'Supplier Purchases']);
     }
 
@@ -195,6 +283,24 @@ class SupplierPurchases extends Component
         $this->recognitionDate = now('Asia/Manila')->toDateString();
         $this->dueDate = $this->recognitionDate;
         $this->lines = [$this->emptyLine()];
+    }
+
+    private function amountCents(string $amount): int
+    {
+        $amount = trim($amount);
+        if (! preg_match('/^\d+(?:\.\d{1,2})?$/D', $amount)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['correctionLines' => 'Enter PHP amounts with no more than two decimal places.']);
+        }
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+        $whole = ltrim($whole, '0') ?: '0';
+        $maximumWhole = (string) intdiv(PHP_INT_MAX, 100);
+        if (strlen($whole) > strlen($maximumWhole)
+            || (strlen($whole) === strlen($maximumWhole) && strcmp($whole, $maximumWhole) > 0)
+            || ($whole === $maximumWhole && (int) str_pad($fraction, 2, '0') > PHP_INT_MAX % 100)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['correctionLines' => 'Amount exceeds the supported PHP-centavo range.']);
+        }
+
+        return ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
     }
 
     private function authorizePermission(string $permission): void

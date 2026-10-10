@@ -51,11 +51,14 @@
         </div>
         <div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Supplier</th><th>Invoice</th><th>Recognition</th><th>Due</th><th class="numeric">Gross</th><th class="numeric">Paid</th><th class="numeric">Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>
             @forelse ($invoices as $invoice)
-                <tr wire:key="purchase-invoice-{{ $invoice->id }}"><td>{{ $invoice->supplier_name_snapshot }}</td><td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td><td class="numeric">{{ number_format($invoice->gross_amount_cents / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->paidAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->outstandingAmountCents() / 100, 2) }}</td><td>{{ $invoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $invoice->payableStatus() }}</td><td>
+                <tr wire:key="purchase-invoice-{{ $invoice->id }}"><td>{{ $invoice->supplier_name_snapshot }}</td><td>{{ $invoice->invoice_number }} @if ($invoice->correction_of_id)<small>Corrected identity for {{ $invoice->correctionParent?->invoice_number }}</small>@elseif ($invoice->correctionChildren->isNotEmpty())<small>Corrected</small>@endif</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td><td class="numeric">{{ number_format($invoice->activeCorrectedAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->paidAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->outstandingAmountCents() / 100, 2) }}</td><td>{{ $invoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $invoice->payableStatus() }}</td><td>
                     <button type="button" wire:click="showInvoice({{ $invoice->id }})">Detail / print</button>
                     @if ($invoice->status === 'draft')
                         @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
                         @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
+                    @if ($invoice->status === 'posted' && ! $invoice->correction_of_id && $invoice->corrections->isEmpty() && $canCorrectPurchases)
+                        <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
+                    @endif
                     @endif
                 </td></tr>
             @empty<tr><td colspan="9">No supplier invoices match these filters.</td></tr>@endforelse
@@ -67,10 +70,56 @@
         <section id="supplier-purchase-print" class="chart-account-card" aria-labelledby="purchase-detail-heading">
             <h2 id="purchase-detail-heading">Supplier invoice {{ $selectedInvoice->invoice_number }} · {{ ucfirst($selectedInvoice->status) }}</h2>
             <p>{{ $selectedInvoice->supplier_name_snapshot }} ({{ $selectedInvoice->supplier_code_snapshot }})</p><p>{{ $selectedInvoice->description }}</p>
-            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Receipt confirmed</dt><dd>{{ $selectedInvoice->receipt_confirmed ? 'Yes' : 'No' }}</dd><dt>Gross amount</dt><dd>PHP {{ number_format($selectedInvoice->gross_amount_cents / 100, 2) }}</dd><dt>Paid</dt><dd>PHP {{ number_format($selectedInvoice->paidAmountCents() / 100, 2) }}</dd><dt>Outstanding</dt><dd>PHP {{ number_format($selectedInvoice->outstandingAmountCents() / 100, 2) }}</dd><dt>Payable status</dt><dd>{{ $selectedInvoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $selectedInvoice->payableStatus() }}</dd><dt>Accounting journal</dt><dd>{{ $selectedInvoice->journal?->reference ?? 'Not posted' }}</dd></dl>
+            <dl><dt>Recognition date</dt><dd>{{ $selectedInvoice->recognition_date->format('Y-m-d') }}</dd><dt>Due date</dt><dd>{{ $selectedInvoice->due_date->format('Y-m-d') }}</dd><dt>Terms</dt><dd>{{ $selectedInvoice->terms ?: 'Not recorded' }}</dd><dt>Receipt confirmed</dt><dd>{{ $selectedInvoice->receipt_confirmed ? 'Yes' : 'No' }}</dd><dt>Original gross amount</dt><dd>PHP {{ number_format($selectedInvoice->gross_amount_cents / 100, 2) }}</dd><dt>Corrected active value</dt><dd>PHP {{ number_format($selectedInvoice->activeCorrectedAmountCents() / 100, 2) }}</dd><dt>Paid</dt><dd>PHP {{ number_format($selectedInvoice->paidAmountCents() / 100, 2) }}</dd><dt>Outstanding AP</dt><dd>PHP {{ number_format($selectedInvoice->outstandingAmountCents() / 100, 2) }}</dd><dt>Supplier refund receivable outstanding</dt><dd>PHP {{ number_format($selectedInvoice->supplierRefundDueCents() / 100, 2) }}</dd><dt>Payable status</dt><dd>{{ $selectedInvoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $selectedInvoice->payableStatus() }}</dd><dt>Accounting journal</dt><dd>{{ $selectedInvoice->journal?->reference ?? 'Not posted' }}</dd>@if ($selectedInvoice->correction_of_id)<dt>Corrected invoice</dt><dd>{{ $selectedInvoice->correctionParent?->invoice_number }} · {{ $selectedInvoice->correction_reason }}</dd>@endif</dl>
             <h3>Allocations and receipt history</h3><table class="reports-table"><thead><tr><th>Description</th><th>Allocation</th><th>Quantity</th><th class="numeric">Amount</th></tr></thead><tbody>@foreach ($selectedInvoice->lines as $line)<tr><td>{{ $line->description }} @if ($line->inventory) · {{ $line->inventory->name }} @elseif ($line->account) · {{ $line->account->code }} {{ $line->account->name }} @endif</td><td>{{ $line->inventory_id ? 'Inventory' : 'Asset / expense' }}</td><td>{{ $line->quantity ?? '—' }}</td><td class="numeric">{{ number_format($line->line_amount_cents / 100, 2) }}</td></tr>@endforeach</tbody></table>
+
+            @php($purchaseCorrections = $selectedInvoice->correction_of_id ? $selectedInvoice->correctionParent?->corrections : $selectedInvoice->corrections)
+            @if ($purchaseCorrections?->isNotEmpty())
+                <h3>Financial correction and supplier refund history</h3>
+                @foreach ($purchaseCorrections as $correction)
+                    <article>
+                        <p>Correction {{ $correction->id }} · {{ $correction->accounting_date->format('Y-m-d') }} · {{ $correction->reason }}</p>
+                        <p>Original PHP {{ number_format($correction->original_amount_cents / 100, 2) }} · Corrected PHP {{ number_format($correction->corrected_amount_cents / 100, 2) }} · Refund due PHP {{ number_format(max(0, $correction->refund_due_cents - $correction->refundReceipts->sum('amount_cents')) / 100, 2) }}</p>
+                        <p>Journal {{ $correction->journal?->reference }} · corrected invoice {{ $correction->replacementInvoice?->invoice_number }}</p>
+                        @foreach ($correction->refundReceipts as $refundReceipt)
+                            <p>Refund received {{ $refundReceipt->receipt_date->format('Y-m-d') }} · {{ $refundReceipt->reference }} · {{ $refundReceipt->evidence_reference }} · PHP {{ number_format($refundReceipt->amount_cents / 100, 2) }} · Journal {{ $refundReceipt->journal?->reference }}</p>
+                        @endforeach
+                        @if ($canPostRefunds && $correction->refund_due_cents > $correction->refundReceipts->sum('amount_cents'))
+                            <form wire:submit="receiveSupplierRefund({{ $correction->id }})">
+                                <label>Actual refund received (PHP)<input inputmode="decimal" wire:model="refundAmount" required></label>
+                                <label>Cash/Bank account<select wire:model="refundMoneyAccountId" required><option value="">Select account</option>@foreach ($cashAccounts as $cashAccount)<option value="{{ $cashAccount->id }}">{{ $cashAccount->code }} — {{ $cashAccount->name }}</option>@endforeach</select></label>
+                                <label>Receipt reference<input wire:model="refundReference" maxlength="100" required></label>
+                                <label>Evidence reference<input wire:model="refundEvidenceReference" maxlength="255" required></label>
+                                <label>Receipt date<input type="date" wire:model="refundDate" required></label>
+                                <button type="submit">Post linked refund receipt</button>
+                            </form>
+                        @endif
+                    </article>
+                @endforeach
+            @endif
+            @if ($correctionLines && $selectedInvoice->id === $this->selectedId)
+                <form wire:submit="postCorrection({{ $selectedInvoice->id }})">
+                    <h3>Correct posted purchase</h3>
+                    <label>Reason for correction<textarea wire:model="correctionReason" maxlength="4000" required></textarea></label>
+                    @foreach ($correctionLines as $index => $correctionLine)
+                        @php($sourceLine = $selectedInvoice->lines->firstWhere('id', $correctionLine['line_id']))
+                        <fieldset wire:key="correction-line-{{ $sourceLine->id }}">
+                            <legend>{{ $sourceLine->description }} — original PHP {{ number_format($sourceLine->line_amount_cents / 100, 2) }}</legend>
+                            <label>Corrected line value (PHP)<input inputmode="decimal" wire:model="correctionLines.{{ $index }}.corrected_amount" required></label>
+                            @if ($sourceLine->inventory_id)
+                                <p>Physical quantity remains {{ $sourceLine->quantity }} unless a separate authorized physical correction is completed.</p>
+                                <label>Reviewed remaining inventory value change (PHP)<input inputmode="decimal" wire:model="correctionLines.{{ $index }}.remaining_inventory"></label>
+                                <label>Reviewed consumed cost change (PHP)<input inputmode="decimal" wire:model="correctionLines.{{ $index }}.consumed_cost"></label>
+                                <label>Consumed cost account<select wire:model="correctionLines.{{ $index }}.consumed_accounting_account_id"><option value="">Select approved expense account</option>@foreach ($accounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @endif
+                        </fieldset>
+                    @endforeach
+                    <button type="submit">Post linked financial correction</button>
+                </form>
+            @endif
+            @php($purchasePayments = $selectedInvoice->correction_of_id ? ($selectedInvoice->correctionParent?->paymentAllocations ?? collect()) : $selectedInvoice->paymentAllocations)
             <h3>Payment allocation and correction history</h3><table class="reports-table"><thead><tr><th>Date</th><th>Payment reference</th><th>Evidence</th><th>Journal</th><th>Actor</th><th class="numeric">Allocation</th><th>Correction</th></tr></thead><tbody>
-                @forelse ($selectedInvoice->paymentAllocations->filter(fn ($allocation) => $allocation->disbursement->status === 'posted')->sortBy(fn ($allocation) => [$allocation->disbursement->payment_date, $allocation->disbursement->id]) as $allocation)
+                @forelse ($purchasePayments->filter(fn ($allocation) => $allocation->disbursement->status === 'posted')->sortBy(fn ($allocation) => [$allocation->disbursement->payment_date, $allocation->disbursement->id]) as $allocation)
                     @php($payment = $allocation->disbursement)
                     <tr><td>{{ $payment->payment_date->format('Y-m-d') }}</td><td>{{ $payment->reference }} · {{ $payment->method }}</td><td>{{ $payment->evidence_reference }}</td><td>{{ $payment->journal?->reference ?? 'Not posted' }}</td><td>{{ $payment->posted_by }}</td><td class="numeric">{{ $payment->reversal_of_id ? '−' : '' }}PHP {{ number_format($allocation->amount_cents / 100, 2) }}</td><td>@if ($payment->reversal_of_id) Reversal of {{ $payment->reversalOf?->reference }}: {{ $payment->correction_reason }} @elseif ($payment->reversals->isNotEmpty()) Reversed by {{ $payment->reversals->first()->reference }}: {{ $payment->reversals->first()->correction_reason }} @else — @endif</td></tr>
                 @empty<tr><td colspan="7">No posted payment allocations.</td></tr>@endforelse
