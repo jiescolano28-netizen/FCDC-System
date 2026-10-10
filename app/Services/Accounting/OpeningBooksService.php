@@ -256,6 +256,7 @@ class OpeningBooksService
             && $apLines->sum('debit_cents') === 0;
 
         return [
+            'production_activated' => false,
             'cutover' => $journal ? 'Approved' : 'Cutover approval required',
             'chart' => $chartApproved ? 'Approved chart available' : 'Chart approval required',
             'mappings' => $mappingsApproved ? 'Posting mappings approved' : 'Posting mapping approvals required',
