@@ -62,6 +62,30 @@ test('a completed sale posts recorded cash, sales and VAT plus frozen moving-ave
         ->and($sale->lines->first()->unit_cost)->toBe('50.00');
 });
 
+test('a POS sale is not blocked by the opening date cutover check', function () {
+    $employee = posAccountingEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Valued board', 'category' => 'Lumber', 'qty' => '10.00', 'unit' => 'piece',
+        'unit_cost' => '50.00', 'selling_price' => '180.00', 'reorder_level' => '0',
+    ]);
+    setupPosAccountingBooks([$item], [$item->id => '500.00']);
+
+    \Illuminate\Support\Facades\DB::table('accounting_journals')
+        ->where('source_type', 'opening')->where('source_id', 'FCDC')
+        ->update(['accounting_date' => now('Asia/Manila')->addDay()->toDateString()]);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $item->id)
+        ->set('amountReceived', '201.60')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    expect(PosTransaction::query()->count())->toBe(1)
+        ->and(AccountingJournal::query()->where('source_type', 'pos_sale')->count())->toBe(1)
+        ->and($item->fresh()->qty)->toBe('9.00');
+});
+
 test('a sale preserves exact rounded line COGS when unit-cost display rounds', function () {
     $employee = posAccountingEmployee();
     $this->actingAs($employee);

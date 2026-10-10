@@ -46,9 +46,6 @@ class PosSalePostingService
             $opening = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')
                 ->where('status', 'posted')->first();
             $openingDate = $opening?->accounting_date->toDateString();
-            if (! $openingDate || $date->toDateString() < $openingDate) {
-                throw ValidationException::withMessages(['accounting' => 'The sale date is outside approved accounting cutover coverage.']);
-            }
             $schedule = OpeningInventoryValuation::query()->where('book_key', 'FCDC')->where('status', 'approved')
                 ->with('lines')->first();
             if (! $schedule) {
