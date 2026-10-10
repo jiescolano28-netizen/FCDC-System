@@ -52,13 +52,11 @@ Exact component boundaries and model names should follow existing Laravel conven
 
 ## Approval and prerequisite
 
-The design is approved. Implementation may proceed for the approved demonstration scope, but the application must not be released as the requested full application until the accounting rules are supplied and implemented. Production accounting remains deferred pending an approved chart, sales/payables/payment posting rules, payable and disbursement lifecycles, and report definitions.
+The approved accounting design is implemented incrementally. Approved chart accounts, cutover/opening books and manual GL journals are persisted, but the application is not ready for full production accounting: operational source posting, controlled Inventory/AP schedules, valuation policies, ledger/financial reports and activation gates remain.
 
-## Accounting demonstration pages
+## Accounting production limits
 
-Production accounting remains deferred: no posting rules, durable account records, payables/disbursements, ledger calculations, or real financial reports are implemented. The authenticated Chart of Accounts page uses `ReferenceAccounts::all()` as illustrative fixtures for chart filters and journal account selection; those fixtures are neither approved production accounts nor persisted records.
-
-The authenticated Journal Entry page keeps its draft and balanced demonstration history under `demo.journals.employee.{employee-id}` in the signed-in session. Saving reports that the entry is not posted; the session history is not included in Accounting Overview balances or postings. Logout invalidates this temporary state with the rest of the session.
+The approved chart and cutover/opening books are persisted. The Journal Entry page persists manual drafts and posted manual journals using active approved accounts; it supports exact-centavo posting and linked reversal/replacement corrections. These manual GL entries do not make operational source posting or production activation available, and bare Accounts Payable and Inventory lines remain blocked.
 
 ## Implemented authenticated shell and Settings slice
 
@@ -99,7 +97,7 @@ VAT Return Preparation requires `tax.view` and is a live, read-only worksheet ov
 
 ## Accounting overview demonstration
 
-The authenticated `/accounting` route uses the Accounting-grouped `AccountingOverview` Livewire page and shared application shell. It labels revenue, expenses, net income, and payables as unavailable, and its recent-entry state does not treat session demo journals or POS sales as postings. Quick actions link only to registered destination routes; unavailable pages remain disabled until implemented. This page does not add accounting calculations or records and does not change the accounting release prerequisites above.
+The authenticated `/accounting` route uses the Accounting-grouped `AccountingOverview` Livewire page and shared application shell. It labels revenue, expenses, net income, and payables as unavailable; it does not calculate balances from posted journal lines or treat POS sales as accounting postings. Quick actions link only to registered destination routes; unavailable reports remain disabled until implemented. This page does not add accounting calculations and does not change the accounting release prerequisites above.
 
 ## Cash Disbursements demonstration
 
