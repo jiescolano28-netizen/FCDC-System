@@ -100,7 +100,7 @@
                                     <td>
                                         @foreach ($cellPermissions as $permission)
                                             <label class="role-check role-permission-check" title="{{ $permission['label'] }}">
-                                                <input type="checkbox" value="{{ $permission['name'] }}" aria-label="{{ $permission['label'] }}" wire:model.live="selectedPermissionNames" @disabled(! $canEditPermissions)>
+                                                <input type="checkbox" value="{{ $permission['name'] }}" aria-label="{{ $permission['label'] }}" wire:model="selectedPermissionNames" @disabled(! $canEditPermissions)>
                                                 <span></span>
                                             </label>
                                         @endforeach

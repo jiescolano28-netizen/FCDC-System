@@ -96,6 +96,22 @@ test('employees without role view permission cannot open role management', funct
     $this->actingAs($employee)->get(route('roles.index'))->assertForbidden();
 });
 
+test('role manager saves individually selected permissions when updating a role', function () {
+    app(\Database\Seeders\RolePermissionSeeder::class)->run();
+    $this->actingAs(roleManagementAdmin());
+    $role = Role::create(['name' => 'inventory-reader', 'guard_name' => 'web']);
+    $role->givePermissionTo(Permission::findOrCreate('inventory.view', 'web'));
+
+    Livewire::test(RoleManagement::class)
+        ->call('selectRole', $role->id)
+        ->set('selectedPermissionNames', ['inventory.view', 'inventory.update'])
+        ->call('saveSelected')
+        ->assertHasNoErrors();
+
+    expect($role->fresh()->permissions()->pluck('name')->all())
+        ->toEqualCanonicalizing(['inventory.view', 'inventory.update']);
+});
+
 test('role manager persists permission presets and duplicates saved roles', function () {
     app(\Database\Seeders\RolePermissionSeeder::class)->run();
     $this->actingAs(roleManagementAdmin());
