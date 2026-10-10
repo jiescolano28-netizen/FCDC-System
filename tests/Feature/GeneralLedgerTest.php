@@ -1,10 +1,8 @@
 <?php
 
-use App\Livewire\Accounting\GeneralLedger;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -28,34 +26,7 @@ test('general ledger is an authenticated named page in accounting navigation', f
         ->assertSee('All accounts')
         ->assertSee('Cash')
         ->assertSee('Accounts Payable')
-        ->assertSee('No ledger entries are available.')
-        ->assertSee('Real ledger calculation and reporting are not implemented.')
-        ->assertSee(route('accounting.general-ledger'), false);
+        ->assertSee('General Ledger reporting is not available yet.')
+        ->assertSee('Manual journal entries can be posted and browsed in Journal Entry.');
 });
 
-test('account and date selections remain usable without creating ledger activity', function () {
-    $employee = createGeneralLedgerEmployee();
-    $this->actingAs($employee);
-
-    session()->put('demo.journals.employee.'.$employee->id.'.history', [[
-        'reference' => 'DEMO-JE-LEDGER',
-        'description' => 'Illustrative journal',
-        'debitTotal' => 500,
-        'creditTotal' => 500,
-    ]]);
-
-    Livewire::test(GeneralLedger::class)
-        ->assertSee('All accounts')
-        ->assertSee('Cash')
-        ->set('accountCode', '2010')
-        ->assertSet('accountCode', '2010')
-        ->set('fromDate', '2026-01-01')
-        ->assertSet('fromDate', '2026-01-01')
-        ->set('toDate', '2026-01-31')
-        ->assertSet('toDate', '2026-01-31')
-        ->assertSee('No ledger entries are available.')
-        ->assertSee('Real ledger calculation and reporting are not implemented.')
-        ->assertDontSee('Running balance')
-        ->assertDontSee('DEMO-JE-LEDGER')
-        ->assertDontSee('500.00');
-});

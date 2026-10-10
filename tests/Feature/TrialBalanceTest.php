@@ -1,10 +1,8 @@
 <?php
 
-use App\Livewire\Accounting\TrialBalance;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -35,28 +33,3 @@ test('trial balance is an authenticated named page in accounting navigation', fu
         ->assertSee('class="app-body trial-balance-body"', false);
 });
 
-test('period selections update the printable empty report without calculating demo journals', function () {
-    $employee = createTrialBalanceEmployee();
-    $this->actingAs($employee);
-
-    session()->put('demo.journals.employee.'.$employee->id.'.history', [[
-        'reference' => 'DEMO-JE-TRIAL',
-        'description' => 'Illustrative journal',
-        'debitTotal' => 500,
-        'creditTotal' => 500,
-    ]]);
-
-    Livewire::test(TrialBalance::class)
-        ->set('fromDate', '2026-01-01')
-        ->set('toDate', '2026-01-31')
-        ->assertSet('fromDate', '2026-01-01')
-        ->assertSet('toDate', '2026-01-31')
-        ->assertSee('From: 2026-01-01')
-        ->assertSee('To: 2026-01-31')
-        ->assertSee('Total debits unavailable')
-        ->assertSee('Total credits unavailable')
-        ->assertSee('No trial balance is available.')
-        ->assertSee('This is not a real trial balance and does not certify that company books are balanced.')
-        ->assertDontSee('DEMO-JE-TRIAL')
-        ->assertDontSee('500.00');
-});

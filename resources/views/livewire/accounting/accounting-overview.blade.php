@@ -2,12 +2,12 @@
     <header class="dashboard-heading">
         <div>
             <h1>Accounting Overview</h1>
-            <p class="dashboard-subtitle">Accounting demonstrations and unavailable reporting destinations.</p>
+            <p class="dashboard-subtitle">Manual journals are available; accounting reports remain unavailable.</p>
         </div>
     </header>
 
     <p class="temporary-notice" role="status">
-        Real accounting balances and reports are not implemented. This page does not calculate or verify company revenue, expenses, net income, payables, or posted activity.
+        Manual journal posting is available. This page does not calculate verified company revenue, expenses, net income, payables, or balances from posted journal lines.
     </p>
 
     <section class="accounting-balance-grid" aria-label="Accounting balances">
@@ -22,7 +22,7 @@
 
     <section class="dashboard-card accounting-activity" aria-labelledby="accounting-activity-title">
         <h2 class="dashboard-card-title" id="accounting-activity-title">Recent accounting entries</h2>
-        <p class="dashboard-chart-note">Demo journal sessions and POS sales are not accounting postings and are not included here.</p>
+        <p class="dashboard-chart-note">Posted manual entries are available in Journal Entry; this overview does not yet summarize recent posting activity.</p>
         <div class="reports-table-wrap">
             <table class="reports-table">
                 <thead>
@@ -35,7 +35,7 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="reports-empty" colspan="4">No posted accounting activity. Real accounting posting is not implemented.</td>
+                        <td class="reports-empty" colspan="4">Recent posted entries are not summarized on this page.</td>
                     </tr>
                 </tbody>
             </table>

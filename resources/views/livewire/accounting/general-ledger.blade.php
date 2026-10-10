@@ -2,11 +2,11 @@
     <header class="page-heading general-ledger-heading">
         <div>
             <h1 id="general-ledger-heading">General Ledger</h1>
-            <p class="page-subtitle">Select a reference account and date range to inspect the ledger demonstration.</p>
+            <p class="page-subtitle">Ledger reports are not yet connected to posted manual journal lines.</p>
         </div>
     </header>
 
-    <p class="temporary-notice" role="status">Real ledger calculation and reporting are not implemented. This page does not create ledger entries or running balances from demo journals or POS sales.</p>
+    <p class="temporary-notice" role="status">Manual journal entries can be posted and browsed in Journal Entry. This page does not yet display ledger activity or calculate running balances.</p>
 
     <div class="general-ledger-filters" role="group" aria-label="General ledger selectors">
         <label>
@@ -32,12 +32,12 @@
         <header>
             <div>
                 <h2 id="general-ledger-activity-heading">Ledger activity</h2>
-                <p>Reference accounts and selectors are illustrative; no posted ledger data is available.</p>
+                <p>Posted journal entries are available in the Journal Entry register.</p>
             </div>
         </header>
         <div class="general-ledger-empty" role="status">
-            <p>No ledger entries are available.</p>
-            <span>Real ledger calculation and reporting are not implemented.</span>
+            <p>General Ledger reporting is not available yet.</p>
+            <span>Posted manual journal lines and running balances are not displayed on this page.</span>
         </div>
     </section>
 </section>

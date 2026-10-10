@@ -35,7 +35,7 @@
 
         <div class="financial-statement-empty" role="status">
             <p>No financial statement is available.</p>
-            <span>This is not a real financial statement. Accounting mappings, policies, and calculations are not implemented; demo journals and POS sales are not included.</span>
+            <span>This is not a real financial statement. Accounting mappings, policies, and calculations are not implemented; posted manual journals are not yet included in financial statements.</span>
         </div>
     </article>
 </section>

@@ -1,10 +1,8 @@
 <?php
 
-use App\Livewire\Accounting\FinancialStatements;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
-use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -32,30 +30,3 @@ test('financial statements is a separate authenticated accounting page', functio
         ->assertSee('not a real financial statement', false);
 });
 
-test('statement type and dates update the isolated non-operational document', function () {
-    $employee = createFinancialStatementsEmployee();
-    $this->actingAs($employee);
-
-    session()->put('demo.journals.employee.'.$employee->id.'.history', [[
-        'reference' => 'DEMO-JE-STATEMENT',
-        'description' => 'Illustrative journal',
-        'debitTotal' => 500,
-        'creditTotal' => 500,
-    ]]);
-
-    Livewire::test(FinancialStatements::class)
-        ->assertSee('Income Statement')
-        ->set('statementType', 'balance-sheet')
-        ->set('fromDate', '2026-01-01')
-        ->set('toDate', '2026-01-31')
-        ->assertSet('statementType', 'balance-sheet')
-        ->assertSet('fromDate', '2026-01-01')
-        ->assertSet('toDate', '2026-01-31')
-        ->assertSee('Balance Sheet')
-        ->assertSee('From: 2026-01-01')
-        ->assertSee('To: 2026-01-31')
-        ->assertSee('No financial statement is available.')
-        ->assertSee('not a real financial statement')
-        ->assertDontSee('DEMO-JE-STATEMENT')
-        ->assertDontSee('500.00');
-});

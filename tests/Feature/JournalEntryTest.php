@@ -1,6 +1,9 @@
 <?php
 
 use App\Livewire\Accounting\JournalEntry;
+use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
+use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -11,186 +14,287 @@ uses(RefreshDatabase::class)->beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
 });
 
-function createJournalEntryEmployee(array $overrides = []): Employee
+function journalEmployee(array $permissions = ['accounting.view', 'accounting.create-journal-entry', 'accounting.post-journal-entry']): Employee
 {
-    return grantEmployeeTestPermissions(Employee::create(array_merge([
-        'username' => 'journal.employee',
-        'email' => 'journal@example.com',
+    return grantEmployeeTestPermissions(Employee::create([
+        'username' => 'journal.employee.'.fake()->unique()->numerify('####'),
+        'email' => fake()->unique()->safeEmail(),
         'password' => Hash::make('journal-password'),
-    ], $overrides)), ['accounting.view', 'accounting.create-journal-entry']);
+    ]), $permissions);
 }
 
-function validDemoJournal(): array
+function approvedJournalAccount(string $code, string $type, string $classification, string $normalBalance): AccountingAccount
 {
-    return [
-        'date' => '2026-10-04',
-        'reference' => 'DEMO-JE-001',
-        'source' => 'Manual',
-        'description' => 'Illustrative journal entry',
-        'lines' => [
-            ['accountCode' => '1010', 'description' => 'Cash received', 'debit' => '125.00', 'credit' => ''],
-            ['accountCode' => '4010', 'description' => 'Illustrative revenue', 'debit' => '', 'credit' => '125.00'],
-        ],
-    ];
+    return AccountingAccount::create([
+        'code' => $code,
+        'name' => $classification,
+        'type' => $type,
+        'classification' => $classification,
+        'normal_balance' => $normalBalance,
+        'is_active' => true,
+        'approved_at' => now(),
+    ]);
 }
 
-function journalEntryComponentWith(array $journal)
+function prepareJournalBook(?string $cutoverDate = null): array
 {
-    return Livewire::test(JournalEntry::class)
-        ->set('date', $journal['date'])
-        ->set('reference', $journal['reference'])
-        ->set('source', $journal['source'])
-        ->set('description', $journal['description'])
-        ->set('lines', $journal['lines']);
-}
-
-test('journal entry is an authenticated named Livewire page in accounting navigation', function () {
-    $this->get(route('accounting.journal-entry'))->assertRedirect(route('login'));
-
-    $this->actingAs(createJournalEntryEmployee())
-        ->get(route('accounting.journal-entry'))
-        ->assertOk()
-        ->assertSee('Journal Entry')
-        ->assertSee('Demonstration only')
-        ->assertSee(route('accounting.journal-entry'), false)
-        ->assertSee(route('accounting.chart-of-accounts'), false);
-});
-
-test('journal entry rejects missing headers, conflicting line amounts, and unbalanced or zero totals', function () {
-    $this->actingAs(createJournalEntryEmployee());
-
-    Livewire::test(JournalEntry::class)
-        ->set('date', '')
-        ->call('save')
-        ->assertHasErrors(['date', 'reference', 'source', 'description']);
-
-    $journal = validDemoJournal();
-    $journal['lines'][0]['credit'] = '20.00';
-    journalEntryComponentWith($journal)
-        ->call('save')
-        ->assertHasErrors('lines.0');
-
-    $journal = validDemoJournal();
-    $journal['lines'][1]['credit'] = '124.00';
-    journalEntryComponentWith($journal)
-        ->call('save')
-        ->assertHasErrors('lines');
-
-    $journal['lines'][0]['debit'] = '';
-    $journal['lines'][1]['credit'] = '';
-    journalEntryComponentWith($journal)
-        ->call('save')
-        ->assertHasErrors('lines');
-});
-
-test('a corrected journal can be saved after a line conflict is rejected', function () {
-    $this->actingAs(createJournalEntryEmployee());
-    $journal = validDemoJournal();
-    $journal['lines'][0]['credit'] = '5.00';
-
-    journalEntryComponentWith($journal)
-        ->call('save')
-        ->assertHasErrors('lines.0')
-        ->set('lines.0.credit', '')
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSee('Demonstration entry saved. Not posted.');
-});
-
-test('a balanced journal remains a session demonstration across navigation and refresh', function () {
-    $employee = createJournalEntryEmployee();
-    $this->actingAs($employee);
-
-    journalEntryComponentWith([
-        'date' => '2026-10-04',
-        'reference' => 'DEMO-JE-001',
-        'source' => 'Manual',
-        'description' => 'Illustrative journal entry',
-        'lines' => validDemoJournal()['lines'],
-    ])
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSee('Demonstration entry saved')
-        ->assertSee('Not posted');
-
-    $this->get(route('accounting.overview'))->assertOk()->assertSee('No posted accounting activity');
-    $this->get(route('accounting.journal-entry'))->assertOk()
-        ->assertSee('DEMO-JE-001')
-        ->assertSee('Illustrative journal entry')
-        ->assertSee('125.00');
-
-    expect(session()->get('demo.journals.employee.'.$employee->id.'.history'))->toHaveCount(1);
-    expect(session()->get('demo.journals.employee.'.$employee->id.'.history.0.demo'))->toBeTrue();
-});
-
-test('journal draft and history are employee-scoped, clearable, and removed at logout', function () {
-    $first = createJournalEntryEmployee();
-    $second = createJournalEntryEmployee(['username' => 'journal.second', 'email' => 'second-journal@example.com']);
-    $this->actingAs($first);
-
-    journalEntryComponentWith([
-        'date' => '2026-10-04',
-        'reference' => 'DEMO-JE-001',
-        'source' => 'Manual',
-        'description' => 'First demonstration',
-        'lines' => validDemoJournal()['lines'],
-    ])
-        ->call('save')
-        ->assertHasNoErrors();
-
-    journalEntryComponentWith([
-        'date' => '2026-10-04',
-        'reference' => 'DRAFT-001',
-        'source' => 'Manual',
-        'description' => 'Draft stays temporary',
-        'lines' => validDemoJournal()['lines'],
+    $cash = approvedJournalAccount('1000', 'Asset', 'cash', 'debit');
+    $revenue = approvedJournalAccount('4000', 'Revenue', 'sales', 'credit');
+    $period = AccountingPostingPeriod::create([
+        'book_key' => 'FCDC',
+        'fiscal_year' => now('Asia/Manila')->year,
+        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
+        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(),
+        'status' => 'open',
+    ]);
+    AccountingJournal::create([
+        'book_key' => 'FCDC',
+        'reference' => 'OPENING-'.fake()->unique()->numerify('####'),
+        'source_type' => 'opening',
+        'source_id' => 'FCDC',
+        'accounting_date' => $cutoverDate ?? $period->starts_on,
+        'posting_period_id' => $period->id,
+        'description' => 'Approved cutover',
+        'status' => 'posted',
+        'prepared_by' => journalEmployee(['accounting.view'])->id,
+        'posted_by' => journalEmployee(['accounting.view'])->id,
+        'posted_at' => now(),
     ]);
 
-    $this->get(route('accounting.overview'))->assertOk();
-    $this->get(route('accounting.journal-entry'))->assertOk()
-        ->assertSee('DRAFT-001')
-        ->assertSee('DEMO-JE-001');
+    return [$cash, $revenue, $period];
+}
 
-    Livewire::test(JournalEntry::class)->call('clear')->assertHasNoErrors();
-    $this->get(route('accounting.journal-entry'))->assertOk()
-        ->assertDontSee('DRAFT-001')
-        ->assertSee('DEMO-JE-001');
+function journalInput(AccountingAccount $cash, AccountingAccount $revenue, array $overrides = []): array
+{
+    return array_merge([
+        'accountingDate' => now('Asia/Manila')->toDateString(),
+        'reference' => 'MANUAL-'.fake()->unique()->numerify('#####'),
+        'externalReference' => '',
+        'description' => 'Recognize completed event',
+        'lines' => [
+            ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+            ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
+        ],
+    ], $overrides);
+}
 
-    journalEntryComponentWith([
-        'date' => '2026-10-04',
-        'reference' => 'DEMO-JE-002',
-        'source' => 'Manual',
-        'description' => 'Second demo entry',
-        'lines' => validDemoJournal()['lines'],
-    ])
-        ->call('save');
+function fillJournal($component, array $journal)
+{
+    foreach ($journal as $field => $value) {
+        $component->set($field, $value);
+    }
 
+    return $component;
+}
+
+
+test('journal page visibility and draft preparation use separate permissions', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $viewer = journalEmployee(['accounting.view']);
+    $this->actingAs($viewer)->get(route('accounting.journal-entry'))->assertOk();
+    fillJournal(Livewire::test(JournalEntry::class), journalInput($cash, $revenue, ['reference' => 'VIEWER-DRAFT']))
+        ->call('saveDraft')->assertForbidden();
+
+    $preparerWithoutView = journalEmployee(['accounting.create-journal-entry']);
+    $this->actingAs($preparerWithoutView)->get(route('accounting.journal-entry'))->assertForbidden();
+});
+test('persistent drafts survive reload and can be edited or deleted without posting effects', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $preparer = journalEmployee(['accounting.view', 'accounting.create-journal-entry']);
+    $this->actingAs($preparer);
+    $journal = journalInput($cash, $revenue, ['reference' => 'DRAFT-001']);
+
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $draft = AccountingJournal::where('reference', 'DRAFT-001')->firstOrFail();
+    expect($draft->status)->toBe('draft')->and($draft->lines)->toHaveCount(2);
+    fillJournal(Livewire::test(JournalEntry::class), journalInput($cash, $revenue, ['reference' => 'DRAFT-001']))
+        ->call('saveDraft')->assertHasErrors('reference');
     $this->post(route('logout'))->assertRedirect(route('login'));
-    $this->actingAs($second)->get(route('accounting.journal-entry'))->assertOk()
-        ->assertDontSee('DEMO-JE-002');
-    expect(session()->get('demo.journals.employee.'.$first->id.'.history', []))->toBe([]);
+    $this->actingAs($preparer)->get(route('accounting.journal-entry'))->assertOk()->assertSee('DRAFT-001');
+    Livewire::test(JournalEntry::class)
+        ->call('editDraft', $draft->id)
+        ->set('description', 'Updated draft')
+        ->call('saveDraft')
+        ->assertHasNoErrors();
+    expect($draft->fresh()->description)->toBe('Updated draft')
+        ->and(AccountingJournal::where('status', 'posted')->count())->toBe(1);
 
-    $this->post(route('logout'));
-    $this->actingAs($first)->get(route('accounting.journal-entry'))->assertOk()
-        ->assertDontSee('DEMO-JE-002');
+    Livewire::test(JournalEntry::class)->call('deleteDraft', $draft->id)->assertHasNoErrors();
+    expect(AccountingJournal::find($draft->id))->toBeNull()
+        ->and($draft->lines()->count())->toBe(0);
 });
 
-test('journal line operations stay within their supported bounds', function () {
-    $this->actingAs(createJournalEntryEmployee());
-    $component = Livewire::test(JournalEntry::class);
+test('manual journal posting rejects unequal centavos and admits a balanced entry once', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    $journal = journalInput($cash, $revenue, [
+        'reference' => 'MANUAL-VALID-001',
+        'lines' => [
+            ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+            ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '124.99'],
+        ],
+    ]);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $draft = AccountingJournal::where('reference', 'MANUAL-VALID-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    expect($draft->fresh()->status)->toBe('draft');
 
-    expect(count($component->get('lines')))->toBe(2);
-    $component->call('removeLine', 0);
-    expect(count($component->get('lines')))->toBe(2);
+    $journal['lines'][1]['credit'] = '125.00';
+    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', $journal['lines'])
+        ->call('saveDraft')->assertHasNoErrors();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasNoErrors();
+    expect($draft->fresh()->status)->toBe('posted')
+        ->and($draft->fresh()->posted_by)->toBe($poster->id)
+        ->and($draft->fresh()->source_type)->toBe('manual')
+        ->and($draft->fresh()->lines->sum('debit_cents'))->toBe(12500)
+        ->and($draft->fresh()->lines->sum('credit_cents'))->toBe(12500);
+});
 
-    for ($index = 0; $index < 10; $index++) {
-        $component->call('addLine');
+test('posting requires posting permission and approved active accounts, and refuses closed, future, pre-cutover and controlled-account entries', function () {
+    [$cash, $revenue, $period] = prepareJournalBook();
+    $preparer = journalEmployee(['accounting.view', 'accounting.create-journal-entry']);
+    $this->actingAs($preparer);
+    $journal = journalInput($cash, $revenue, ['reference' => 'NO-POST-001']);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $draft = AccountingJournal::where('reference', 'NO-POST-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertForbidden();
+
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    $pending = approvedJournalAccount('1005', 'Asset', 'cash', 'debit');
+    $pending->update(['approved_at' => null]);
+    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
+        ['accountId' => (string) $pending->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
+    ])->call('saveDraft')->assertHasNoErrors();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    $inactive = approvedJournalAccount('1010', 'Asset', 'cash', 'debit');
+    $inactive->update(['is_active' => false, 'approved_at' => now()]);
+    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
+        ['accountId' => (string) $inactive->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
+    ])->call('saveDraft')->assertHasNoErrors();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    expect($draft->fresh()->status)->toBe('draft');
+
+    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
+        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
+    ])->call('saveDraft')->assertHasNoErrors();
+    $period->update(['status' => 'closed']);
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    $period->update(['status' => 'open']);
+
+    $ap = approvedJournalAccount('2000', 'Liability', 'accounts_payable', 'credit');
+    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
+        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $ap->id, 'debit' => '', 'credit' => '125.00'],
+    ])->call('saveDraft')->assertHasNoErrors();
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+});
+
+test('posting rejects future and pre-cutover dates while allowing approved GL-only receivable and card-clearing accounts', function () {
+    [$cash, $revenue] = prepareJournalBook(now('Asia/Manila')->toDateString());
+    $this->actingAs(journalEmployee());
+    foreach ([
+        ['reference' => 'FUTURE-001', 'accountingDate' => now('Asia/Manila')->addDay()->toDateString()],
+        ['reference' => 'PRE-CUTOVER-001', 'accountingDate' => now('Asia/Manila')->subDay()->toDateString()],
+    ] as $case) {
+        $journal = journalInput($cash, $revenue, $case);
+        fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+        $draft = AccountingJournal::where('reference', $case['reference'])->firstOrFail();
+        Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+        expect($draft->fresh()->status)->toBe('draft');
     }
-    expect(count($component->get('lines')))->toBe(10);
 
-    $component->call('addLine');
-    expect(count($component->get('lines')))->toBe(10);
+    foreach ([
+        ['account' => approvedJournalAccount('1100', 'Asset', 'accounts_receivable', 'debit'), 'reference' => 'GL-AR-001'],
+        ['account' => approvedJournalAccount('1110', 'Asset', 'card_clearing', 'debit'), 'reference' => 'CARD-CLEARING-001'],
+    ] as $case) {
+        $journal = journalInput($case['account'], $revenue, ['reference' => $case['reference']]);
+        fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+        $entry = AccountingJournal::where('reference', $case['reference'])->firstOrFail();
+        Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+        expect($entry->fresh()->status)->toBe('posted');
+    }
+});
 
-    $component->call('removeLine', 0);
-    expect(count($component->get('lines')))->toBe(9);
+test('manual journal lines reject two-sided or sub-cent amounts and block both controlled accounts', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $this->actingAs(journalEmployee());
+    $journal = journalInput($cash, $revenue, ['reference' => 'INVALID-LINES-001']);
+    $journal['lines'][0]['credit'] = '0.01';
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasErrors('lines.0');
+
+    $journal = journalInput($cash, $revenue, ['reference' => 'SUB-CENT-001']);
+    $journal['lines'][0]['debit'] = '1.001';
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasErrors('lines');
+
+    $inventory = approvedJournalAccount('1200', 'Asset', 'inventory', 'debit');
+    $journal = journalInput($cash, $revenue, ['reference' => 'INVENTORY-001', 'lines' => [
+        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $inventory->id, 'debit' => '', 'credit' => '125.00'],
+    ]]);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $entry = AccountingJournal::where('reference', 'INVENTORY-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasErrors('journal');
+    expect($entry->fresh()->status)->toBe('draft');
+    $journal = journalInput($cash, $revenue, ['reference' => 'OVERFLOW-001']);
+    $journal['lines'][0]['debit'] = '100000000000000000.00';
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasErrors('lines');
+});
+
+test('a correction posts a linked reversal and replacement with reason and actors while preserving original history', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    $original = journalInput($cash, $revenue, ['reference' => 'MANUAL-ORIGINAL-001']);
+    fillJournal(Livewire::test(JournalEntry::class), $original)->call('saveDraft')->assertHasNoErrors();
+    $entry = AccountingJournal::where('reference', 'MANUAL-ORIGINAL-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+    $beforeLines = $entry->fresh()->lines->map(fn ($line) => [$line->accounting_account_id, $line->debit_cents, $line->credit_cents])->all();
+
+    Livewire::test(JournalEntry::class)
+        ->call('beginCorrection', $entry->id)
+        ->set('accountingDate', now('Asia/Manila')->subDay()->toDateString())
+        ->set('correctionReason', 'Correct amount supported by receipt')
+        ->set('correctionReference', 'CORR-REV-001')
+        ->set('replacementReference', 'CORR-REPL-001')
+        ->set('lines', [
+            ['accountId' => (string) $cash->id, 'debit' => '120.00', 'credit' => ''],
+            ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '120.00'],
+        ])
+        ->call('correct', $entry->id)
+        ->assertHasNoErrors();
+
+    $reversal = AccountingJournal::where('reference', 'CORR-REV-001')->firstOrFail();
+    $replacement = AccountingJournal::where('reference', 'CORR-REPL-001')->firstOrFail();
+    expect($entry->fresh()->status)->toBe('posted')
+        ->and($entry->fresh()->lines->map(fn ($line) => [$line->accounting_account_id, $line->debit_cents, $line->credit_cents])->all())->toBe($beforeLines)
+        ->and($reversal->source_type)->toBe('reversal')
+        ->and($reversal->correction_of_id)->toBe($entry->id)
+        ->and($reversal->correction_reason)->toBe('Correct amount supported by receipt')
+        ->and($reversal->posted_by)->toBe($poster->id)
+        ->and($reversal->accounting_date->toDateString())->toBe(now('Asia/Manila')->toDateString())
+        ->and($replacement->accounting_date->toDateString())->toBe(now('Asia/Manila')->toDateString())
+        ->and($replacement->source_type)->toBe('replacement')
+        ->and($replacement->correction_of_id)->toBe($entry->id)
+        ->and($replacement->posted_by)->toBe($poster->id)
+        ->and($reversal->reference)->not->toBe($replacement->reference);
+});
+
+test('posted journals cannot be edited or deleted and listing filters posted history', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    $journal = journalInput($cash, $revenue, ['reference' => 'FILTERED-001', 'description' => 'Unique event text']);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $entry = AccountingJournal::where('reference', 'FILTERED-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+    Livewire::test(JournalEntry::class)->set('search', 'FILTERED-001')->assertSee('FILTERED-001')->assertDontSee('OPENING-');
+    Livewire::test(JournalEntry::class)->set('sourceFilter', 'manual')->set('dateFrom', now('Asia/Manila')->addDay()->toDateString())
+        ->assertDontSee('FILTERED-001');
+    expect(fn () => $entry->update(['description' => 'Rewritten']))->toThrow(DomainException::class);
+    expect(fn () => $entry->fresh()->delete())->toThrow(DomainException::class);
 });

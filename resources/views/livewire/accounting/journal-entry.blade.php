@@ -2,134 +2,108 @@
     <header class="page-heading journal-entry-heading">
         <div>
             <h1 id="journal-entry-heading">Journal Entry</h1>
-            <p class="page-subtitle">Temporary demonstration entry only. Nothing is posted to accounting records.</p>
+            <p class="page-subtitle">Prepare persistent manual drafts, post approved entries, and correct posted history through linked reversals.</p>
         </div>
     </header>
 
-    <p class="temporary-notice" role="note">Demonstration only: sample account references and journal entries are not approved production accounting data. Saving adds a temporary session example; it does not create a posted journal, ledger entry, payable, disbursement, or report balance.</p>
-
-    @if (session()->has('journal-entry-saved'))
-        <p class="journal-entry-feedback" role="status">{{ session('journal-entry-saved') }}</p>
+    @if (session()->has('journal-entry-message'))
+        <p class="journal-entry-feedback" role="status">{{ session('journal-entry-message') }}</p>
     @endif
 
-    <form class="journal-entry-card" wire:submit="save">
-        <h2>Demonstration journal details</h2>
-        <div class="journal-entry-header-fields">
-            <label>
-                <span>Date</span>
-                <input type="date" wire:model.live="date" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                @error('date') <small class="settings-error">{{ $message }}</small> @enderror
-            </label>
-            <label>
-                <span>Reference</span>
-                <input type="text" wire:model.live="reference" maxlength="100" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                @error('reference') <small class="settings-error">{{ $message }}</small> @enderror
-            </label>
-            <label>
-                <span>Source</span>
-                <input type="text" wire:model.live="source" maxlength="80" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                @error('source') <small class="settings-error">{{ $message }}</small> @enderror
-            </label>
-            <label class="journal-entry-description">
-                <span>Description</span>
-                <input type="text" wire:model.live="description" maxlength="255" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                @error('description') <small class="settings-error">{{ $message }}</small> @enderror
-            </label>
-        </div>
-
-        <div class="journal-lines-heading">
-            <div>
-                <h3>Entry lines</h3>
-                <p>Reference accounts are illustrative. Debit and credit values are demonstration amounts only.</p>
+    @can('accounting.create-journal-entry')
+        <form class="journal-entry-card" wire:submit="{{ $isCorrecting ? 'correct('.$correctingJournalId.')' : 'saveDraft' }}">
+            <h2>{{ $isCorrecting ? 'Correct posted journal' : ($editingDraftId ? 'Edit journal draft' : 'New manual journal draft') }}</h2>
+            <div class="journal-entry-header-fields">
+                <label><span>Accounting date</span><input type="date" wire:model="accountingDate">@error('accountingDate') <small class="settings-error">{{ $message }}</small> @enderror</label>
+                <label><span>Journal reference</span><input type="text" wire:model="reference" maxlength="80">@error('reference') <small class="settings-error">{{ $message }}</small> @enderror</label>
+                <label><span>External reference</span><input type="text" wire:model="externalReference" maxlength="120">@error('externalReference') <small class="settings-error">{{ $message }}</small> @enderror</label>
+                <label class="journal-entry-description"><span>Description</span><input type="text" wire:model="description" maxlength="255">@error('description') <small class="settings-error">{{ $message }}</small> @enderror</label>
             </div>
-            @can('accounting.create-journal-entry')
-                <button class="journal-secondary-button" type="button" wire:click="addLine" @disabled(count($lines) >= 10)>Add line</button>
-            @endcan
-        </div>
 
-        <div class="journal-line-list">
-            @foreach ($lines as $index => $line)
-                <fieldset class="journal-line" wire:key="journal-line-{{ $index }}">
-                    <legend>Line {{ $index + 1 }}</legend>
-                    <label class="journal-line-account">
-                        <span>Account</span>
-                        <select wire:model.live="lines.{{ $index }}.accountCode" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                            <option value="">Select a sample account</option>
-                            @foreach ($accounts as $account)
-                                <option value="{{ $account['code'] }}">{{ $account['code'] }} · {{ $account['name'] }}</option>
-                            @endforeach
-                        </select>
-                        @error("lines.{$index}.accountCode") <small class="settings-error">{{ $message }}</small> @enderror
-                    </label>
-                    <label class="journal-line-description">
-                        <span>Line description</span>
-                        <input type="text" wire:model.live="lines.{{ $index }}.description" maxlength="255" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                        @error("lines.{$index}.description") <small class="settings-error">{{ $message }}</small> @enderror
-                    </label>
-                    <label>
-                        <span>Debit</span>
-                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.debit" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                        @error("lines.{$index}.debit") <small class="settings-error">{{ $message }}</small> @enderror
-                    </label>
-                    <label>
-                        <span>Credit</span>
-                        <input type="number" min="0" step="0.01" wire:model.live="lines.{{ $index }}.credit" @disabled(auth()->user()->cannot('accounting.create-journal-entry'))>
-                        @error("lines.{$index}.credit") <small class="settings-error">{{ $message }}</small> @enderror
-                    </label>
-                    @can('accounting.create-journal-entry')
+            @if ($isCorrecting)
+                <div class="journal-entry-header-fields">
+                    <label><span>Correction reason</span><input type="text" wire:model="correctionReason" maxlength="1000">@error('correctionReason') <small class="settings-error">{{ $message }}</small> @enderror</label>
+                    <label><span>Reversal reference</span><input type="text" wire:model="correctionReference" maxlength="80">@error('correctionReference') <small class="settings-error">{{ $message }}</small> @enderror</label>
+                    <label><span>Replacement reference</span><input type="text" wire:model="replacementReference" maxlength="80"></label>
+                    @error('correctionReference') <small class="settings-error">{{ $message }}</small> @enderror
+                </div>
+            @endif
+
+            <div class="journal-lines-heading">
+                <div><h3>Account lines</h3><p>Use approved active accounts. Accounts Payable and Inventory require their controlled schedules.</p></div>
+                <button class="journal-secondary-button" type="button" wire:click="addLine" @disabled(count($lines) >= 100)>Add line</button>
+            </div>
+            <div class="journal-line-list">
+                @foreach ($lines as $index => $line)
+                    <fieldset class="journal-line" wire:key="journal-line-{{ $index }}">
+                        <legend>Line {{ $index + 1 }}</legend>
+                        <label class="journal-line-account"><span>Account</span>
+                            <select wire:model="lines.{{ $index }}.accountId"><option value="">Select approved account</option>
+                                @foreach ($accounts as $account)<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>@endforeach
+                            </select>
+                        </label>
+                        <label class="journal-line-description"><span>Line description</span><input type="text" wire:model="lines.{{ $index }}.description" maxlength="255"></label>
+                        <label><span>Debit (PHP)</span><input type="number" min="0" step="0.01" wire:model="lines.{{ $index }}.debit"></label>
+                        <label><span>Credit (PHP)</span><input type="number" min="0" step="0.01" wire:model="lines.{{ $index }}.credit"></label>
                         <button class="journal-remove-button" type="button" wire:click="removeLine({{ $index }})" @disabled(count($lines) <= 2)>Remove line</button>
-                    @endcan
-                    @error("lines.{$index}") <small class="settings-error journal-line-error">{{ $message }}</small> @enderror
-                </fieldset>
-            @endforeach
-        </div>
-        @error('lines') <p class="settings-error journal-total-error">{{ $message }}</p> @enderror
-
-        <div class="journal-entry-totals" aria-live="polite">
-            <div><span>Total Debits</span><strong>{{ number_format($debitTotal, 2) }}</strong></div>
-            <div><span>Total Credits</span><strong>{{ number_format($creditTotal, 2) }}</strong></div>
-        </div>
-
-        <footer class="journal-entry-actions">
-            @can('accounting.create-journal-entry')
-                <button class="journal-secondary-button" type="button" wire:click="clear">Clear</button>
-                <button class="journal-save-button" type="submit">Save demonstration entry</button>
-            @endcan
-        </footer>
-    </form>
+                        @error("lines.{$index}") <small class="settings-error journal-line-error">{{ $message }}</small> @enderror
+                    </fieldset>
+                @endforeach
+            </div>
+            @error('lines') <p class="settings-error journal-total-error">{{ $message }}</p> @enderror
+            @error('journal') <p class="settings-error journal-total-error">{{ $message }}</p> @enderror
+            @if ($isCorrecting)
+                <button class="journal-save-button" type="submit" @disabled(auth()->user()->cannot('accounting.post-journal-entry'))>Post linked reversal and replacement</button>
+            @else
+                <button class="journal-save-button" type="submit">Save draft</button>
+            @endif
+        </form>
+    @endcan
 
     <section class="journal-history-card" aria-labelledby="journal-history-heading">
-        <header>
-            <div>
-                <h2 id="journal-history-heading">Demonstration history</h2>
-                <p>Saved in this signed-in session only; history is not posted accounting activity.</p>
-            </div>
-        </header>
-        @forelse ($history as $entry)
-            <article class="journal-history-entry" wire:key="journal-history-{{ $entry['reference'] }}-{{ $loop->index }}">
+        <header><div><h2 id="journal-history-heading">Journal register</h2><p>Posted entries are immutable; drafts have no accounting effect.</p></div></header>
+        <div class="journal-entry-header-fields">
+            <label><span>Search</span><input type="search" wire:model.live.debounce.300ms="search" placeholder="Reference, description or external reference"></label>
+            <label><span>From</span><input type="date" wire:model.live="dateFrom"></label>
+            <label><span>To</span><input type="date" wire:model.live="dateTo"></label>
+            <label><span>Source</span><select wire:model.live="sourceFilter"><option value="">All sources</option><option value="manual">Manual</option><option value="reversal">Reversal</option><option value="replacement">Replacement</option><option value="opening">Opening</option></select></label>
+        </div>
+        @forelse ($journals as $journal)
+            <article class="journal-history-entry" wire:key="journal-{{ $journal->id }}">
                 <div class="journal-history-summary">
-                    <div>
-                        <strong>{{ $entry['reference'] }}</strong>
-                        <span>{{ $entry['date'] }} · {{ $entry['source'] }} · {{ $entry['description'] }}</span>
+                    <div><strong>{{ $journal->reference }}</strong><span>{{ $journal->accounting_date->format('Y-m-d') }} · {{ $journal->source_type }} · {{ $journal->description }}</span>
+                        @if ($journal->external_reference)<span>External reference: {{ $journal->external_reference }}</span>@endif
+                        @if ($journal->correction_of_id)<span>Corrects <button type="button" wire:click="showJournal({{ $journal->correction_of_id }})">{{ $journal->correctionOf?->reference }}</button> · {{ $journal->correction_reason }}</span>@endif
                     </div>
-                    <span class="journal-demo-status">Demonstration · Not posted</span>
+                    <span class="journal-demo-status">{{ ucfirst($journal->status) }}@if ($journal->poster) · Posted by {{ $journal->poster->username }}@endif</span>
                 </div>
                 <div class="journal-history-lines">
-                    @foreach ($entry['lines'] as $line)
-                        @php($account = collect($accounts)->firstWhere('code', $line['accountCode']))
-                        <div>
-                            <span>{{ $line['accountCode'] }} · {{ $account['name'] ?? 'Sample account' }}@if ($line['description']) — {{ $line['description'] }}@endif</span>
-                            <span>Debit {{ number_format((float) ($line['debit'] ?: 0), 2) }} · Credit {{ number_format((float) ($line['credit'] ?: 0), 2) }}</span>
-                        </div>
+                    @foreach ($journal->lines as $line)
+                        <div><span>{{ $line->account->code }} · {{ $line->account->name }}@if ($line->description) — {{ $line->description }}@endif</span><span>Debit {{ number_format($line->debit_cents / 100, 2) }} · Credit {{ number_format($line->credit_cents / 100, 2) }}</span></div>
                     @endforeach
                 </div>
-                <div class="journal-history-totals">
-                    <span>Debits {{ number_format($entry['debitTotal'], 2) }}</span>
-                    <span>Credits {{ number_format($entry['creditTotal'], 2) }}</span>
+                <div class="journal-entry-actions">
+                    <button type="button" wire:click="showJournal({{ $journal->id }})">Detail</button>
+                    @if ($journal->status === 'draft')
+                        @can('accounting.create-journal-entry')<button type="button" wire:click="editDraft({{ $journal->id }})">Edit draft</button><button type="button" wire:click="deleteDraft({{ $journal->id }})">Delete draft</button>@endcan
+                        @can('accounting.post-journal-entry')<button type="button" wire:click="postDraft({{ $journal->id }})">Post draft</button>@endcan
+                    @elseif (in_array($journal->source_type, ['manual', 'replacement'], true))
+                        @can('accounting.create-journal-entry')<button type="button" wire:click="beginCorrection({{ $journal->id }})">Correct</button>@endcan
+                    @endif
                 </div>
             </article>
         @empty
-            <p class="journal-history-empty">No demonstration entries saved in this session.</p>
+            <p class="journal-history-empty">No journal entries match these filters.</p>
         @endforelse
     </section>
+
+    @if ($selectedJournal)
+        <section class="journal-history-card" aria-labelledby="journal-detail-heading">
+            <h2 id="journal-detail-heading">Journal detail: {{ $selectedJournal->reference }}</h2>
+            <p>{{ $selectedJournal->accounting_date->format('Y-m-d') }} · {{ $selectedJournal->source_type }} · {{ $selectedJournal->description }}</p>
+            <p>Status: {{ ucfirst($selectedJournal->status) }} · Prepared by {{ $selectedJournal->preparer?->username ?? '—' }} · Posted by {{ $selectedJournal->poster?->username ?? '—' }}</p>
+            @if ($selectedJournal->correction_reason)<p>Correction reason: {{ $selectedJournal->correction_reason }}</p>@endif
+            <button type="button" wire:click="$set('selectedJournalId', null)">Close detail</button>
+        </section>
+    @endif
 </section>

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccountingJournalLine extends Model
 {
-    protected $fillable = ['accounting_account_id', 'debit_cents', 'credit_cents'];
+    protected $fillable = ['accounting_account_id', 'description', 'debit_cents', 'credit_cents'];
 
     protected static function booted(): void
     {

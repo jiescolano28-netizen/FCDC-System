@@ -11,7 +11,7 @@ class AccountingJournal extends Model
 {
     protected $fillable = [
         'book_key', 'reference', 'source_type', 'source_id', 'accounting_date', 'posting_period_id',
-        'description', 'status', 'prepared_by',
+        'description', 'external_reference', 'correction_of_id', 'correction_reason', 'status', 'prepared_by',
     ];
 
     protected function casts(): array
@@ -22,13 +22,23 @@ class AccountingJournal extends Model
     protected static function booted(): void
     {
         static::updating(function (AccountingJournal $journal): void {
-            if ($journal->getOriginal('status') === 'posted'
-                && $journal->isDirty(['book_key', 'reference', 'source_type', 'source_id', 'accounting_date', 'posting_period_id', 'description', 'status', 'prepared_by', 'posted_at', 'posted_by', 'approved_at', 'approved_by'])) {
+            $persistedStatus = $journal->exists
+                ? static::whereKey($journal->getKey())->value('status')
+                : null;
+            if ($persistedStatus === 'posted'
+                && $journal->isDirty([
+                    'book_key', 'reference', 'source_type', 'source_id', 'accounting_date', 'posting_period_id',
+                    'description', 'external_reference', 'correction_of_id', 'correction_reason', 'status',
+                    'prepared_by', 'posted_at', 'posted_by', 'approved_at', 'approved_by',
+                ])) {
                 throw new DomainException('Posted accounting journals are immutable.');
             }
         });
         static::deleting(function (AccountingJournal $journal): void {
-            if ($journal->status === 'posted') {
+            $persistedStatus = $journal->exists
+                ? static::whereKey($journal->getKey())->value('status')
+                : null;
+            if ($persistedStatus === 'posted') {
                 throw new DomainException('Posted accounting journals cannot be deleted.');
             }
         });
@@ -57,5 +67,15 @@ class AccountingJournal extends Model
     public function approver(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'approved_by');
+    }
+
+    public function correctionOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'correction_of_id');
+    }
+
+    public function corrections(): HasMany
+    {
+        return $this->hasMany(self::class, 'correction_of_id');
     }
 }
