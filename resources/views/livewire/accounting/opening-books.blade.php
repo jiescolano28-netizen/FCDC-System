@@ -139,4 +139,36 @@
             @endif
         @endif
     </section>
+
+    <section class="chart-account-card" aria-labelledby="intervening-sources-heading">
+        <h2 id="intervening-sources-heading">Post-cutover source reconciliation</h2>
+        <p>Existing completed activity from the approved cutover is listed once. Including a source creates only its accounting link; it does not recreate a sale or stock movement. Unsupported historical costs remain blockers.</p>
+        @if ($interveningSources->isEmpty())
+            <p>No post-cutover source activity found.</p>
+        @else
+            <table>
+                <thead><tr><th>Date</th><th>Source</th><th>Reference</th><th>State</th><th>Detail</th><th>Action</th></tr></thead>
+                <tbody>
+                    @foreach ($interveningSources as $source)
+                        <tr wire:key="intervening-source-{{ $source['type'] }}-{{ $source['id'] }}">
+                            <td>{{ $source['date'] }}</td>
+                            <td>{{ $source['description'] }}</td>
+                            <td>{{ $source['reference'] }}</td>
+                            <td>{{ $source['status'] }}</td>
+                            <td>{{ $source['reason'] ?? ($source['journal_id'] ? 'Journal '.$source['journal_id'] : 'Approved evidence is available.') }}</td>
+                            <td>
+                                @if ($source['status'] === 'missing' && in_array($source['type'], ['pos_sale', 'stock_movement', 'supplier_purchase', 'cash_disbursement'], true))
+                                    @can('accounting.reconcile-sources')
+                                        <button type="button" wire:click="includeInterveningSource('{{ $source['type'] }}', {{ $source['id'] }})">Include source</button>
+                                    @endcan
+                                @else
+                                    —
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </section>
 </section>

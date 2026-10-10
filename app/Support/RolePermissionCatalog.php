@@ -51,6 +51,7 @@ class RolePermissionCatalog
                 'accounting.close-period' => 'Close reconciled accounting months',
                 'accounting.reopen-period' => 'Reopen accounting months and dependent periods',
                 'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
+                'accounting.reconcile-sources' => 'Reconcile existing post-cutover source activity',
             ],
             'Settings' => [
                 'settings.view' => 'View company settings',

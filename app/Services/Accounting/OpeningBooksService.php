@@ -21,6 +21,7 @@ class OpeningBooksService
     {
         $date = $this->validBusinessDate($date);
         $validatedLines = $this->validatedOpeningLines($lines);
+
         return DB::transaction(function () use ($date, $validatedLines, $actorId): AccountingJournal {
             $period = AccountingPostingPeriod::firstOrCreateForDate($date);
             $journal = AccountingJournal::where('source_type', 'opening')
@@ -49,6 +50,7 @@ class OpeningBooksService
             return $journal->load('lines.account');
         });
     }
+
     public function saveInventoryValuation(string $date, string $evidence, array $lines, int $actorId): OpeningInventoryValuation
     {
         $date = $this->validBusinessDate($date);
@@ -56,6 +58,7 @@ class OpeningBooksService
         if ($evidence === '' || strlen($evidence) > 255) {
             throw ValidationException::withMessages(['inventoryEvidence' => 'Provide a supporting cutover count/value reference of at most 255 characters.']);
         }
+
         return DB::transaction(function () use ($date, $evidence, $lines, $actorId): OpeningInventoryValuation {
             $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
             $this->assertOpeningInventoryIsEditable($journal);
@@ -114,7 +117,6 @@ class OpeningBooksService
             return $schedule->refresh()->load('lines.inventory');
         });
     }
-
 
     public function approveOpening(int $actorId): AccountingJournal
     {
@@ -254,6 +256,8 @@ class OpeningBooksService
         ) : collect();
         $apScheduleMatches = $apLines->sum('credit_cents') === $postedSupplierInvoices->sum('amount_cents')
             && $apLines->sum('debit_cents') === 0;
+        $interveningSources = app(InterveningSourceReconciliation::class)->sources();
+        $unresolvedSources = $interveningSources->filter(fn (array $source) => $source['status'] !== 'matched');
 
         return [
             'production_activated' => false,
@@ -267,13 +271,16 @@ class OpeningBooksService
                     ? 'Opening supplier schedule pending approval'
                     : 'Opening supplier schedule required'),
             'inventory' => $this->inventoryReadiness($journal),
+            'source_reconciliation' => $unresolvedSources->isEmpty()
+                ? 'Intervening post-cutover sources reconciled'
+                : $unresolvedSources->count().' intervening source records remain unresolved; missing and unsupported evidence block activation',
             'valuation' => 'Valuation policies not approved',
             'ytd' => $cutoverDate === null
                 ? 'Save a cutover date to determine YTD evidence requirements'
                 : (! $midyear
                     ? 'Not required for January 1 cutover'
                     : ($ytdApproved ? 'Approved pre-cutover YTD evidence' : 'Pre-cutover YTD evidence required')),
-            'production' => 'Production activation unavailable: valuation policies remain outstanding; chart, mapping, cutover, supplier, inventory and YTD readiness are listed above.',
+            'production' => 'Production activation unavailable: valuation policies remain outstanding; source reconciliation, chart, mapping, cutover, supplier, inventory and YTD readiness must be resolved.',
         ];
     }
 
@@ -353,6 +360,7 @@ class OpeningBooksService
         $inventoryAccountIds = AccountingAccount::where('classification', 'inventory')->pluck('id')->map(fn ($id) => (int) $id)->all();
         $inventoryLines = collect($journalLines)->filter(function (array $line) use ($inventoryAccountIds): bool {
             $accountId = (int) ($line['accounting_account_id'] ?? $line['accountId'] ?? 0);
+
             return in_array($accountId, $inventoryAccountIds, true);
         });
         $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
@@ -366,6 +374,7 @@ class OpeningBooksService
             if ($hasCutoverStock) {
                 throw ValidationException::withMessages(['opening' => 'Opening Inventory with on-hand stock requires a per-item valuation schedule.']);
             }
+
             return;
         }
         if (! $schedule || $schedule->cutover_date->toDateString() !== $date
@@ -422,6 +431,7 @@ class OpeningBooksService
 
         return 'Opening stock schedule reconciled';
     }
+
     private function inventoryScheduleLines(OpeningInventoryValuation $schedule): array
     {
         return $schedule->lines->map(fn ($line) => [
@@ -430,7 +440,6 @@ class OpeningBooksService
             'value' => $this->decimalFromHundredths((int) $line->carrying_value_cents),
         ])->all();
     }
-
 
     private function quantityInHundredths(mixed $quantity, bool $allowNegative = false): int
     {
@@ -453,6 +462,7 @@ class OpeningBooksService
 
         return $negative && $value !== 0 ? -$value : $value;
     }
+
     private function assertOpeningInventoryIsEditable(?AccountingJournal $journal): void
     {
         if ($journal?->status === 'posted') {
@@ -460,12 +470,10 @@ class OpeningBooksService
         }
     }
 
-
     private function decimalFromHundredths(int $hundredths): string
     {
         return intdiv($hundredths, 100).'.'.str_pad((string) ($hundredths % 100), 2, '0', STR_PAD_LEFT);
     }
-
 
     private function validatedYtdLines(array $lines): array
     {
