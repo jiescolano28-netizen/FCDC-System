@@ -36,11 +36,23 @@
 .nav-dropdown { display: none; padding-left: 14px; }
 .nav-dropdown.open { display: block; }
 .nav-child { padding-left: 14px; font-size: 13px; }
-.sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--emerald-800); color: var(--emerald-200); font-size: 11px; }
-.sidebar-footer strong { display: block; margin-top: 2px; color: #fff; font-size: 13px; }
-.logout-form { margin-top: 12px; }
-.logout-button { width: 100%; padding: 7px 10px; border: 1px solid var(--gold); border-radius: 6px; color: #fff; background: transparent; font-size: 12px; cursor: pointer; }
+.sidebar-footer { display: flex; flex-direction: column; gap: 12px; padding: 14px 12px 16px; border-top: 1px solid var(--emerald-800); color: var(--emerald-200); font-size: 11px; }
+.sidebar-profile-link { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; color: var(--emerald-200); text-decoration: none; transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+.sidebar-profile-link:hover, .sidebar-profile-link.active { border-color: var(--emerald-700); color: #fff; background: var(--emerald-800); }
+.sidebar-profile-link:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.sidebar-profile-avatar { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 50%; color: #fff; background: var(--emerald-700); font-size: 14px; font-weight: 700; text-transform: uppercase; }
+.sidebar-footer-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; overflow: hidden; }
+.sidebar-profile-caption { color: var(--emerald-200); font-size: 10px; line-height: 1.2; }
+.sidebar-footer strong { overflow: hidden; color: #fff; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-profile-arrow { width: 16px; height: 16px; flex: 0 0 16px; color: var(--emerald-200); }
+.logout-form { margin: 0; }
+.logout-button { width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--gold); border-radius: 7px; color: #fff; background: transparent; font-size: 12px; cursor: pointer; }
 .logout-button:hover { background: var(--gold-dark); }
+@media (min-width: 801px) {
+    .sidebar.collapsed .sidebar-footer { align-items: center; padding: 12px 8px; }
+    .sidebar.collapsed .sidebar-profile-link { justify-content: center; padding: 8px 0; }
+    .sidebar.collapsed .sidebar-profile-arrow { display: none; }
+}
 .sidebar-toggle { position: absolute; z-index: 5; top: 18px; right: -12px; display: flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 2px solid var(--emerald-50); border-radius: 50%; color: #fff; background: var(--emerald-700); font-size: 11px; cursor: pointer; }
 .sidebar-toggle:hover { background: var(--gold-dark); }
 .sidebar.collapsed { flex-basis: 68px; }
@@ -178,15 +190,15 @@
 @media (max-width: 800px) {
     .app-shell { flex-direction: column; }
     .sidebar, .sidebar.collapsed { flex: 0 0 auto; width: 100%; }
-    .sidebar-toggle, .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-label, .sidebar.collapsed .nav-arrow, .sidebar.collapsed .nav-dropdown, .sidebar.collapsed .sidebar-footer-text, .sidebar.collapsed .logout-form { display: none; }
+.sidebar-toggle, .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-label, .sidebar.collapsed .nav-arrow, .sidebar.collapsed .nav-dropdown, .sidebar.collapsed .logout-form { display: none; }
     .brand, .sidebar.collapsed .brand { justify-content: flex-start; padding: 8px 16px; }
     .company-logo, .sidebar.collapsed .company-logo { width: 44px; height: 44px; }
     .nav { flex-direction: row; overflow-x: auto; padding: 8px; }
     .nav-group { position: relative; flex: 0 0 auto; }
     .nav-item { width: auto; flex-shrink: 0; white-space: nowrap; }
     .nav-dropdown.open { position: absolute; z-index: 6; min-width: 200px; background: var(--emerald-900); }
-    .sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
-    .logout-form { margin: 0; }
+    .sidebar-footer { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+    .sidebar-profile-link { flex: 1; }
     .logout-button { width: auto; min-width: 90px; }
     .app-main { overflow-x: hidden; padding: 16px; }
     .pos-layout { grid-template-columns: minmax(0, 1fr); }

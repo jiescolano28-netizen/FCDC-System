@@ -32,9 +32,7 @@
             @endcan
 
             <nav class="nav" aria-label="Application navigation">
-                <a class="nav-item {{ request()->routeIs('profile') ? 'active' : '' }}" href="{{ route('profile') }}" @if (request()->routeIs('profile')) aria-current="page" @endif>
-                    <span class="nav-label">My profile</span>
-                </a>
+                
                 @can('dashboard.view')
                     <a class="nav-item {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}" @if (request()->routeIs('dashboard')) aria-current="page" @endif>
                         <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Dashboard Update</span>
@@ -172,7 +170,14 @@
             </nav>
 
             <footer class="sidebar-footer">
-                <span class="sidebar-footer-text">Signed in as<strong>{{ auth()->user()->username }}</strong></span>
+                <a class="sidebar-profile-link {{ request()->routeIs('profile') ? 'active' : '' }}" href="{{ route('profile') }}" @if (request()->routeIs('profile')) aria-current="page" @endif aria-label="View profile for {{ auth()->user()->username }}">
+                    <span class="sidebar-profile-avatar" aria-hidden="true">{{ strtoupper(substr(auth()->user()->username, 0, 1)) }}</span>
+                    <span class="sidebar-footer-text">
+                        <span class="sidebar-profile-caption">Signed in as</span>
+                        <strong>{{ auth()->user()->username }}</strong>
+                    </span>
+                    <svg class="sidebar-profile-arrow" aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="m7.5 4.5 5.5 5.5-5.5 5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
                 <form class="logout-form" action="{{ route('logout') }}" method="POST">
                     @csrf
                     <button class="logout-button" type="submit">Log out</button>

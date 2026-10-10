@@ -29,6 +29,8 @@ test('profile is available to every authenticated employee and has no other empl
         ->assertOk()
         ->assertSee('My profile')
         ->assertSee('profile-owner')
+        ->assertSee('View profile for profile-owner')
+        ->assertDontSee('<span class="nav-label">My profile</span>', false)
         ->assertDontSee('different-employee@example.test');
 
     $this->actingAs($employee)
