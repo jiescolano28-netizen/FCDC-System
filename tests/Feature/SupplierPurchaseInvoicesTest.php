@@ -292,6 +292,14 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         ->and(DB::table('supplier_purchase_corrections')->count())->toBe(0)
         ->and(DB::table('accounting_journals')->where('source_type', 'supplier_purchase_correction')->count())->toBe(0);
 
+    $nextCorrectionId = (int) DB::table('supplier_purchase_corrections')->max('id') + 1;
+    $collisionInvoice = app(SupplierPurchaseService::class)->saveDraft([
+        'supplier_id' => $supplier->id, 'invoice_number' => 'COR-INV-'.$actor->id.'-C'.$nextCorrectionId,
+        'recognition_date' => now('Asia/Manila')->toDateString(), 'due_date' => now('Asia/Manila')->toDateString(),
+        'description' => 'Existing supplier invoice matching the generated correction identity', 'receipt_confirmed' => true,
+        'lines' => [['inventory_id' => '', 'accounting_account_id' => $expense->id, 'description' => 'Repairs', 'quantity' => '', 'amount' => '100.00']],
+    ], $actor->id);
+
     $correction = app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
         'reason' => 'Supplier issued corrected invoice',
         'allocations' => [['line_id' => $invoice->lines->first()->id, 'corrected_amount_cents' => 4_000_000]],
@@ -304,6 +312,7 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         ->and($invoice->fresh()->supplierRefundDueCents())->toBe(1_000_000)
         ->and($replacement->gross_amount_cents)->toBe(4_000_000)
         ->and($replacement->correction_of_id)->toBe($invoice->id)
+        ->and($replacement->invoice_number)->toBe($collisionInvoice->invoice_number.'-2')
         ->and($payment->fresh()->lines)->toHaveCount(1)
         ->and((int) $correction->journal->lines->firstWhere('accounting_account_id', $receivable->id)->debit_cents)->toBe(1_000_000);
 
@@ -328,6 +337,9 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         ->and($invoice->fresh()->activeCorrectedAmountCents())->toBe(4_500_000)
         ->and($invoice->fresh()->supplierRefundDueCents())->toBe(0)
         ->and($invoice->fresh()->outstandingAmountCents())->toBe(500_000)
+        ->and($invoice->fresh()->isActiveCorrectionIdentity())->toBeFalse()
+        ->and($replacement->fresh()->isActiveCorrectionIdentity())->toBeFalse()
+        ->and($secondCorrection->replacementInvoice->fresh()->isActiveCorrectionIdentity())->toBeTrue()
         ->and((int) $secondCorrection->journal->lines->firstWhere('accounting_account_id', $ap->id)->credit_cents)->toBe(500_000);
     Livewire::actingAs($actor)->test(\App\Livewire\Accounting\SupplierPurchases::class)
         ->assertSee('Correct purchase')

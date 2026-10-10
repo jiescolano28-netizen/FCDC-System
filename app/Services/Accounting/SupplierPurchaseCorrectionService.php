@@ -41,6 +41,9 @@ class SupplierPurchaseCorrectionService
         }
 
         return DB::transaction(function () use ($invoiceId, $data, $reason, $actor): SupplierPurchaseCorrection {
+            $invoiceCandidate = SupplierPurchaseInvoice::query()->findOrFail($invoiceId);
+            $rootInvoiceId = $invoiceCandidate->correctionChainInvoiceIds()[0];
+            SupplierPurchaseInvoice::query()->lockForUpdate()->findOrFail($rootInvoiceId);
             $invoice = SupplierPurchaseInvoice::query()->with('lines')->lockForUpdate()->findOrFail($invoiceId);
             if ($invoice->status !== 'posted' || $invoice->correctionChildren()->exists()) {
                 throw ValidationException::withMessages(['invoice' => 'Only the active posted credit purchase identity can be corrected.']);
@@ -240,7 +243,17 @@ class SupplierPurchaseCorrectionService
                     'unit_cost' => (float) $item->qty === 0.0 ? '0.00' : number_format($after / ((float) $item->qty * 100), 2, '.', ''),
                 ]);
             }
-            $replacementNumber = mb_substr($invoice->invoice_number, 0, 76, 'UTF-8').'-C'.$correction->id;
+            $replacementSuffix = '-C'.$correction->id;
+            $replacementNumber = mb_substr($invoice->invoice_number, 0, 100 - mb_strlen($replacementSuffix, 'UTF-8'), 'UTF-8').$replacementSuffix;
+            $sequence = 1;
+            while (SupplierPurchaseInvoice::query()
+                ->where('supplier_id', $invoice->supplier_id)
+                ->where('invoice_number_normalized', mb_strtoupper($replacementNumber, 'UTF-8'))
+                ->exists()) {
+                $sequence++;
+                $replacementSuffix = '-C'.$correction->id.'-'.$sequence;
+                $replacementNumber = mb_substr($invoice->invoice_number, 0, 100 - mb_strlen($replacementSuffix, 'UTF-8'), 'UTF-8').$replacementSuffix;
+            }
             $replacement = SupplierPurchaseInvoice::query()->create([
                 'supplier_id' => $invoice->supplier_id, 'supplier_code_snapshot' => $invoice->supplier_code_snapshot,
                 'supplier_name_snapshot' => $invoice->supplier_name_snapshot, 'invoice_number' => $replacementNumber,
@@ -459,9 +472,15 @@ class SupplierPurchaseCorrectionService
         ])->validate();
 
         return DB::transaction(function () use ($correctionId, $data, $actor): SupplierRefundReceipt {
-            $correction = SupplierPurchaseCorrection::query()->with('invoice')->lockForUpdate()->findOrFail($correctionId);
-            $due = $correction->invoice
-                ? SupplierPurchaseInvoice::query()->lockForUpdate()->findOrFail($correction->invoice->id)->supplierRefundDueCents()
+            $correctionCandidate = SupplierPurchaseCorrection::query()->with('invoice')->findOrFail($correctionId);
+            $rootInvoice = null;
+            if ($correctionCandidate->invoice) {
+                $rootInvoiceId = $correctionCandidate->invoice->correctionChainInvoiceIds()[0];
+                $rootInvoice = SupplierPurchaseInvoice::query()->lockForUpdate()->findOrFail($rootInvoiceId);
+            }
+            $correction = SupplierPurchaseCorrection::query()->lockForUpdate()->findOrFail($correctionId);
+            $due = $rootInvoice
+                ? $rootInvoice->supplierRefundDueCents()
                 : (int) $correction->refund_due_cents - (int) $correction->refundReceipts()->sum('amount_cents');
             $amount = (int) $data['amount_cents'];
             if ($due < 1 || $amount > $due) {

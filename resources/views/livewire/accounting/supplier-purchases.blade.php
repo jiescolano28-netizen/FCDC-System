@@ -51,16 +51,30 @@
         </div>
         <div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Supplier</th><th>Invoice</th><th>Recognition</th><th>Due</th><th class="numeric">Gross</th><th class="numeric">Paid</th><th class="numeric">Outstanding</th><th>Status</th><th>Actions</th></tr></thead><tbody>
             @forelse ($invoices as $invoice)
-                <tr wire:key="purchase-invoice-{{ $invoice->id }}"><td>{{ $invoice->supplier_name_snapshot }}</td><td>{{ $invoice->invoice_number }} @if ($invoice->correction_of_id)<small>Corrected identity for {{ $invoice->correctionParent?->invoice_number }}</small>@elseif ($invoice->correctionChildren->isNotEmpty())<small>Corrected</small>@endif</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td><td class="numeric">{{ number_format($invoice->activeCorrectedAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->paidAmountCents() / 100, 2) }}</td><td class="numeric">{{ number_format($invoice->outstandingAmountCents() / 100, 2) }}</td><td>{{ $invoice->isOverdueOn($today) ? 'Overdue · ' : '' }}{{ $invoice->payableStatus() }}</td><td>
-                    <button type="button" wire:click="showInvoice({{ $invoice->id }})">Detail / print</button>
-                    @if ($invoice->status === 'draft')
-                        @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
-                        @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
-                    @endif
-                    @if ($invoice->status === 'posted' && $invoice->correctionChildren->isEmpty() && $canCorrectPurchases)
-                        <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
-                    @endif
-                </td></tr>
+                @php($activeIdentity = $invoice->isActiveCorrectionIdentity())
+                @php($displayAmountCents = $activeIdentity ? $invoice->activeCorrectedAmountCents() : $invoice->gross_amount_cents)
+                @php($displayPaidCents = $activeIdentity ? max(0, $invoice->paidAmountCents() - $invoice->refundReceivedAmountCents()) : 0)
+                @php($displayOutstandingCents = $activeIdentity ? $invoice->outstandingAmountCents() : 0)
+                <tr wire:key="purchase-invoice-{{ $invoice->id }}">
+                    <td>{{ $invoice->supplier_name_snapshot }}</td>
+                    <td>{{ $invoice->invoice_number }} @if ($invoice->correction_of_id)<small>Corrected identity for {{ $invoice->correctionParent?->invoice_number }}</small>@elseif ($invoice->correctionChildren->isNotEmpty())<small>Corrected</small>@endif</td>
+                    <td>{{ $invoice->recognition_date->format('Y-m-d') }}</td>
+                    <td>{{ $invoice->due_date->format('Y-m-d') }}</td>
+                    <td class="numeric">{{ number_format($displayAmountCents / 100, 2) }}</td>
+                    <td class="numeric">{{ number_format($displayPaidCents / 100, 2) }}</td>
+                    <td class="numeric">{{ number_format($displayOutstandingCents / 100, 2) }}</td>
+                    <td>{{ $activeIdentity ? ($invoice->isOverdueOn($today) ? 'Overdue · ' : '').$invoice->payableStatus() : 'Corrected' }}</td>
+                    <td>
+                        <button type="button" wire:click="showInvoice({{ $invoice->id }})">Detail / print</button>
+                        @if ($invoice->status === 'draft')
+                            @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
+                            @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
+                        @endif
+                        @if ($invoice->status === 'posted' && $activeIdentity && $canCorrectPurchases)
+                            <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
+                        @endif
+                    </td>
+                </tr>
             @empty<tr><td colspan="9">No supplier invoices match these filters.</td></tr>@endforelse
         </tbody></table></div>
     </section>

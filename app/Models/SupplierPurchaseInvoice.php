@@ -64,6 +64,10 @@ class SupplierPurchaseInvoice extends Model
     {
         return $this->hasMany(self::class, 'correction_of_id');
     }
+    public function isActiveCorrectionIdentity(): bool
+    {
+        return $this->correctionChildren->isEmpty();
+    }
 
     public function correctionParent(): BelongsTo
     {

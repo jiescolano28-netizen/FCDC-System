@@ -217,11 +217,11 @@ class SupplierPurchases extends Component
         $all = $query->get();
         $invoices = $all->filter(fn (SupplierPurchaseInvoice $invoice) => match ($this->status) {
             'Draft' => $invoice->status === 'draft',
-            'Overdue' => $invoice->isOverdueOn($today),
-            'Paid' => $invoice->payableStatus() === 'Paid',
-            'Partially Paid' => $invoice->payableStatus() === 'Partially paid',
-            'Unpaid' => $invoice->payableStatus() === 'Unpaid',
-            'Outstanding' => $invoice->status === 'posted' && $invoice->outstandingAmountCents() > 0,
+            'Overdue' => $invoice->isActiveCorrectionIdentity() && $invoice->isOverdueOn($today),
+            'Paid' => $invoice->isActiveCorrectionIdentity() && $invoice->payableStatus() === 'Paid',
+            'Partially Paid' => $invoice->isActiveCorrectionIdentity() && $invoice->payableStatus() === 'Partially paid',
+            'Unpaid' => $invoice->isActiveCorrectionIdentity() && $invoice->payableStatus() === 'Unpaid',
+            'Outstanding' => $invoice->isActiveCorrectionIdentity() && $invoice->status === 'posted' && $invoice->outstandingAmountCents() > 0,
             default => true,
         })->values();
         $posted = $all->where('status', 'posted')->whereNull('correction_of_id');
