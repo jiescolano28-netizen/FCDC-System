@@ -10,6 +10,7 @@ use App\Models\PosTransaction;
 use App\Models\StockMovement;
 use App\Models\SupplierPurchaseInvoice;
 use App\Models\SupplierPurchaseCorrection;
+use App\Services\Accounting\OpeningBooksService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -39,10 +40,17 @@ class GeneralLedger extends Component
             ->where('status', 'posted')
             ->value('accounting_date');
         $cutoverDate = $cutover ? CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString() : null;
+        $readiness = app(OpeningBooksService::class)->readiness();
+        $productionActivated = $readiness['production_activated'];
+        if (! $productionActivated) {
+            $cutoverDate = null;
+        }
         $account = $this->accountId !== ''
             ? AccountingAccount::query()->whereNotNull('approved_at')->find($this->accountId)
             : null;
-        $dateError = $this->dateRangeError($cutoverDate);
+        $dateError = $productionActivated
+            ? $this->dateRangeError($cutoverDate)
+            : $readiness['production'];
         $lines = collect();
         $openingBalanceCents = 0;
         $closingBalanceCents = 0;

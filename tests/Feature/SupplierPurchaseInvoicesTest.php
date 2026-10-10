@@ -373,10 +373,11 @@ test('purchase correction allocates reviewed cost between remaining and consumed
         'accounting.correct-supplier-purchases', 'accounting.post-disbursements',
         'accounting.prepare-disbursements', 'inventory.movements.record', 'inventory.valuation.approve', 'accounting.view',
     ]);
+    $periodDate = now('Asia/Manila');
     $period = AccountingPostingPeriod::create([
-        'book_key' => 'FCDC', 'fiscal_year' => now('Asia/Manila')->year,
-        'starts_on' => now('Asia/Manila')->startOfYear()->toDateString(),
-        'ends_on' => now('Asia/Manila')->endOfYear()->toDateString(), 'status' => 'open',
+        'book_key' => 'FCDC', 'fiscal_year' => $periodDate->year, 'period_month' => $periodDate->month,
+        'starts_on' => $periodDate->startOfMonth()->toDateString(),
+        'ends_on' => $periodDate->endOfMonth()->toDateString(), 'status' => 'open',
     ]);
     $openingJournal = AccountingJournal::create([
         'book_key' => 'FCDC', 'reference' => 'OPEN-STOCK-CORR-'.$actor->id, 'source_type' => 'opening',

@@ -3,11 +3,13 @@
 use App\Livewire\Accounting\OpeningBooks;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournalLine;
+use App\Models\AccountingPostingMapping;
 use App\Models\Inventory;
 use App\Models\StockMovement;
 use App\Models\Employee;
 use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
@@ -206,6 +208,73 @@ test('an authorized reviewer approves one balanced cash and capital opening at a
         ->and(DB::table('accounting_posting_periods')->value('starts_on'))->toBe('2026-07-01')
         ->and(DB::table('accounting_posting_periods')->value('ends_on'))->toBe('2026-07-31');
 });
+
+test('production activation is permission-gated and incomplete readiness creates no activation', function () {
+    $unauthorized = openingBooksEmployee(['accounting.view']);
+    $this->actingAs($unauthorized);
+    Livewire::test(OpeningBooks::class)->call('activateProduction')->assertForbidden();
+
+    $operator = openingBooksEmployee(['accounting.view', 'accounting.activate-books']);
+    $this->actingAs($operator);
+
+    Livewire::test(OpeningBooks::class)
+        ->call('activateProduction')
+        ->assertHasErrors('activation')
+        ->assertSee('Production activation unavailable');
+
+    expect(DB::table('accounting_production_activations')->count())->toBe(0);
+});
+
+test('authorized production activation requires reconciled books and is exactly once', function () {
+    Carbon::setTestNow(Carbon::parse('2026-01-01 12:00:00', 'Asia/Manila'));
+    $item = Inventory::create([
+        'code' => 'ACT-001',
+        'name' => 'Activation stock',
+        'category' => 'Materials',
+        'unit' => 'piece',
+        'qty' => 1,
+        'unit_cost' => 10,
+        'status' => 'active',
+    ]);
+    $accounts = setupPosAccountingBooks([$item]);
+    $reviewer = Employee::where('username', 'like', 'pos.books.%')->firstOrFail();
+    $payables = approvedOpeningAccount('2000', 'accounts_payable', 'Liability', 'credit');
+    foreach ([
+        'accounts_payable' => $payables,
+        'recovery_offset' => $accounts['capital'],
+        'adjustment' => $accounts['capital'],
+    ] as $source => $account) {
+        AccountingPostingMapping::create([
+            'source' => $source,
+            'accounting_account_id' => $account->id,
+            'approved_at' => now(),
+            'approved_by' => $reviewer->id,
+        ]);
+    }
+    $operator = openingBooksEmployee(['accounting.view', 'accounting.activate-books']);
+    $this->actingAs($operator);
+
+    Livewire::test(OpeningBooks::class)
+        ->call('activateProduction')
+        ->assertHasNoErrors()
+        ->assertSee('Production activated');
+    Livewire::test(OpeningBooks::class)
+        ->call('activateProduction')
+        ->assertHasNoErrors()
+        ->assertSee('Production activated');
+
+    Livewire::test(\App\Livewire\Accounting\AccountingOverview::class)
+        ->assertSee('Revenue')
+        ->assertSee('No posted activity in this period');
+    Livewire::test(\App\Livewire\Accounting\FinancialStatements::class)
+        ->assertSee('Sales')
+        ->assertSee('No posted income or expense activity in this period.');
+
+    expect(DB::table('accounting_production_activations')->count())->toBe(1)
+        ->and(DB::table('accounting_production_activations')->value('activated_by'))->toBe($operator->id)
+        ->and(app(OpeningBooksService::class)->readiness()['production_activated'])->toBeTrue();
+});
+
 
 test('opening approval rejects unequal and empty lines, unapproved accounts, duplicate posting and unauthorized reviewers', function () {
     $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);

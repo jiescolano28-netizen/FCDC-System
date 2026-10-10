@@ -360,19 +360,15 @@ class SupplierPurchaseVatReclassificationService
             throw ValidationException::withMessages(['date' => 'Purchase VAT reclassifications cannot be future-dated.']);
         }
         $opening = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->first();
-        if (! $opening || $date->lt(CarbonImmutable::parse($opening->accounting_date, 'Asia/Manila'))) {
+        if (! $opening || $date->toDateString() < $opening->accounting_date->toDateString()) {
             throw ValidationException::withMessages(['date' => 'Purchase VAT reclassifications require an accounting date on or after approved cutover.']);
         }
-        $period = AccountingPostingPeriod::query()->firstOrCreate(
-            ['book_key' => 'FCDC', 'fiscal_year' => $date->year],
-            ['starts_on' => $date->startOfYear()->toDateString(), 'ends_on' => $date->endOfYear()->toDateString(), 'status' => 'open'],
-        );
-        $period = AccountingPostingPeriod::query()->lockForUpdate()->findOrFail($period->id);
-        if ($period->status !== 'open') {
-            throw ValidationException::withMessages(['date' => 'The purchase VAT reclassification date is in a closed accounting period.']);
-        }
 
-        return $period;
+        return app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+            $date->toDateString(),
+            'date',
+            'The purchase VAT reclassification date is in a closed accounting period.',
+        );
     }
 
     private function classifiedAccount(string $classification, string $type): AccountingAccount

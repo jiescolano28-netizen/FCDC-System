@@ -6,6 +6,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class AccountingPostingPeriod extends Model
 {
@@ -27,14 +28,18 @@ class AccountingPostingPeriod extends Model
     {
         $month = CarbonImmutable::parse($date, 'Asia/Manila')->startOfMonth();
 
-        return static::query()->firstOrCreate(
-            ['book_key' => 'FCDC', 'fiscal_year' => $month->year, 'period_month' => $month->month],
-            [
-                'starts_on' => $month->toDateString(),
-                'ends_on' => $month->endOfMonth()->toDateString(),
-                'status' => 'open',
-            ],
-        );
+        return DB::transaction(function () use ($month): self {
+            static::query()->where('book_key', 'FCDC')->orderBy('id')->lockForUpdate()->first();
+
+            return static::query()->firstOrCreate(
+                ['book_key' => 'FCDC', 'fiscal_year' => $month->year, 'period_month' => $month->month],
+                [
+                    'starts_on' => $month->toDateString(),
+                    'ends_on' => $month->endOfMonth()->toDateString(),
+                    'status' => 'open',
+                ],
+            );
+        });
     }
 
     public function closer(): BelongsTo

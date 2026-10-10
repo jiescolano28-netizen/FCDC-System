@@ -1,6 +1,6 @@
 # Accounting workflow design
 
-Status: confirmed design and operating contract. Implementation is not authorized by this design-only approval.
+Status: confirmed design and operating contract. Implemented accounting workflows and activation prerequisites are recorded below. Activation readiness is operational, not an audit, filing, or legal certification.
 
 ## Confirmed foundations
 
@@ -161,13 +161,11 @@ The user confirmed the complete design, operating contract and shared understand
 
 ## Repository evidence
 
-- Accounting components and `app/Support/ReferenceAccounts.php` currently provide demonstration behavior, not approved production books.
-- `app/Livewire/Pos/PointOfSale.php` persists completed cash, card and bank-transfer sales, saved sale/VAT amounts, line unit-cost snapshots and stock depletion. It does not currently post accounting entries.
-- `app/Models/StockMovement.php` records immutable quantity movements and corrections; its movement fields do not establish historical inventory valuation.
-- `docs/vat-compliance-design.md` confirms a POS-only tax scope and explicitly excludes purchase-based and accountant-entered input VAT. Extending accounting treatment does not implicitly change that tax scope.
-- Some earlier current-state documentation describes POS as session-only. Current persisted checkout code is the source evidence for this interview; unrelated documentation is not revised here.
-
-At initial design approval, no accounting implementation or runtime verification was claimed.
+- The accounting pages use persisted chart, mapping, journal, supplier, inventory-valuation, operational-source and reporting records; no illustrative reference chart or journal fixtures are migrated as company books.
+- POS checkout, received supplier purchases, payments and valued-stock/recovery actions use persisted operational records; each applicable accounting posting shares its source action's transaction and source identity.
+- Stock history retains immutable physical quantity movements; approved opening and subsequent value evidence supplies inventory carrying values.
+- `docs/vat-compliance-design.md` remains limited to POS VAT reporting. Purchase-based input VAT reclassification is a separate approved accounting-ledger operation and does not expand POS tax-return scope.
+- Initial design approval preceded implementation. This section records repository evidence, not audit, filing or legal certification.
 
 ## Implemented chart and mapping maintenance
 

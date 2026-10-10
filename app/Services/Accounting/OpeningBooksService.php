@@ -7,6 +7,7 @@ use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\AccountingPostingPeriod;
 use App\Models\AccountingYtdSummary;
+use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
 use App\Models\StockMovement;
@@ -237,6 +238,38 @@ class OpeningBooksService
         });
     }
 
+    public function activateProduction(int $actorId): void
+    {
+        abort_unless(Employee::findOrFail($actorId)->can('accounting.activate-books'), 403);
+
+        DB::transaction(function () use ($actorId): void {
+            $activation = DB::table('accounting_production_activations')
+                ->where('book_key', 'FCDC')
+                ->lockForUpdate()
+                ->first();
+            if ($activation) {
+                return;
+            }
+
+            // Source posting locks its period row, so its commit precedes this readiness snapshot.
+            AccountingPostingPeriod::query()->where('book_key', 'FCDC')->orderBy('id')->lockForUpdate()->get(['id']);
+            $readiness = $this->readiness();
+            if (! $readiness['production_ready']) {
+                throw ValidationException::withMessages([
+                    'activation' => 'Production activation unavailable: '.implode('; ', $readiness['production_blockers']).'.',
+                ]);
+            }
+
+            DB::table('accounting_production_activations')->insertOrIgnore([
+                'book_key' => 'FCDC',
+                'activated_by' => $actorId,
+                'activated_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
     public function readiness(): array
     {
         $openingJournal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->first();
@@ -249,6 +282,8 @@ class OpeningBooksService
         $requiredMappings = [...array_keys(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS), 'recovery_offset', 'adjustment'];
         $mappings = AccountingPostingMapping::whereIn('source', $requiredMappings)->with('account')->get()->keyBy('source');
         $mappingsApproved = collect($requiredMappings)->every(fn (string $source) => $mappings->get($source)?->isApprovedForPosting() === true);
+        $policiesApproved = collect(['recovery_offset', 'adjustment'])
+            ->every(fn (string $source) => $mappings->get($source)?->isApprovedForPosting() === true);
         $ytdApproved = AccountingYtdSummary::where('book_key', 'FCDC')->where('fiscal_year', $year)->where('status', 'approved')->exists();
         $postedSupplierInvoices = SupplierOpeningInvoice::activePosted()->get();
         $apLines = $journal ? $journal->lines()->with('account')->get()->filter(
@@ -256,11 +291,48 @@ class OpeningBooksService
         ) : collect();
         $apScheduleMatches = $apLines->sum('credit_cents') === $postedSupplierInvoices->sum('amount_cents')
             && $apLines->sum('debit_cents') === 0;
+        $inventoryReady = $this->inventoryReadiness($journal) === 'Opening stock schedule reconciled';
         $interveningSources = app(InterveningSourceReconciliation::class)->sources();
         $unresolvedSources = $interveningSources->filter(fn (array $source) => $source['status'] !== 'matched');
+        $activation = DB::table('accounting_production_activations')->where('book_key', 'FCDC')->first();
+        $blockers = [];
+
+        if (! $chartApproved) {
+            $blockers[] = 'active chart accounts need approval';
+        }
+        if (! $mappingsApproved) {
+            $blockers[] = 'required source mappings need approval';
+        }
+        if (! $journal) {
+            $blockers[] = 'a balanced approved cutover journal is required';
+        }
+        if (! $journal || ! $apScheduleMatches) {
+            $blockers[] = 'opening supplier balances must match the approved supplier schedule';
+        }
+        if (! $inventoryReady) {
+            $blockers[] = 'opening inventory must match the approved item schedule';
+        }
+        if ($unresolvedSources->isNotEmpty()) {
+            $blockers[] = $unresolvedSources->count().' intervening source records remain unresolved';
+        }
+        if (! $policiesApproved) {
+            $blockers[] = 'recovery and adjustment valuation policies need approval';
+        }
+        if ($cutoverDate !== null && $midyear && ! $ytdApproved) {
+            $blockers[] = 'approved pre-cutover YTD evidence is required';
+        }
+
+        $productionReady = $blockers === [];
+        $production = $activation
+            ? 'Production activated on '.CarbonImmutable::parse($activation->activated_at)->timezone('Asia/Manila')->format('F j, Y')
+            : ($productionReady
+                ? 'Production ready for authorized activation'
+                : 'Production activation unavailable: '.implode('; ', $blockers).'.');
 
         return [
-            'production_activated' => false,
+            'production_activated' => $activation !== null,
+            'production_ready' => $productionReady,
+            'production_blockers' => $blockers,
             'cutover' => $journal ? 'Approved' : 'Cutover approval required',
             'chart' => $chartApproved ? 'Approved chart available' : 'Chart approval required',
             'mappings' => $mappingsApproved ? 'Posting mappings approved' : 'Posting mapping approvals required',
@@ -274,13 +346,13 @@ class OpeningBooksService
             'source_reconciliation' => $unresolvedSources->isEmpty()
                 ? 'Intervening post-cutover sources reconciled'
                 : $unresolvedSources->count().' intervening source records remain unresolved; missing and unsupported evidence block activation',
-            'valuation' => 'Valuation policies not approved',
+            'valuation' => $policiesApproved ? 'Recovery and adjustment policies approved' : 'Valuation policies not approved',
             'ytd' => $cutoverDate === null
                 ? 'Save a cutover date to determine YTD evidence requirements'
                 : (! $midyear
                     ? 'Not required for January 1 cutover'
                     : ($ytdApproved ? 'Approved pre-cutover YTD evidence' : 'Pre-cutover YTD evidence required')),
-            'production' => 'Production activation unavailable: valuation policies remain outstanding; source reconciliation, chart, mapping, cutover, supplier, inventory and YTD readiness must be resolved.',
+            'production' => $production,
         ];
     }
 

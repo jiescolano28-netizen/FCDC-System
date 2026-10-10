@@ -6,6 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Services\Accounting\AccountingPositionSchedules;
+use App\Services\Accounting\OpeningBooksService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -31,7 +32,13 @@ class TrialBalance extends Component
             ->where('book_key', 'FCDC')->where('source_type', 'opening')->where('source_id', 'FCDC')
             ->where('status', 'posted')->value('accounting_date');
         $cutoverDate = $cutover ? CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString() : null;
-        $dateError = $this->dateRangeError($cutoverDate);
+        $readiness = app(OpeningBooksService::class)->readiness();
+        if (! $readiness['production_activated']) {
+            $cutoverDate = null;
+        }
+        $dateError = $readiness['production_activated']
+            ? $this->dateRangeError($cutoverDate)
+            : $readiness['production'];
         $accounts = collect();
         $totalDebitsCents = 0;
         $totalCreditsCents = 0;
