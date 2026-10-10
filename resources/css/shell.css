@@ -459,30 +459,6 @@
     .accounts-payable-page .dashboard-heading { align-items: flex-start; flex-direction: column; }
 }
 
-.chart-of-accounts-page { max-width: 1440px; margin: 0 auto; }
-.chart-of-accounts-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
-.chart-of-accounts-heading { align-items: center; margin-bottom: 16px; }
-.chart-account-action { padding: 9px 13px; border: 1px solid var(--slate-200); border-radius: 7px; color: var(--slate-500); background: var(--slate-100); font: inherit; font-size: 13px; cursor: not-allowed; }
-.chart-account-action-note { margin: -10px 0 16px; color: var(--slate-500); font-size: 12px; }
-.chart-account-filters { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, .45fr) minmax(160px, .45fr); gap: 12px; margin-bottom: 16px; }
-.chart-account-filters label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
-.chart-account-filters input, .chart-account-filters select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
-.chart-account-card { overflow: hidden; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
-.chart-account-card > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 16px; }
-.chart-account-card h2 { margin: 0 0 5px; color: var(--slate-700); font-size: 14px; font-weight: 600; }
-.chart-account-card header p { margin: 0; color: var(--slate-500); font-size: 12px; line-height: 1.5; }
-.chart-account-count { color: var(--slate-500); font-size: 12px; white-space: nowrap; }
-.chart-account-table-wrap { overflow-x: auto; }
-.chart-account-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.chart-account-table-wrap th, .chart-account-table-wrap td { padding: 11px 10px; border-top: 1px solid var(--slate-100); text-align: left; white-space: nowrap; }
-.chart-account-table-wrap th { color: var(--emerald-800); background: var(--emerald-50); font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.chart-account-status { display: inline-block; padding: 4px 8px; border-radius: 999px; color: var(--emerald-800); background: var(--emerald-100); font-size: 11px; }
-.chart-account-edit { padding: 6px 9px; border: 1px solid var(--slate-200); border-radius: 6px; color: var(--slate-400); background: var(--slate-50); font: inherit; cursor: not-allowed; }
-.chart-account-empty { padding: 24px !important; color: var(--slate-500); text-align: center !important; white-space: normal !important; }
-@media (max-width: 700px) {
-    .chart-account-filters { grid-template-columns: minmax(0, 1fr); }
-    .chart-account-card > header { align-items: flex-start; flex-direction: column; }
-}
 
 .general-ledger-page { max-width: 1440px; margin: 0 auto; }
 .general-ledger-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
