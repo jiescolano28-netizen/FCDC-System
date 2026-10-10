@@ -29,4 +29,3 @@ test('financial statements is a separate authenticated accounting page', functio
         ->assertSee('No financial statement is available.', false)
         ->assertSee('not a real financial statement', false);
 });
-

@@ -5,6 +5,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -87,7 +88,6 @@ function fillJournal($component, array $journal)
     return $component;
 }
 
-
 test('journal page visibility and draft preparation use separate permissions', function () {
     [$cash, $revenue] = prepareJournalBook();
     $viewer = journalEmployee(['accounting.view']);
@@ -99,7 +99,7 @@ test('journal page visibility and draft preparation use separate permissions', f
     $this->actingAs($preparerWithoutView)->get(route('accounting.journal-entry'))->assertForbidden();
 });
 test('persistent drafts survive reload and can be edited or deleted without posting effects', function () {
-    [$cash, $revenue] = prepareJournalBook();
+    [$cash, $revenue, $period] = prepareJournalBook();
     $preparer = journalEmployee(['accounting.view', 'accounting.create-journal-entry']);
     $this->actingAs($preparer);
     $journal = journalInput($cash, $revenue, ['reference' => 'DRAFT-001']);
@@ -118,6 +118,20 @@ test('persistent drafts survive reload and can be edited or deleted without post
         ->assertHasNoErrors();
     expect($draft->fresh()->description)->toBe('Updated draft')
         ->and(AccountingJournal::where('status', 'posted')->count())->toBe(1);
+    $openingDraft = AccountingJournal::create([
+        'book_key' => 'FCDC',
+        'reference' => 'OPENING-DRAFT-001',
+        'source_type' => 'opening',
+        'source_id' => 'FCDC-DRAFT-001',
+        'accounting_date' => now('Asia/Manila')->toDateString(),
+        'posting_period_id' => $period->id,
+        'description' => 'Opening draft',
+        'status' => 'draft',
+        'prepared_by' => $preparer->id,
+    ]);
+    expect(fn () => Livewire::test(JournalEntry::class)->call('deleteDraft', $openingDraft->id))
+        ->toThrow(ModelNotFoundException::class);
+    expect(AccountingJournal::find($openingDraft->id))->not->toBeNull();
 
     Livewire::test(JournalEntry::class)->call('deleteDraft', $draft->id)->assertHasNoErrors();
     expect(AccountingJournal::find($draft->id))->toBeNull()
@@ -282,6 +296,21 @@ test('a correction posts a linked reversal and replacement with reason and actor
         ->and($replacement->correction_of_id)->toBe($entry->id)
         ->and($replacement->posted_by)->toBe($poster->id)
         ->and($reversal->reference)->not->toBe($replacement->reference);
+    expect($entry->fresh()->corrections)->toHaveCount(2);
+    expect(AccountingJournal::whereDoesntHave('corrections')->whereKey($entry->id)->exists())->toBeFalse();
+    expect(fn () => Livewire::test(JournalEntry::class)
+        ->set('accountingDate', now('Asia/Manila')->toDateString())
+        ->set('correctionReason', 'Duplicate correction attempt')
+        ->set('description', 'Corrected again')
+        ->set('correctionReference', 'CORR-REV-002')
+        ->set('replacementReference', 'CORR-REPL-002')
+        ->set('lines', [
+            ['accountId' => (string) $cash->id, 'debit' => '120.00', 'credit' => ''],
+            ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '120.00'],
+        ])
+        ->call('correct', $entry->id))->toThrow(ModelNotFoundException::class);
+    expect(AccountingJournal::where('source_type', 'reversal')->count())->toBe(1)
+        ->and(AccountingJournal::where('source_type', 'replacement')->count())->toBe(1);
 });
 
 test('posted journals cannot be edited or deleted and listing filters posted history', function () {

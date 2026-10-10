@@ -32,4 +32,3 @@ test('trial balance is an authenticated named page in accounting navigation', fu
         ->assertSee(route('accounting.trial-balance'), false)
         ->assertSee('class="app-body trial-balance-body"', false);
 });
-

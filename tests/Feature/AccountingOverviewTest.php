@@ -26,4 +26,3 @@ test('accounting overview distinguishes available manual journals from unavailab
         ->assertSee('Posted manual entries are available in Journal Entry')
         ->assertSee('Recent posted entries are not summarized on this page.');
 });
-

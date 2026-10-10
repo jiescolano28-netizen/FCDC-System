@@ -5,25 +5,38 @@ namespace App\Livewire\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Services\Accounting\ManualJournalService;
-use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class JournalEntry extends Component
 {
     public string $accountingDate = '';
+
     public string $reference = '';
+
     public string $externalReference = '';
+
     public string $description = '';
+
     public array $lines = [];
+
     public ?int $editingDraftId = null;
+
     public ?int $selectedJournalId = null;
+
     public string $search = '';
+
     public string $dateFrom = '';
+
     public string $dateTo = '';
+
     public string $sourceFilter = '';
+
     public string $correctionReason = '';
+
     public string $correctionReference = '';
+
     public string $replacementReference = '';
+
     public ?int $correctingJournalId = null;
 
     public function mount(): void
@@ -91,21 +104,15 @@ class JournalEntry extends Component
     {
         $this->authorizePermission('accounting.create-journal-entry');
         $journal = AccountingJournal::where('status', 'posted')
-            ->whereIn('source_type', ['manual', 'replacement'])->with('lines')->findOrFail($journalId);
+            ->whereIn('source_type', ['manual', 'replacement'])
+            ->whereDoesntHave('corrections')->with('lines')->findOrFail($journalId);
+        $this->fillFromJournal($journal);
         $this->correctingJournalId = $journal->id;
         $this->accountingDate = now('Asia/Manila')->toDateString();
         $this->reference = '';
         $this->replacementReference = '';
         $this->correctionReference = '';
         $this->correctionReason = '';
-        $this->externalReference = $journal->external_reference ?? '';
-        $this->description = $journal->description;
-        $this->lines = $journal->lines->map(fn ($line) => [
-            'accountId' => (string) $line->accounting_account_id,
-            'description' => $line->description ?? '',
-            'debit' => $line->debit_cents ? number_format($line->debit_cents / 100, 2, '.', '') : '',
-            'credit' => $line->credit_cents ? number_format($line->credit_cents / 100, 2, '.', '') : '',
-        ])->all();
     }
 
     public function correct(int $journalId): void
@@ -123,7 +130,7 @@ class JournalEntry extends Component
 
     public function render()
     {
-        $journals = AccountingJournal::query()->with(['lines.account', 'poster', 'correctionOf'])
+        $journals = AccountingJournal::query()->with(['lines.account', 'poster', 'correctionOf', 'corrections'])
             ->when($this->search !== '', function ($query): void {
                 $term = '%'.trim($this->search).'%';
                 $query->where(fn ($nested) => $nested->where('reference', 'like', $term)

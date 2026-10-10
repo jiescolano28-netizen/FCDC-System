@@ -84,10 +84,10 @@
                 </div>
                 <div class="journal-entry-actions">
                     <button type="button" wire:click="showJournal({{ $journal->id }})">Detail</button>
-                    @if ($journal->status === 'draft')
+                    @if ($journal->status === 'draft' && $journal->source_type === 'manual')
                         @can('accounting.create-journal-entry')<button type="button" wire:click="editDraft({{ $journal->id }})">Edit draft</button><button type="button" wire:click="deleteDraft({{ $journal->id }})">Delete draft</button>@endcan
                         @can('accounting.post-journal-entry')<button type="button" wire:click="postDraft({{ $journal->id }})">Post draft</button>@endcan
-                    @elseif (in_array($journal->source_type, ['manual', 'replacement'], true))
+                    @elseif ($journal->status === 'posted' && in_array($journal->source_type, ['manual', 'replacement'], true) && $journal->corrections->isEmpty())
                         @can('accounting.create-journal-entry')<button type="button" wire:click="beginCorrection({{ $journal->id }})">Correct</button>@endcan
                     @endif
                 </div>

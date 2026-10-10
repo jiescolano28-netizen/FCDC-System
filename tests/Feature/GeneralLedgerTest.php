@@ -29,4 +29,3 @@ test('general ledger is an authenticated named page in accounting navigation', f
         ->assertSee('General Ledger reporting is not available yet.')
         ->assertSee('Manual journal entries can be posted and browsed in Journal Entry.');
 });
-

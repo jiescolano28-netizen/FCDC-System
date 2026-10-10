@@ -48,7 +48,8 @@ class ManualJournalService
     public function deleteDraft(int $journalId): void
     {
         DB::transaction(function () use ($journalId): void {
-            $journal = AccountingJournal::where('status', 'draft')->lockForUpdate()->findOrFail($journalId);
+            $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'draft')
+                ->lockForUpdate()->findOrFail($journalId);
             $journal->lines()->delete();
             $journal->delete();
         });
@@ -88,6 +89,7 @@ class ManualJournalService
 
         return DB::transaction(function () use ($journalId, $validated, $reason, $reversalReference, $actorId): array {
             $original = AccountingJournal::where('status', 'posted')->whereIn('source_type', ['manual', 'replacement'])
+                ->whereDoesntHave('corrections')
                 ->lockForUpdate()->with('lines.account')->findOrFail($journalId);
             $this->assertPostingEligible($validated['accountingDate'], $original->lines);
             $replacementLines = collect($validated['lines'])->map(fn (array $line) => (object) [
