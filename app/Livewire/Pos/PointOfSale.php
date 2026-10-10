@@ -41,7 +41,8 @@ class PointOfSale extends Component
         $item = Inventory::availableForSale()->findOrFail($inventoryId);
         $cart = $this->cart();
         $current = (float) ($cart[$item->id]['quantity'] ?? 0);
-        $next = $current === 0.0 ? min(1, (float) $item->qty) : min($current + 1, (float) $item->qty);
+        $available = (int) floor((float) $item->qty);
+        $next = $current === 0.0 ? min(1, $available) : min($current + 1, $available);
 
         if ($next > $current) {
             $cart[$item->id] = ['quantity' => $next];
@@ -102,7 +103,7 @@ class PointOfSale extends Component
                 $quantity = (float) ($line['quantity'] ?? 0);
 
                 if ($item === null || $item->status !== 'active' || $item->selling_price === null
-                    || $quantity <= 0 || round($quantity, 2) !== $quantity || $quantity > (float) $item->qty) {
+                    || $quantity <= 0 || floor($quantity) !== $quantity || $quantity > (float) $item->qty) {
                     throw ValidationException::withMessages(['cart' => 'An item is no longer available in the requested quantity. Review the cart and try again.']);
                 }
 
@@ -287,12 +288,12 @@ class PointOfSale extends Component
     {
         $item = Inventory::availableForSale()->find($inventoryId);
 
-        if ($item === null || $quantity <= 0) {
+        if ($item === null) {
             unset($cart[$inventoryId]);
-        } elseif (round($quantity, 2) !== $quantity || $quantity > (float) $item->qty) {
-            throw ValidationException::withMessages(['cart' => 'Quantity must be positive, use at most two decimal places, and not exceed available stock.']);
+        } elseif ($quantity <= 0 || floor($quantity) !== $quantity || $quantity > (float) $item->qty) {
+            throw ValidationException::withMessages(['cart' => 'Quantity must be a positive whole number and not exceed available stock.']);
         } else {
-            $cart[$inventoryId] = ['quantity' => $quantity];
+            $cart[$inventoryId] = ['quantity' => (int) $quantity];
         }
 
         $this->saveCart($cart);

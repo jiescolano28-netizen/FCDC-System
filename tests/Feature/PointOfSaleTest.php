@@ -55,7 +55,7 @@ test('POS is an authenticated named Livewire page in the shared shell', function
         ->assertDontSee('id=\"view-pos\"', false);
 });
 
-test('cashier can search by item or category, adjust a bounded decimal cart, and keep it after navigation', function () {
+test('cashier can search by item or category, adjust a bounded whole-number cart, and keep it after navigation', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory();
     createPosInventory(['name' => 'Cement bag', 'category' => 'Concrete']);
@@ -70,37 +70,37 @@ test('cashier can search by item or category, adjust a bounded decimal cart, and
         ->assertDontSee('Cement bag')
         ->call('addToCart', $board->id)
         ->call('addToCart', $board->id)
-        ->assertSee('2.00')
+        ->assertSee('value="2"', false)
+        ->call('setQuantity', $board->id, 1)
+        ->assertSee('value="1"', false)
         ->call('setQuantity', $board->id, 1.25)
-        ->assertSee('1.25');
+        ->assertHasErrors('cart')
+        ->call('setQuantity', $board->id, 0)
+        ->assertHasErrors('cart');
 
-    expect(session('pos.employee.'.auth()->id().'.cart')[$board->id]['quantity'])->toBe(1.25);
+    expect(session('pos.employee.'.auth()->id().'.cart')[$board->id]['quantity'])->toBe(1);
 
     $this->get(route('settings'))->assertOk();
-    $this->get(route('pos'))->assertOk()->assertSee('Pine board')->assertSee('1.25');
+    $this->get(route('pos'))->assertOk()->assertSee('Pine board')->assertSee('value="1"', false);
 
     Livewire::test(PointOfSale::class)
-        ->call('setQuantity', $board->id, 10.01)
+        ->call('setQuantity', $board->id, 10.5)
         ->assertHasErrors('cart')
         ->call('removeFromCart', $board->id)
         ->assertSee('Cart is empty');
 });
 
-test('fractional stock is available and can be sold at two decimal precision', function () {
+test('POS rejects quantities below one or with fractional values', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory(['qty' => 0.50]);
-    setupPosAccountingBooks([$board]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
+        ->assertSee('Cart is empty')
         ->call('setQuantity', $board->id, 0.50)
-        ->set('amountReceived', '11.20')
-        ->call('checkout')
-        ->assertHasNoErrors()
-        ->assertSee('₱11.20');
-
-    expect($board->fresh()->qty)->toBe('0.00')
-        ->and(PosTransaction::query()->sole()->lines()->first()->quantity)->toBe('0.50');
+        ->assertHasErrors('cart')
+        ->call('setQuantity', $board->id, 1)
+        ->assertHasErrors('cart');
 });
 
 test('cash checkout persists VAT, payment, customer, price snapshots, stock movement, history, and receipt', function () {
@@ -115,42 +115,42 @@ test('cash checkout persists VAT, payment, customer, price snapshots, stock move
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
-        ->call('setQuantity', $board->id, 1.25)
+        ->call('setQuantity', $board->id, 1)
         ->set('customerName', 'Walk-in customer')
         ->set('amountReceived', '30.00')
         ->call('checkout')
         ->assertHasNoErrors()
         ->assertSee('POS-')
         ->assertSee('Walk-in customer')
-        ->assertSee('₱28.00')
-        ->assertSee('₱2.00')
+        ->assertSee('₱22.40')
+        ->assertSee('₱2.40')
         ->assertSee('View receipt')
         ->call('viewReceipt', PosTransaction::query()->sole()->id)
         ->assertSee('Receipt · Completed transaction')
         ->assertSee('North Shore Materials')
         ->assertSee('18 Harbor Road')
         ->assertSee('555-0142')
-        ->assertSee('Pine board × 1.25 piece')
-        ->assertSee('₱25.00')
-        ->assertSee('₱3.00');
+        ->assertSee('Pine board × 1.00 piece')
+        ->assertSee('₱20.00')
+        ->assertSee('₱2.40');
 
     $transaction = PosTransaction::query()->with('lines')->sole();
 
     expect($transaction->status)->toBe('completed')
-        ->and($transaction->subtotal)->toBe('25.00')
+        ->and($transaction->subtotal)->toBe('20.00')
         ->and($transaction->vat_rate)->toBe('0.1200')
-        ->and($transaction->vat_amount)->toBe('3.00')
-        ->and($transaction->total)->toBe('28.00')
+        ->and($transaction->vat_amount)->toBe('2.40')
+        ->and($transaction->total)->toBe('22.40')
         ->and($transaction->payment_method)->toBe('cash')
         ->and($transaction->amount_received)->toBe('30.00')
-        ->and($transaction->change_due)->toBe('2.00')
+        ->and($transaction->change_due)->toBe('7.60')
         ->and($transaction->customer_name)->toBe('Walk-in customer')
         ->and($transaction->lines)->toHaveCount(1)
-        ->and($transaction->lines[0]->quantity)->toBe('1.25')
+        ->and($transaction->lines[0]->quantity)->toBe('1.00')
         ->and($transaction->lines[0]->selling_price)->toBe('20.00')
         ->and($transaction->lines[0]->unit_cost)->toBe('5.00')
-        ->and($board->fresh()->qty)->toBe('8.75')
-        ->and((float) $board->stockMovements()->where('type', 'stock_out')->sum('quantity'))->toBe(-1.25);
+        ->and($board->fresh()->qty)->toBe('9.00')
+        ->and($board->stockMovements()->where('type', 'stock_out')->sum('quantity'))->toBe(-1);
 
     expect(fn () => $transaction->update(['customer_name' => 'Edited customer']))
         ->toThrow(LogicException::class);

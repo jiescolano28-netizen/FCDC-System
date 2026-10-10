@@ -51,7 +51,7 @@
                         <div class="pos-cart-name">{{ $item->name }}<span>{{ $money($item->selling_price) }} / {{ $item->unit }}</span></div>
                         @can('pos.checkout')
                             <div class="pos-quantity-controls">
-                                <input aria-label="{{ $item->name }} quantity" type="number" min="0.01" max="{{ $item->qty }}" step="0.01" value="{{ number_format($item->cart_quantity, 2, '.', '') }}" wire:change="setQuantity({{ $item->id }}, $event.target.value)">
+                                <input aria-label="{{ $item->name }} quantity" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ number_format($item->cart_quantity, 0, '.', '') }}" data-previous-value="{{ number_format($item->cart_quantity, 0, '.', '') }}" onfocus="this.dataset.editingValue = this.value; this.dataset.invalidInput = 'false'" onkeydown="if (this.dataset.invalidInput === 'true') { if (['Backspace', 'Delete'].includes(event.key) || (event.ctrlKey && event.key.toLowerCase() === 'a')) this.dataset.invalidInput = 'false'; else if (!['Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.preventDefault(); }" oninput="if (/^[0-9]*$/.test(this.value)) this.dataset.previousValue = this.value; else { this.value = this.dataset.editingValue; this.dataset.invalidInput = 'true'; }" wire:change="setQuantity({{ $item->id }}, $event.target.value)">
                                 <button class="pos-remove-button" type="button" wire:click="removeFromCart({{ $item->id }})" aria-label="Remove {{ $item->name }}">×</button>
                             </div>
                         @endcan
