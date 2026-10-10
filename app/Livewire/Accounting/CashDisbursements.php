@@ -12,6 +12,7 @@ use App\Models\SupplierPurchaseInvoice;
 use App\Services\Accounting\CashDisbursementService;
 use App\Models\SupplierPurchaseCorrection;
 use App\Services\Accounting\SupplierPurchaseCorrectionService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -187,14 +188,23 @@ class CashDisbursements extends Component
     {
         $this->authorizePermission('accounting.correct-supplier-purchases');
         $payment = CashDisbursementRecord::query()->with('lines')->findOrFail($disbursementId);
-        abort_unless($payment->status === 'posted' && $payment->supplier_id === null, 404);
-        abort_unless(! SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $payment->id)->exists(), 404);
+        abort_unless(
+            $payment->status === 'posted' && $payment->supplier_id === null
+                && $payment->reversal_of_id === null && ! $payment->reversals()->exists(),
+            404,
+        );
+        $lineChanges = DB::table('supplier_purchase_correction_lines')
+            ->join('supplier_purchase_corrections', 'supplier_purchase_corrections.id', '=', 'supplier_purchase_correction_lines.supplier_purchase_correction_id')
+            ->where('supplier_purchase_corrections.cash_disbursement_id', $payment->id)
+            ->get(['cash_disbursement_line_id', 'direction', 'amount_cents'])
+            ->groupBy('cash_disbursement_line_id')
+            ->map(fn ($lines) => $lines->sum(fn ($line) => $line->direction === 'increase' ? (int) $line->amount_cents : -(int) $line->amount_cents));
         $this->selectedId = $payment->id;
         $this->directCorrectionSupplierId = '';
         $this->directCorrectionReason = '';
         $this->directCorrectionLines = $payment->lines->map(fn ($line) => [
             'line_id' => $line->id,
-            'corrected_amount' => number_format($line->amount_cents / 100, 2, '.', ''),
+            'corrected_amount' => number_format(($line->amount_cents + (int) ($lineChanges[$line->id] ?? 0)) / 100, 2, '.', ''),
             'remaining_inventory' => '0.00',
             'consumed_cost' => '0.00',
             'consumed_accounting_account_id' => '',

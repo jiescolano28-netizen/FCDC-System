@@ -42,7 +42,7 @@ class SupplierPurchaseCorrectionService
 
         return DB::transaction(function () use ($invoiceId, $data, $reason, $actor): SupplierPurchaseCorrection {
             $invoice = SupplierPurchaseInvoice::query()->with('lines')->lockForUpdate()->findOrFail($invoiceId);
-            if ($invoice->status !== 'posted' || $invoice->supplier_purchase_correction_id !== null || $invoice->correctionChildren()->exists()) {
+            if ($invoice->status !== 'posted' || $invoice->correctionChildren()->exists()) {
                 throw ValidationException::withMessages(['invoice' => 'Only the active posted credit purchase identity can be corrected.']);
             }
             $date = CarbonImmutable::now('Asia/Manila')->startOfDay();
@@ -285,16 +285,31 @@ class SupplierPurchaseCorrectionService
 
         return DB::transaction(function () use ($disbursementId, $data, $reason, $actor): SupplierPurchaseCorrection {
             $payment = CashDisbursement::query()->with(['lines', 'journal'])->lockForUpdate()->findOrFail($disbursementId);
+            $previousCorrections = SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $payment->id)->orderBy('id')->get();
             if ($payment->status !== 'posted' || $payment->reversal_of_id !== null || $payment->supplier_id !== null
                 || $payment->lines->isEmpty() || $payment->lines->contains(fn ($line) => $line->supplier_purchase_invoice_id || $line->supplier_opening_invoice_id)
-                || SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $payment->id)->exists()) {
-                throw ValidationException::withMessages(['disbursement' => 'Only an uncorrected posted direct purchase can be corrected.']);
+                || CashDisbursement::query()->where('reversal_of_id', $payment->id)->exists()) {
+                throw ValidationException::withMessages(['disbursement' => 'Only an unreversed posted direct purchase can be corrected.']);
             }
             $supplier = Supplier::query()->findOrFail($data['supplier_id']);
             $date = CarbonImmutable::now('Asia/Manila')->startOfDay();
             $period = $this->openPeriod($date);
             $linesById = $payment->lines->keyBy('id');
             $originalAmount = (int) $payment->lines->sum('amount_cents');
+            $currentAmount = (int) ($previousCorrections->last()?->corrected_amount_cents ?? $originalAmount);
+            $currentLineAmounts = $payment->lines->mapWithKeys(fn ($line) => [$line->id => (int) $line->amount_cents])->all();
+            $previousAllocations = DB::table('supplier_purchase_correction_lines')
+                ->join('supplier_purchase_corrections', 'supplier_purchase_corrections.id', '=', 'supplier_purchase_correction_lines.supplier_purchase_correction_id')
+                ->where('supplier_purchase_corrections.cash_disbursement_id', $payment->id)
+                ->get(['cash_disbursement_line_id', 'direction', 'amount_cents']);
+            foreach ($previousAllocations as $previousAllocation) {
+                $currentLineAmounts[$previousAllocation->cash_disbursement_line_id] += $previousAllocation->direction === 'increase'
+                    ? (int) $previousAllocation->amount_cents
+                    : -(int) $previousAllocation->amount_cents;
+            }
+            if (collect($currentLineAmounts)->contains(fn ($amount) => $amount < 1)) {
+                throw ValidationException::withMessages(['disbursement' => 'Prior direct purchase corrections leave an invalid line value.']);
+            }
             $correctedTotal = 0;
             $reviewed = [];
             $inventoryChanges = [];
@@ -308,7 +323,7 @@ class SupplierPurchaseCorrectionService
                 if ($correctedCents > PHP_INT_MAX - $correctedTotal) {
                     throw ValidationException::withMessages(['allocations' => 'The corrected direct purchase total exceeds the supported centavo range.']);
                 }
-                $lineDifference = $correctedCents - (int) $line->amount_cents;
+                $lineDifference = $correctedCents - $currentLineAmounts[$line->id];
                 $amount = abs($lineDifference);
                 $inventoryId = $line->inventory_id ? (int) $line->inventory_id : null;
                 $accountId = $inventoryId ? $this->mappedAccount('inventory')->id : (int) $line->accounting_account_id;
@@ -347,24 +362,18 @@ class SupplierPurchaseCorrectionService
                 ];
                 $correctedTotal += $correctedCents;
             }
-            $difference = $correctedTotal - $originalAmount;
-            if (count($reviewed) !== $linesById->count() || $correctedTotal < 1 || $difference === 0) {
-                throw ValidationException::withMessages(['allocations' => 'Correct every direct purchase allocation and provide a changed positive purchase total.']);
+            $difference = $correctedTotal - $currentAmount;
+            if (count($reviewed) !== $linesById->count() || $correctedTotal < 1 || $difference >= 0) {
+                throw ValidationException::withMessages(['allocations' => 'Correct every direct purchase allocation and provide a lower positive total.']);
             }
             foreach ($reviewed as $allocation) {
-                if ($allocation['amount_cents'] > 0 && ($allocation['direction'] === 'increase') !== ($difference > 0)) {
-                    throw ValidationException::withMessages(['allocations' => 'A correction cannot increase some direct purchase lines while decreasing others in one posting.']);
+                if ($allocation['amount_cents'] > 0 && $allocation['direction'] !== 'decrease') {
+                    throw ValidationException::withMessages(['allocations' => 'A direct-purchase correction must reduce every changed line.']);
                 }
             }
             $this->assertForwardInventoryDate($inventoryChanges, $date);
-            $journalLines = [];
-            if ($difference < 0) {
-                $receivable = $this->classifiedAccount('accounts_receivable', 'Asset');
-                $journalLines[$receivable->id] = ['debit_cents' => abs($difference), 'credit_cents' => 0];
-            } else {
-                $ap = $this->mappedAccount('accounts_payable');
-                $journalLines[$ap->id] = ['debit_cents' => 0, 'credit_cents' => $difference];
-            }
+            $receivable = $this->classifiedAccount('accounts_receivable', 'Asset');
+            $journalLines = [$receivable->id => ['debit_cents' => abs($difference), 'credit_cents' => 0]];
             foreach ($reviewed as $allocation) {
                 foreach ([
                     [$allocation['accounting_account_id'], $allocation['inventory_id'] ? $allocation['remaining_inventory_cents'] : $allocation['amount_cents']],
@@ -382,12 +391,13 @@ class SupplierPurchaseCorrectionService
             if ($debits !== $credits || $debits !== abs($difference)) {
                 throw ValidationException::withMessages(['allocations' => 'Direct purchase correction allocations must balance the supplier refund/payable exactly.']);
             }
+            $journalReference = 'DIRECT-CORR-'.$payment->id.'-'.Str::upper(Str::random(8));
             $journal = AccountingJournal::query()->create([
-                'book_key' => 'FCDC', 'reference' => 'DIRECT-CORR-'.$payment->id.'-'.Str::upper(Str::random(8)),
-                'source_type' => 'direct_purchase_correction', 'source_id' => (string) $payment->id,
+                'book_key' => 'FCDC', 'reference' => $journalReference,
+                'source_type' => 'direct_purchase_correction', 'source_id' => $journalReference,
                 'accounting_date' => $date->toDateString(), 'posting_period_id' => $period->id,
                 'description' => 'Direct purchase correction for '.$payment->reference.': '.$reason,
-                'external_reference' => $payment->reference, 'correction_of_id' => $payment->journal_id,
+                'external_reference' => $payment->reference, 'correction_of_id' => $previousCorrections->last()?->journal_id ?? $payment->journal_id,
                 'correction_reason' => $reason, 'status' => 'draft', 'prepared_by' => $actor->id,
             ]);
             foreach ($journalLines as $accountId => $amounts) {
@@ -401,39 +411,13 @@ class SupplierPurchaseCorrectionService
             $correction = SupplierPurchaseCorrection::query()->create([
                 'cash_disbursement_id' => $payment->id, 'journal_id' => $journal->id,
                 'supplier_id' => $supplier->id, 'source_type' => 'direct_purchase',
-                'original_amount_cents' => $originalAmount, 'corrected_amount_cents' => $correctedTotal,
-                'refund_due_cents' => max(0, $originalAmount - $correctedTotal), 'reason' => $reason,
+                'original_amount_cents' => $currentAmount, 'corrected_amount_cents' => $correctedTotal,
+                'refund_due_cents' => max(0, -$difference), 'reason' => $reason,
                 'accounting_date' => $date->toDateString(), 'prepared_by' => $actor->id, 'posted_by' => $actor->id,
             ]);
             foreach ($reviewed as $allocation) {
                 $allocation['supplier_purchase_correction_id'] = $correction->id;
                 DB::table('supplier_purchase_correction_lines')->insert($allocation + ['created_at' => now(), 'updated_at' => now()]);
-            }
-            if ($difference > 0) {
-                $invoiceNumber = 'DIRECT-'.$supplier->id.'-CORR-'.$payment->id.'-'.$correction->id;
-                $replacement = SupplierPurchaseInvoice::query()->create([
-                    'supplier_id' => $supplier->id, 'supplier_code_snapshot' => $supplier->code,
-                    'supplier_name_snapshot' => $supplier->name, 'invoice_number' => $invoiceNumber,
-                    'invoice_number_normalized' => mb_strtoupper($invoiceNumber, 'UTF-8'),
-                    'recognition_date' => $date->toDateString(), 'due_date' => $date->toDateString(),
-                    'gross_amount_cents' => $difference, 'description' => 'Direct purchase correction: '.$reason,
-                    'receipt_confirmed' => true, 'status' => 'draft', 'prepared_by' => $actor->id,
-                    'accounting_journal_id' => $journal->id, 'supplier_purchase_correction_id' => $correction->id,
-                ]);
-                foreach ($reviewed as $allocation) {
-                    $sourceLine = $linesById->get($allocation['cash_disbursement_line_id']);
-                    $replacement->lines()->create([
-                        'description' => $sourceLine->description,
-                        'inventory_id' => $allocation['inventory_id'],
-                        'accounting_account_id' => $allocation['accounting_account_id'],
-                        'quantity' => null,
-                        'line_amount_cents' => $allocation['amount_cents'],
-                    ]);
-                }
-                $replacement->forceFill([
-                    'status' => 'posted', 'posted_by' => $actor->id, 'posted_at' => now('UTC'),
-                ])->save();
-                $correction->forceFill(['replacement_invoice_id' => $replacement->id])->save();
             }
             foreach ($inventoryChanges as $inventoryId => $change) {
                 if ($change === 0) {

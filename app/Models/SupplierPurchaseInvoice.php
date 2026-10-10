@@ -14,7 +14,7 @@ class SupplierPurchaseInvoice extends Model
         'supplier_id', 'supplier_code_snapshot', 'supplier_name_snapshot', 'invoice_number',
         'invoice_number_normalized', 'recognition_date', 'due_date', 'gross_amount_cents',
         'description', 'terms', 'receipt_confirmed', 'status', 'prepared_by', 'posted_by',
-        'posted_at', 'accounting_journal_id', 'correction_of_id', 'correction_reason', 'supplier_purchase_correction_id',
+        'posted_at', 'accounting_journal_id', 'correction_of_id', 'correction_reason',
     ];
 
     protected function casts(): array

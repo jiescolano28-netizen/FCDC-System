@@ -9,6 +9,7 @@ use App\Models\CashDisbursement;
 use App\Models\PosTransaction;
 use App\Models\StockMovement;
 use App\Models\SupplierPurchaseInvoice;
+use App\Models\SupplierPurchaseCorrection;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -142,8 +143,9 @@ class GeneralLedger extends Component
             'opening' => $journal->source_id === 'FCDC' ? route('accounting.opening-books') : null,
             'supplier_purchase', 'supplier_purchase_correction' => SupplierPurchaseInvoice::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.supplier-purchases', ['invoice' => $journal->source_id]) : null,
-            'cash_disbursement', 'cash_disbursement_reversal', 'direct_purchase_correction' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
+            'cash_disbursement', 'cash_disbursement_reversal' => CashDisbursement::query()->whereKey($journal->source_id)->exists()
                 ? route('accounting.cash-disbursements', ['disbursement' => $journal->source_id]) : null,
+            'direct_purchase_correction' => $this->directCorrectionUrl($journal),
             'supplier_refund_receipt' => $this->refundCorrectionUrl($journal),
             'pos_sale' => auth()->user()?->can('pos.view') && PosTransaction::query()->whereKey($journal->source_id)->where('status', 'completed')->exists()
                 ? route('pos', ['receipt' => $journal->source_id]) : null,
@@ -151,6 +153,13 @@ class GeneralLedger extends Component
                 ? $this->stockHistoryUrl($journal->source_id) : null,
             default => null,
         };
+    }
+
+    private function directCorrectionUrl(AccountingJournal $journal): ?string
+    {
+        $disbursementId = SupplierPurchaseCorrection::query()->where('journal_id', $journal->id)->value('cash_disbursement_id');
+
+        return $disbursementId ? route('accounting.cash-disbursements', ['disbursement' => $disbursementId]) : null;
     }
 
     private function refundCorrectionUrl(AccountingJournal $journal): ?string
@@ -163,9 +172,8 @@ class GeneralLedger extends Component
             && SupplierPurchaseInvoice::query()->whereKey($correction->source_id)->exists()) {
             return route('accounting.supplier-purchases', ['invoice' => $correction->source_id]);
         }
-        if ($correction->source_type === 'direct_purchase_correction'
-            && CashDisbursement::query()->whereKey($correction->source_id)->exists()) {
-            return route('accounting.cash-disbursements', ['disbursement' => $correction->source_id]);
+        if ($correction->source_type === 'direct_purchase_correction') {
+            return $this->directCorrectionUrl($correction);
         }
 
         return null;

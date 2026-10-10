@@ -497,4 +497,33 @@ test('direct supplier purchases preserve the disbursement and post a linked refu
     expect($receipt->amount_cents)->toBe(1_000_000)
         ->and((int) DB::table('supplier_refund_receipts')->where('supplier_purchase_correction_id', $correction->id)->sum('amount_cents'))->toBe(1_000_000)
         ->and($payment->fresh()->journal_id)->not->toBe($correction->journal_id);
+    $nextCorrection = app(SupplierPurchaseCorrectionService::class)->correctDirectPurchase($payment->id, [
+        'supplier_id' => $supplier->id, 'reason' => 'Additional direct-purchase credit',
+        'allocations' => [[
+            'line_id' => $payment->lines->first()->id, 'corrected_amount_cents' => 3_500_000,
+        ]],
+    ], $actor->id);
+
+    expect($nextCorrection->original_amount_cents)->toBe(4_000_000)
+        ->and($nextCorrection->refund_due_cents)->toBe(500_000)
+        ->and($nextCorrection->journal->correction_of_id)->toBe($correction->journal_id)
+        ->and((int) $nextCorrection->journal->lines->firstWhere('accounting_account_id', $receivable->id)->debit_cents)->toBe(500_000);
+    expect(fn () => app(CashDisbursementService::class)->reverse($payment->id, 'Attempt reversal after correction', $actor->id))
+        ->toThrow(ValidationException::class);
+    $reversedPayment = app(CashDisbursementService::class)->saveDraft([
+        'payee' => $supplier->name, 'supplierId' => null, 'paymentDate' => now('Asia/Manila')->toDateString(),
+        'method' => 'Bank Transfer', 'moneyAccountId' => (string) $bank->id,
+        'reference' => 'DIRECT-REV-'.$actor->id, 'checkNumber' => '',
+        'description' => 'Reversed direct purchase', 'evidenceReference' => 'Supplier invoice reversed',
+        'amount' => '1000.00',
+        'allocations' => [['accounting_account_id' => (string) $expense->id, 'description' => 'Direct purchase', 'amount' => '1000.00']],
+    ], $actor->id);
+    $reversedPayment = app(CashDisbursementService::class)->post($reversedPayment->id, $actor->id);
+    app(CashDisbursementService::class)->reverse($reversedPayment->id, 'Supplier canceled the direct purchase', $actor->id);
+    expect(fn () => app(SupplierPurchaseCorrectionService::class)->correctDirectPurchase($reversedPayment->id, [
+        'supplier_id' => $supplier->id, 'reason' => 'Attempt correction after reversal',
+        'allocations' => [[
+            'line_id' => $reversedPayment->lines->first()->id, 'corrected_amount_cents' => 90_000,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
 });

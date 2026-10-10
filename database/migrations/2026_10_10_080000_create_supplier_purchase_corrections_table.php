@@ -34,10 +34,6 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['supplier_id', 'accounting_date'], 'supplier_purchase_corrections_supplier_date_idx');
         });
-        Schema::table('supplier_purchase_invoices', function (Blueprint $table): void {
-            $table->foreignId('supplier_purchase_correction_id')->nullable()->after('correction_reason')
-                ->constrained('supplier_purchase_corrections')->restrictOnDelete();
-        });
         Schema::create('supplier_purchase_correction_lines', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('supplier_purchase_correction_id')->constrained('supplier_purchase_corrections')->restrictOnDelete();
@@ -74,7 +70,6 @@ return new class extends Migration
         Schema::dropIfExists('supplier_refund_receipts');
         Schema::dropIfExists('supplier_purchase_correction_lines');
         Schema::table('supplier_purchase_invoices', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('supplier_purchase_correction_id');
             $table->dropIndex('supplier_purchase_invoice_corrections_idx');
             $table->dropConstrainedForeignId('correction_of_id');
             $table->dropColumn('correction_reason');

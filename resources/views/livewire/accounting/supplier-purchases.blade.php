@@ -57,7 +57,7 @@
                         @can('accounting.prepare-supplier-purchases')<button type="button" wire:click="editDraft({{ $invoice->id }})">Edit</button><button type="button" wire:click="deleteDraft({{ $invoice->id }})">Delete</button>@endcan
                         @can('accounting.post-supplier-purchases')<button type="button" wire:click="postInvoice({{ $invoice->id }})">Post received invoice</button>@endcan
                     @endif
-                    @if ($invoice->status === 'posted' && $invoice->supplier_purchase_correction_id === null && $invoice->correctionChildren->isEmpty() && $canCorrectPurchases)
+                    @if ($invoice->status === 'posted' && $invoice->correctionChildren->isEmpty() && $canCorrectPurchases)
                         <button type="button" wire:click="startCorrection({{ $invoice->id }})">Correct purchase</button>
                     @endif
                 </td></tr>

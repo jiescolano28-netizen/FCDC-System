@@ -148,7 +148,7 @@ class TrialBalance extends Component
         $openingInvoices = SupplierOpeningInvoice::query()->where('status', 'posted')->with('openingJournal')
             ->get()->filter(fn (SupplierOpeningInvoice $invoice) => $invoice->openingJournal?->accounting_date?->toDateString() <= $date);
         $purchaseInvoices = SupplierPurchaseInvoice::query()->where('status', 'posted')->whereNull('correction_of_id')
-            ->whereNull('supplier_purchase_correction_id')->whereDate('recognition_date', '<=', $date)->get();
+            ->whereDate('recognition_date', '<=', $date)->get();
         $invoiceCents = (int) $openingInvoices->sum(fn ($invoice) => $invoice->reversal_of_id ? -(int) $invoice->amount_cents : (int) $invoice->amount_cents)
             + (int) $purchaseInvoices->sum('gross_amount_cents');
         $apAccountIds = AccountingAccount::query()->where('classification', 'accounts_payable')->pluck('id');

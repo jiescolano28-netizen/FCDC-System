@@ -143,7 +143,7 @@ class SupplierPurchases extends Component
     {
         $this->authorizePermission('accounting.correct-supplier-purchases');
         $invoice = SupplierPurchaseInvoice::query()->with('lines')->findOrFail($invoiceId);
-        abort_unless($invoice->status === 'posted' && $invoice->supplier_purchase_correction_id === null && ! $invoice->correctionChildren()->exists(), 404);
+        abort_unless($invoice->status === 'posted' && ! $invoice->correctionChildren()->exists(), 404);
         $this->selectedId = $invoice->id;
         $this->correctionReason = '';
         $this->correctionLines = $invoice->lines->map(fn ($line) => [

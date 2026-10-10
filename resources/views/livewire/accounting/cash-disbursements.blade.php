@@ -123,7 +123,7 @@
             </ul>
             @if ($selectedDisbursement->reversal_of_id)<p>Linked reversal of {{ $selectedDisbursement->reversalOf?->reference }}. Reason: {{ $selectedDisbursement->correction_reason }}</p>@endif
             @if ($selectedDisbursement->reversals->isNotEmpty())<p>Reversed by {{ $selectedDisbursement->reversals->first()->reference }}. Reason: {{ $selectedDisbursement->reversals->first()->correction_reason }}</p>@endif
-            @if ($directCorrections->isEmpty() && $selectedDisbursement->status === 'posted' && ! $selectedDisbursement->supplier_id && ! $selectedDisbursement->reversal_of_id && $selectedDisbursement->reversals->isEmpty() && $canCorrectPurchases)
+            @if ($selectedDisbursement->status === 'posted' && ! $selectedDisbursement->supplier_id && ! $selectedDisbursement->reversal_of_id && $selectedDisbursement->reversals->isEmpty() && $canCorrectPurchases)
                 <button type="button" wire:click="startDirectPurchaseCorrection({{ $selectedDisbursement->id }})">Correct directly paid purchase</button>
             @endif
             @if ($directCorrectionLines && $selectedDisbursement->id === $this->selectedId)
@@ -134,7 +134,7 @@
                     @foreach ($directCorrectionLines as $index => $correctionLine)
                         @php($sourceLine = $selectedDisbursement->lines->firstWhere('id', $correctionLine['line_id']))
                         <fieldset wire:key="direct-correction-line-{{ $sourceLine->id }}">
-                            <legend>{{ $sourceLine->description }} — original PHP {{ number_format($sourceLine->amount_cents / 100, 2) }}</legend>
+                            <legend>{{ $sourceLine->description }} — current corrected value PHP {{ number_format((float) $correctionLine['corrected_amount'], 2) }}</legend>
                             <label>Corrected line value (PHP)<input inputmode="decimal" wire:model="directCorrectionLines.{{ $index }}.corrected_amount" required></label>
                             @if ($sourceLine->inventory_id)
                                 <p>Physical quantity remains {{ $sourceLine->quantity }}; value corrections do not reverse stock.</p>

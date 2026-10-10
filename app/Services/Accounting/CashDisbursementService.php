@@ -12,6 +12,7 @@ use App\Models\Inventory;
 use App\Models\Supplier;
 use App\Models\SupplierOpeningInvoice;
 use App\Models\SupplierPurchaseInvoice;
+use App\Models\SupplierPurchaseCorrection;
 use App\Services\Inventory\RecordValuedStockMovement;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -142,6 +143,11 @@ class CashDisbursementService
                 ->lockForUpdate()->with(['lines.account', 'moneyAccount', 'journal.lines'])->findOrFail($disbursementId);
             if ($original->reversals()->exists()) {
                 throw ValidationException::withMessages(['disbursement' => 'This payment already has a linked reversal.']);
+            }
+            $correctedPurchasePayment = SupplierPurchaseCorrection::query()->where('cash_disbursement_id', $original->id)->exists()
+                || $original->lines()->whereNotNull('supplier_purchase_invoice_id')->whereHas('invoice', fn ($query) => $query->whereHas('corrections'))->exists();
+            if ($correctedPurchasePayment) {
+                throw ValidationException::withMessages(['disbursement' => 'A payment linked to a corrected purchase cannot be reversed; correct the purchase and settlement through its source-linked records.']);
             }
             if ($original->lines()->whereNotNull('inventory_id')->exists()) {
                 throw ValidationException::withMessages(['disbursement' => 'Inventory receipts cannot be reversed through payment correction; use an authorized source-linked stock correction.']);
