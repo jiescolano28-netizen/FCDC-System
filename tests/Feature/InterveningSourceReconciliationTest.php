@@ -9,8 +9,10 @@ use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\PosTransaction;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Services\Accounting\AccountingPositionSchedules;
 use App\Services\Accounting\InterveningSourceReconciliation;
+use App\Services\Accounting\SupplierPurchaseService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +60,7 @@ function createLegacySale(Inventory $item, Employee $cashier, string $lineCost =
 }
 
 test('an existing completed sale is linked once without another stock issue', function () {
-    $employee = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources']);
+    $employee = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     $item = Inventory::create([
         'name' => 'Legacy steel', 'code' => 'LEGACY-STEEL', 'category' => 'Steel', 'unit' => 'piece',
         'qty' => 10, 'unit_cost' => 50, 'selling_price' => 180, 'reorder_level' => 1, 'status' => 'active',
@@ -85,7 +87,7 @@ test('an existing completed sale is linked once without another stock issue', fu
 });
 
 test('an existing sale without frozen historical line cost is not included', function () {
-    $employee = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources']);
+    $employee = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     $item = Inventory::create([
         'name' => 'Legacy pipe', 'code' => 'LEGACY-PIPE', 'category' => 'Pipe', 'unit' => 'piece',
         'qty' => 10, 'unit_cost' => 50, 'selling_price' => 180, 'reorder_level' => 1, 'status' => 'active',
@@ -100,7 +102,7 @@ test('an existing sale without frozen historical line cost is not included', fun
 });
 
 test('an unvalued historical receipt is rejected without creating an accounting link', function () {
-    $employee = reconciliationEmployee(['accounting.view', 'accounting.reconcile-sources']);
+    $employee = reconciliationEmployee(['accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     $item = Inventory::create([
         'name' => 'Legacy cement', 'code' => 'LEGACY-CEMENT', 'category' => 'Cement', 'unit' => 'bag',
         'qty' => 0, 'unit_cost' => 0, 'selling_price' => 100, 'reorder_level' => 1, 'status' => 'active',
@@ -121,9 +123,46 @@ test('an unvalued historical receipt is rejected without creating an accounting 
 
     expect(AccountingJournal::query()->where('source_type', 'stock_movement')->where('source_id', (string) $movement->id)->exists())->toBeFalse();
 });
+test('supplier purchase inclusion rejects a receipt without saved carrying-value evidence', function () {
+    $employee = reconciliationEmployee([
+        'accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources',
+        'accounting.prepare-supplier-purchases',
+    ]);
+    $item = Inventory::create([
+        'name' => 'Unvalued purchase receipt', 'code' => 'UNVALUED-PURCHASE', 'category' => 'Steel', 'unit' => 'piece',
+        'qty' => 10, 'unit_cost' => 50, 'selling_price' => 100, 'reorder_level' => 1, 'status' => 'active',
+    ]);
+    setupPosAccountingBooks([$item], [$item->id => '500.00']);
+    $supplier = Supplier::create(['code' => 'UNVAL-1', 'name' => 'Unvalued Supplier', 'created_by' => $employee->id]);
+    $date = now('Asia/Manila')->toDateString();
+    $invoice = app(SupplierPurchaseService::class)->saveDraft([
+        'supplier_id' => $supplier->id, 'invoice_number' => 'UNVALUED-INV-1',
+        'recognition_date' => $date, 'due_date' => $date, 'description' => 'Missing receipt valuation',
+        'receipt_confirmed' => true,
+        'lines' => [[
+            'inventory_id' => $item->id, 'accounting_account_id' => '', 'description' => 'Steel receipt',
+            'quantity' => '2.00', 'amount' => '200.00',
+        ]],
+    ], $employee->id);
+    DB::table('supplier_purchase_invoices')->where('id', $invoice->id)->update(['status' => 'posted']);
+    $movement = StockMovement::create([
+        'inventory_id' => $item->id, 'posted_by' => $employee->id, 'type' => 'purchase_receipt', 'quantity' => '2.00',
+        'reason_category' => 'supplier_purchase', 'reference' => $invoice->invoice_number, 'effective_date' => $date,
+        'posted_at' => now('UTC'), 'value_cents' => 20_000, 'source_reference' => 'supplier_purchase:'.$invoice->id,
+    ]);
+    test()->actingAs($employee);
+
+    Livewire::test(OpeningBooks::class)
+        ->call('includeInterveningSource', 'supplier_purchase', $invoice->id)
+        ->assertHasErrors();
+
+    expect(AccountingJournal::query()->where('source_type', 'supplier_purchase')->where('source_id', (string) $invoice->id)->exists())
+        ->toBeFalse()
+        ->and($movement->fresh()->accounting_journal_id)->toBeNull();
+});
 
 test('a valued legacy stock movement receives an accounting link without changing physical quantity', function () {
-    $employee = reconciliationEmployee(['accounting.view', 'accounting.reconcile-sources']);
+    $employee = reconciliationEmployee(['accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     test()->actingAs($employee);
     $item = Inventory::create([
         'name' => 'Legacy valve', 'code' => 'LEGACY-VALVE', 'category' => 'Valve', 'unit' => 'piece',
@@ -171,14 +210,14 @@ test('a valued legacy stock movement receives an accounting link without changin
         ->and($inventoryLedger)->toBe($inventorySchedule);
 });
 
-test('reconciliation requires its dedicated permission', function () {
+test('source posting requires a separate posting permission from reconciliation', function () {
     $cashier = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources']);
     $item = Inventory::create([
         'name' => 'Permission steel', 'code' => 'PERM-STEEL', 'category' => 'Steel', 'unit' => 'piece',
         'qty' => 10, 'unit_cost' => 50, 'selling_price' => 180, 'reorder_level' => 1, 'status' => 'active',
     ]);
     $sale = createLegacySale($item, $cashier);
-    $viewer = reconciliationEmployee(['accounting.view']);
+    $viewer = reconciliationEmployee(['accounting.view', 'accounting.reconcile-sources']);
     test()->actingAs($viewer);
 
     Livewire::test(OpeningBooks::class)
@@ -187,7 +226,7 @@ test('reconciliation requires its dedicated permission', function () {
 });
 
 test('a failed source inclusion leaves no journal or stock changes', function () {
-    $cashier = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources']);
+    $cashier = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     $item = Inventory::create([
         'name' => 'Atomic steel', 'code' => 'ATOMIC-STEEL', 'category' => 'Steel', 'unit' => 'piece',
         'qty' => 10, 'unit_cost' => 50, 'selling_price' => 180, 'reorder_level' => 1, 'status' => 'active',
@@ -207,7 +246,7 @@ test('a failed source inclusion leaves no journal or stock changes', function ()
 });
 
 test('the review identifies a source whose accounting links disagree', function () {
-    $cashier = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources']);
+    $cashier = reconciliationEmployee(['pos.checkout', 'accounting.view', 'accounting.reconcile-sources', 'accounting.post-reconciled-sources']);
     $item = Inventory::create([
         'name' => 'Duplicate-link steel', 'code' => 'DUPLINK-STEEL', 'category' => 'Steel', 'unit' => 'piece',
         'qty' => 10, 'unit_cost' => 50, 'selling_price' => 180, 'reorder_level' => 1, 'status' => 'active',
@@ -218,19 +257,13 @@ test('the review identifies a source whose accounting links disagree', function 
     $sourceJournal = AccountingJournal::create([
         'book_key' => 'FCDC', 'reference' => 'LEGACY-POS-LINK', 'source_type' => 'pos_sale',
         'source_id' => (string) $sale->id, 'accounting_date' => $date, 'posting_period_id' => $periodId,
-        'description' => 'Existing source identity without completed posting', 'status' => 'draft', 'prepared_by' => $cashier->id,
+        'description' => 'Posted source identity missing operational links', 'status' => 'posted', 'prepared_by' => $cashier->id,
+        'posted_by' => $cashier->id, 'posted_at' => now(),
     ]);
-    $otherJournal = AccountingJournal::create([
-        'book_key' => 'FCDC', 'reference' => 'OTHER-STOCK-LINK', 'source_type' => 'manual',
-        'source_id' => 'OTHER-STOCK-LINK', 'accounting_date' => $date, 'posting_period_id' => $periodId,
-        'description' => 'Unrelated existing link', 'status' => 'draft', 'prepared_by' => $cashier->id,
-    ]);
-    DB::table('stock_movements')->where('source_reference', 'pos_sale:'.$sale->id)
-        ->update(['accounting_journal_id' => $otherJournal->id]);
 
     $source = app(InterveningSourceReconciliation::class)
         ->sources()->first(fn (array $source) => $source['type'] === 'pos_sale' && $source['id'] === $sale->id);
 
     expect($source['status'])->toBe('duplicate-link')
-        ->and($sourceJournal->status)->toBe('draft');
+        ->and($sourceJournal->status)->toBe('posted');
 });

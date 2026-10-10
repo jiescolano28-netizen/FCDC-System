@@ -136,6 +136,7 @@ class OpeningBooks extends Component
     public function includeInterveningSource(string $type, int $sourceId): void
     {
         $this->authorizePermission('accounting.reconcile-sources');
+        $this->authorizePermission('accounting.post-reconciled-sources');
         $reconciliation = app(InterveningSourceReconciliation::class);
         match ($type) {
             'pos_sale' => $reconciliation->includePosSale($sourceId, auth()->id()),

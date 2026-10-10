@@ -159,7 +159,9 @@
                             <td>
                                 @if ($source['status'] === 'missing' && in_array($source['type'], ['pos_sale', 'stock_movement', 'supplier_purchase', 'cash_disbursement'], true))
                                     @can('accounting.reconcile-sources')
-                                        <button type="button" wire:click="includeInterveningSource('{{ $source['type'] }}', {{ $source['id'] }})">Include source</button>
+                                        @can('accounting.post-reconciled-sources')
+                                            <button type="button" wire:click="includeInterveningSource('{{ $source['type'] }}', {{ $source['id'] }})">Include source</button>
+                                        @endcan
                                     @endcan
                                 @else
                                     —

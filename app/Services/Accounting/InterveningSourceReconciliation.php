@@ -33,7 +33,7 @@ class InterveningSourceReconciliation
             ->orderBy('completed_at')->orderBy('id')->with('lines', 'vatRecord')->get()
             ->each(fn (PosTransaction $sale) => $sources->push($this->row('pos_sale', $sale->id,
                 CarbonImmutable::parse($sale->completed_at)->timezone('Asia/Manila')->toDateString(),
-                $sale->transaction_number, 'POS sale', $this->posEvidenceMatches($sale))));
+                $sale->transaction_number, 'POS sale', $this->posEvidenceMatches($sale, false))));
 
         SupplierPurchaseInvoice::query()->where('status', 'posted')->whereDate('recognition_date', '>=', $cutover)
             ->orderBy('recognition_date')->orderBy('id')->with('lines')->get()->each(fn (SupplierPurchaseInvoice $invoice) => $sources->push(
@@ -43,7 +43,7 @@ class InterveningSourceReconciliation
         CashDisbursement::query()->where('status', 'posted')->whereNull('reversal_of_id')->whereDate('payment_date', '>=', $cutover)
             ->orderBy('payment_date')->orderBy('id')->with('lines')->get()->each(fn (CashDisbursement $payment) => $sources->push(
                 $this->row('cash_disbursement', $payment->id, $payment->payment_date->toDateString(), $payment->reference, 'Payment',
-                    $this->paymentEvidenceMatches($payment))));
+                    $this->paymentEvidenceMatches($payment, false))));
 
         CashDisbursement::query()->where('status', 'posted')->whereNotNull('reversal_of_id')->whereDate('payment_date', '>=', $cutover)
             ->orderBy('payment_date')->orderBy('id')->get()->each(fn (CashDisbursement $reversal) => $sources->push(
@@ -56,7 +56,7 @@ class InterveningSourceReconciliation
                 ->where('source_reference', 'not like', 'supplier_purchase:%')
                 ->where('source_reference', 'not like', 'pos_sale:%')))
             ->orderBy('effective_date')->orderBy('id')->get()->each(fn (StockMovement $movement) => $sources->push(
-                $this->row('stock_movement', $movement->id, $movement->effective_date->toDateString(), $movement->reference ?: 'Stock movement '.$movement->id, 'Stock movement', $movement->value_cents !== null)));
+                $this->row('stock_movement', $movement->id, $movement->effective_date->toDateString(), $movement->reference ?: 'Stock movement '.$movement->id, 'Stock movement', $movement->value_cents !== null && $movement->carrying_value_after_cents !== null && (int) $movement->value_cents !== 0)));
 
         return $sources->sortBy([['date', 'asc'], ['id', 'asc']])->values();
     }
@@ -64,8 +64,7 @@ class InterveningSourceReconciliation
     public function includePosSale(int $saleId, int $actorId): AccountingJournal
     {
         return DB::transaction(function () use ($saleId, $actorId): AccountingJournal {
-            $actor = Employee::query()->findOrFail($actorId);
-            abort_unless($actor->can('accounting.reconcile-sources'), 403);
+            $this->authorizeSourceReconciliation($actorId);
             $sale = PosTransaction::query()->with('lines', 'vatRecord')->lockForUpdate()->findOrFail($saleId);
             if ($sale->status !== 'completed' || ! $sale->vatRecord || $sale->lines->isEmpty()) {
                 throw ValidationException::withMessages(['source' => 'A completed sale with its saved VAT record and item lines is required.']);
@@ -144,8 +143,7 @@ class InterveningSourceReconciliation
     public function includeStockMovement(int $movementId, int $actorId): AccountingJournal
     {
         return DB::transaction(function () use ($movementId, $actorId): AccountingJournal {
-            $actor = Employee::query()->findOrFail($actorId);
-            abort_unless($actor->can('accounting.reconcile-sources'), 403);
+            $this->authorizeSourceReconciliation($actorId);
             $movement = StockMovement::query()->lockForUpdate()->findOrFail($movementId);
             if ($movement->type === 'opening_balance' || $movement->value_cents === null
                 || $movement->carrying_value_after_cents === null || (int) $movement->value_cents === 0) {
@@ -192,8 +190,7 @@ class InterveningSourceReconciliation
     public function includeSupplierPurchase(int $invoiceId, int $actorId): AccountingJournal
     {
         return DB::transaction(function () use ($invoiceId, $actorId): AccountingJournal {
-            $actor = Employee::query()->findOrFail($actorId);
-            abort_unless($actor->can('accounting.reconcile-sources'), 403);
+            $this->authorizeSourceReconciliation($actorId);
             $invoice = SupplierPurchaseInvoice::query()->with('lines')->lockForUpdate()->findOrFail($invoiceId);
             if ($invoice->status !== 'posted' || ! $invoice->receipt_confirmed || $invoice->lines->isEmpty()) {
                 throw ValidationException::withMessages(['source' => 'A completed received supplier purchase with allocations is required.']);
@@ -212,20 +209,13 @@ class InterveningSourceReconciliation
             if ($debits !== (int) $invoice->gross_amount_cents || $debits <= 0) {
                 throw ValidationException::withMessages(['source' => 'Saved purchase allocations do not equal the source invoice amount.']);
             }
+            if (! $this->purchaseReceiptEvidenceMatches($invoice)) {
+                throw ValidationException::withMessages(['source' => 'The purchase receipt quantity/cost is unsupported or already accounted; no receipt may be recreated.']);
+            }
             $journalLines = [];
             foreach ($invoice->lines as $line) {
                 if ($line->inventory_id) {
                     $account = $this->mappedAccount('inventory');
-                    $movements = StockMovement::query()->where('source_reference', 'supplier_purchase:'.$invoice->id)
-                        ->where('inventory_id', $line->inventory_id)->whereNotNull('value_cents')->get();
-                    $expectedAmount = (int) $invoice->lines->where('inventory_id', $line->inventory_id)->sum('line_amount_cents');
-                    $expectedQuantity = (int) round($invoice->lines->where('inventory_id', $line->inventory_id)->sum(fn ($receiptLine) => (float) $receiptLine->quantity) * 100);
-                    $movementQuantity = (int) round($movements->sum(fn (StockMovement $movement) => (float) $movement->quantity) * 100);
-                    if ($movements->isEmpty() || (int) $movements->sum('value_cents') !== $expectedAmount
-                        || $movementQuantity !== $expectedQuantity
-                        || $movements->contains(fn (StockMovement $movement) => $movement->accounting_journal_id !== null)) {
-                        throw ValidationException::withMessages(['source' => 'The purchase receipt quantity/cost is unsupported or already accounted; no receipt may be recreated.']);
-                    }
                 } else {
                     $account = AccountingAccount::query()->find($line->accounting_account_id);
                     if (! $account?->isApprovedForPosting() || ! in_array($account->type, ['Asset', 'Expense'], true)
@@ -262,8 +252,7 @@ class InterveningSourceReconciliation
     public function includePayment(int $paymentId, int $actorId): AccountingJournal
     {
         return DB::transaction(function () use ($paymentId, $actorId): AccountingJournal {
-            $actor = Employee::query()->findOrFail($actorId);
-            abort_unless($actor->can('accounting.reconcile-sources'), 403);
+            $this->authorizeSourceReconciliation($actorId);
             $payment = CashDisbursement::query()->with('lines')->lockForUpdate()->findOrFail($paymentId);
             if ($payment->status !== 'posted' || $payment->reversal_of_id !== null || $payment->lines->isEmpty()) {
                 throw ValidationException::withMessages(['source' => 'A completed payment with saved allocations is required.']);
@@ -331,7 +320,7 @@ class InterveningSourceReconciliation
         });
     }
 
-    private function posEvidenceMatches(PosTransaction $sale): bool
+    private function posEvidenceMatches(PosTransaction $sale, bool $requireUnlinked = true): bool
     {
         if (! $sale->vatRecord || $sale->lines->isEmpty()) {
             return false;
@@ -348,7 +337,7 @@ class InterveningSourceReconciliation
         }
         $movements = StockMovement::query()->where('source_reference', 'pos_sale:'.$sale->id)->get();
         if ($movements->isEmpty() || $movements->contains(fn (StockMovement $movement) => $movement->value_cents === null
-            || $movement->carrying_value_after_cents === null || $movement->accounting_journal_id !== null)) {
+            || $movement->carrying_value_after_cents === null || ($requireUnlinked && $movement->accounting_journal_id !== null))) {
             return false;
         }
         foreach ($sale->lines->groupBy('inventory_id') as $inventoryId => $lines) {
@@ -370,17 +359,8 @@ class InterveningSourceReconciliation
         if ($invoice->lines->isEmpty() || (int) $invoice->lines->sum('line_amount_cents') !== (int) $invoice->gross_amount_cents) {
             return false;
         }
-        foreach ($invoice->lines->whereNotNull('inventory_id')->groupBy('inventory_id') as $inventoryId => $lines) {
-            $movements = StockMovement::query()->where('source_reference', 'supplier_purchase:'.$invoice->id)
-                ->where('inventory_id', $inventoryId)->get();
-            $expectedAmount = (int) $lines->sum('line_amount_cents');
-            $expectedQuantity = (int) round($lines->sum(fn ($line) => (float) $line->quantity) * 100);
-            $movementQuantity = (int) round($movements->sum(fn (StockMovement $movement) => (float) $movement->quantity) * 100);
-            if ($movements->isEmpty() || $movements->contains(fn (StockMovement $movement) => $movement->value_cents === null
-                || $movement->carrying_value_after_cents === null || $movement->accounting_journal_id !== null)
-                || (int) $movements->sum('value_cents') !== $expectedAmount || $movementQuantity !== $expectedQuantity) {
-                return false;
-            }
+        if (! $this->purchaseReceiptEvidenceMatches($invoice, false)) {
+            return false;
         }
         foreach ($invoice->lines->whereNull('inventory_id') as $line) {
             $account = AccountingAccount::query()->find($line->accounting_account_id);
@@ -393,7 +373,25 @@ class InterveningSourceReconciliation
         return true;
     }
 
-    private function paymentEvidenceMatches(CashDisbursement $payment): bool
+    private function purchaseReceiptEvidenceMatches(SupplierPurchaseInvoice $invoice, bool $requireUnlinked = true): bool
+    {
+        foreach ($invoice->lines->whereNotNull('inventory_id')->groupBy('inventory_id') as $inventoryId => $lines) {
+            $movements = StockMovement::query()->where('source_reference', 'supplier_purchase:'.$invoice->id)
+                ->where('inventory_id', $inventoryId)->get();
+            $expectedAmount = (int) $lines->sum('line_amount_cents');
+            $expectedQuantity = (int) round($lines->sum(fn ($line) => (float) $line->quantity) * 100);
+            $movementQuantity = (int) round($movements->sum(fn (StockMovement $movement) => (float) $movement->quantity) * 100);
+            if ($movements->isEmpty() || $movements->contains(fn (StockMovement $movement) => $movement->value_cents === null
+                || $movement->carrying_value_after_cents === null || ($requireUnlinked && $movement->accounting_journal_id !== null))
+                || (int) $movements->sum('value_cents') !== $expectedAmount || $movementQuantity !== $expectedQuantity) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function paymentEvidenceMatches(CashDisbursement $payment, bool $requireUnlinked = true): bool
     {
         if ($payment->lines->isEmpty() || (int) $payment->lines->sum('amount_cents') !== (int) $payment->amount_cents) {
             return false;
@@ -416,7 +414,7 @@ class InterveningSourceReconciliation
                 $movement = StockMovement::query()->where('cash_disbursement_line_id', $line->id)->first();
                 if (! $movement || (int) $movement->value_cents !== (int) $line->amount_cents
                     || (int) round((float) $movement->quantity * 100) !== (int) round((float) $line->quantity * 100)
-                    || $movement->carrying_value_after_cents === null || $movement->accounting_journal_id !== null) {
+                    || $movement->carrying_value_after_cents === null || ($requireUnlinked && $movement->accounting_journal_id !== null)) {
                     return false;
                 }
             }
@@ -469,9 +467,15 @@ class InterveningSourceReconciliation
         } elseif ($sourceJournal && $linkedJournalId && (int) $linkedJournalId !== $sourceJournal->id) {
             $status = 'duplicate-link';
             $reason = 'The source and its operational record point to different accounting journals.';
+        } elseif ($sourceJournal && ! $this->sourceLinksMatch($type, $id, $sourceJournal)) {
+            $status = 'duplicate-link';
+            $reason = 'The posted journal is missing an operational source link.';
         } elseif (! $sourceJournal && $linkedJournal && ! $linkedIdentityMatches) {
             $status = 'duplicate-link';
             $reason = 'The operational record points to an unrelated accounting journal.';
+        } elseif ($journal && $type !== 'cash_disbursement_reversal' && ! $hasEvidence) {
+            $status = 'unsupported-cost';
+            $reason = 'Historical cost, allocation or linked receipt evidence is incomplete.';
         } elseif ($journal) {
             $status = 'matched';
             $reason = null;
@@ -484,6 +488,64 @@ class InterveningSourceReconciliation
         }
 
         return compact('type', 'id', 'date', 'reference', 'description', 'status', 'reason') + ['journal_id' => $journal?->id];
+    }
+
+    private function sourceLinksMatch(string $type, int $id, AccountingJournal $journal): bool
+    {
+        return match ($type) {
+            'pos_sale' => $this->linkedMovementsMatch('pos_sale:'.$id, $journal->id, true),
+            'supplier_purchase' => $this->supplierPurchaseLinksMatch($id, $journal->id),
+            'cash_disbursement' => $this->paymentLinksMatch($id, $journal->id),
+            'cash_disbursement_reversal' => (int) CashDisbursement::query()->where('reversal_of_id', $id)->value('journal_id') === $journal->id,
+            'stock_movement' => (int) StockMovement::query()->whereKey($id)->value('accounting_journal_id') === $journal->id,
+            default => false,
+        };
+    }
+
+    private function supplierPurchaseLinksMatch(int $invoiceId, int $journalId): bool
+    {
+        $invoice = SupplierPurchaseInvoice::query()->with('lines')->find($invoiceId);
+        if (! $invoice || (int) $invoice->accounting_journal_id !== $journalId) {
+            return false;
+        }
+        if (! $invoice->lines->contains(fn ($line) => $line->inventory_id !== null)) {
+            return true;
+        }
+
+        return $this->linkedMovementsMatch('supplier_purchase:'.$invoiceId, $journalId, true);
+    }
+
+    private function paymentLinksMatch(int $paymentId, int $journalId): bool
+    {
+        $payment = CashDisbursement::query()->with('lines')->find($paymentId);
+        if (! $payment || (int) $payment->journal_id !== $journalId) {
+            return false;
+        }
+        $lineIds = $payment->lines->whereNotNull('inventory_id')->pluck('id');
+        if ($lineIds->isEmpty()) {
+            return true;
+        }
+        $movements = StockMovement::query()->whereIn('cash_disbursement_line_id', $lineIds)->get();
+
+        return $movements->count() === $lineIds->count()
+            && $movements->every(fn (StockMovement $movement) => (int) $movement->accounting_journal_id === $journalId
+                && $movement->value_cents !== null && $movement->carrying_value_after_cents !== null);
+    }
+
+    private function linkedMovementsMatch(string $sourceReference, int $journalId, bool $requireMovements): bool
+    {
+        $movements = StockMovement::query()->where('source_reference', $sourceReference)->get();
+
+        return (! $requireMovements || $movements->isNotEmpty())
+            && $movements->every(fn (StockMovement $movement) => (int) $movement->accounting_journal_id === $journalId
+                && $movement->value_cents !== null && $movement->carrying_value_after_cents !== null);
+    }
+
+    private function authorizeSourceReconciliation(int $actorId): void
+    {
+        $actor = Employee::query()->findOrFail($actorId);
+        abort_unless($actor->can('accounting.reconcile-sources')
+            && $actor->can('accounting.post-reconciled-sources'), 403);
     }
 
     private function opening(): ?AccountingJournal
