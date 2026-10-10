@@ -18,6 +18,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
+test('supplier purchase invoice composite index has a MySQL-safe explicit name', function () {
+    $indexNames = collect(DB::getSchemaBuilder()->getIndexes('supplier_purchase_invoices'))
+        ->pluck('name');
+
+    expect($indexNames)->toContain('supplier_purchase_invoices_due_status_idx')
+        ->and(strlen('supplier_purchase_invoices_due_status_idx'))->toBeLessThanOrEqual(64);
+});
+
 
 test('supplier purchase drafts persist line allocations without payable stock or journal effects', function () {
     $actor = grantEmployeeTestPermissions(Employee::create([
