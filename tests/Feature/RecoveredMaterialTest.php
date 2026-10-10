@@ -243,3 +243,27 @@ test('recovery management is independent of inventory movement permission', func
 
     expect(RecoveredMaterialAssessment::count())->toBe(0);
 });
+
+test('a fully rejected recovery saves its assessment without a stock movement', function () {
+    $employee = recoveredMaterialEmployee();
+    $project = recoveredMaterialProject();
+    $item = recoveredMaterialInventory(['qty' => 2]);
+    $recovery = RecoveredMaterial::create([
+        'demolition_project_id' => $project->id,
+        'recorded_by' => $employee->id,
+        'material' => 'Rejected timber',
+        'quantity' => 5,
+        'unit' => 'piece',
+        'condition' => 'poor',
+    ]);
+
+    $assessment = app(AssessRecoveredMaterial::class)->handle($recovery->id, [
+        'accepted_quantity' => '0',
+        'rejected_quantity' => '5',
+        'rejection_reason' => 'Not reusable',
+        'inventory_id' => $item->id,
+    ], $employee->id);
+
+    expect($assessment->stock_movement_id)->toBeNull()
+        ->and((float) $item->fresh()->qty)->toBe(2.0);
+});

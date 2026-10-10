@@ -65,7 +65,7 @@ class ReportsPage extends Component
             'data' => IllustrativeSales::SERIES_BY_PERIOD[$this->salesPeriod],
         ];
         $categoryValues = Inventory::query()
-            ->selectRaw('category, SUM(qty * unit_cost) as value')
+            ->selectRaw('category, SUM(COALESCE(carrying_value_cents / 100.0, qty * unit_cost)) as value')
             ->groupBy('category')
             ->orderBy('category')
             ->get()
@@ -123,7 +123,7 @@ class ReportsPage extends Component
             'period' => $period,
             'periodTotal' => array_sum(array_column($period['data'], 'total')),
             'inventoryCount' => Inventory::query()->count(),
-            'inventoryValue' => (float) Inventory::query()->selectRaw('COALESCE(SUM(qty * unit_cost), 0) as value')->value('value'),
+            'inventoryValue' => (float) Inventory::query()->selectRaw('COALESCE(SUM(COALESCE(carrying_value_cents / 100.0, qty * unit_cost)), 0) as value')->value('value'),
             'categoryValues' => $categoryValues,
             'inventoryQuantities' => $inventoryQuantities,
             'posSales' => $posSales,

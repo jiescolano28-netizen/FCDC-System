@@ -19,6 +19,12 @@ class ReverseStockMovement
                     'movement' => 'This stock movement cannot be reversed again.',
                 ]);
             }
+            if ($movement->accounting_journal_id !== null) {
+                throw ValidationException::withMessages([
+                    'movement' => 'Valued stock movements require a linked accounting correction; quantity-only reversal is prohibited.',
+                ]);
+            }
+            app(EnsureQuantityOnlyMovementIsPreCutover::class)->assertAllowed(now('Asia/Manila')->toDateString());
 
             $item = Inventory::query()->lockForUpdate()->findOrFail($movement->inventory_id);
             $newQuantity = (float) $item->qty - (float) $movement->quantity;

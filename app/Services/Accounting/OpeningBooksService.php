@@ -112,6 +112,7 @@ class OpeningBooksService
                     'unit_cost' => $quantityHundredths === 0
                         ? '0.00'
                         : number_format($line->carrying_value_cents / $quantityHundredths, 2, '.', ''),
+                    'carrying_value_cents' => (int) $line->carrying_value_cents,
                 ]);
             }
 

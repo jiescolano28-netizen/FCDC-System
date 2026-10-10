@@ -21,6 +21,7 @@ class RolePermissionCatalog
                 'inventory.update' => 'Update inventory items',
                 'inventory.delete' => 'Deactivate inventory items',
                 'inventory.movements.record' => 'Record inventory movements',
+                'inventory.valuation.approve' => 'Authorize inventory movement values',
             ],
             'Demolition Projects & Recovery' => [
                 'demolition-projects.view' => 'View Demolition Projects',

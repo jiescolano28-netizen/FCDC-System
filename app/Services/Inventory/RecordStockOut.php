@@ -25,6 +25,7 @@ class RecordStockOut
         }
 
         return DB::transaction(function () use ($inventoryId, $quantity, $reasonCategory, $notes, $reference, $effectiveDate, $employeeId) {
+            app(EnsureQuantityOnlyMovementIsPreCutover::class)->assertAllowed($effectiveDate);
             $item = Inventory::query()->lockForUpdate()->findOrFail($inventoryId);
 
             if ($item->status !== 'active') {

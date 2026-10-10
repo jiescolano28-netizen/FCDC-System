@@ -11,7 +11,7 @@ class DashboardPage extends Component
     {
         $inventory = Inventory::query();
         $categoryValues = Inventory::query()
-            ->selectRaw('category, SUM(qty * unit_cost) as value')
+            ->selectRaw('category, SUM(COALESCE(carrying_value_cents / 100.0, qty * unit_cost)) as value')
             ->groupBy('category')
             ->orderBy('category')
             ->get()
@@ -24,7 +24,7 @@ class DashboardPage extends Component
         return view('livewire.dashboard.dashboard-page', [
             'inventoryCount' => (clone $inventory)->count(),
             'inventoryValue' => (float) (clone $inventory)
-                ->selectRaw('COALESCE(SUM(qty * unit_cost), 0) as value')
+                ->selectRaw('COALESCE(SUM(COALESCE(carrying_value_cents / 100.0, qty * unit_cost)), 0) as value')
                 ->value('value'),
             'lowStockItems' => (clone $inventory)
                 ->where('qty', '>', 0)

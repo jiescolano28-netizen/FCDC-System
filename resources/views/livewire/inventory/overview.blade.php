@@ -48,7 +48,7 @@
                         <td>{{ number_format((float) $item->qty, 2) }} {{ $item->unit }}</td>
                         <td>{{ number_format((float) $item->unit_cost, 2) }}</td>
                         <td>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</td>
-                        <td>{{ number_format((float) $item->qty * (float) $item->unit_cost, 2) }}</td>
+                        <td>{{ number_format($item->carrying_value_cents === null ? (float) $item->qty * (float) $item->unit_cost : $item->carrying_value_cents / 100, 2) }}</td>
                         <td>
                             @if ((float) $item->qty <= 0)
                                 <span class="status empty">Out of stock</span>

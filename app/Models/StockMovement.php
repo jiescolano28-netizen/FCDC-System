@@ -81,4 +81,9 @@ class StockMovement extends Model
     {
         return $this->belongsTo(self::class, 'reverses_movement_id');
     }
+
+    public function accountingJournal(): BelongsTo
+    {
+        return $this->belongsTo(AccountingJournal::class);
+    }
 }

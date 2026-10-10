@@ -56,7 +56,9 @@ class AssessRecoveredMaterial
             }
 
             $movement = null;
+
             if ($accepted > 0) {
+                app(EnsureQuantityOnlyMovementIsPreCutover::class)->assertAllowed(now('Asia/Manila')->toDateString());
                 $movement = StockMovement::create([
                     'inventory_id' => $item->id,
                     'demolition_project_id' => $recovery->demolition_project_id,

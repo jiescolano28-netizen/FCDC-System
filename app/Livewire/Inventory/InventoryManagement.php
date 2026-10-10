@@ -48,10 +48,12 @@ class InventoryManagement extends Component
     public string $adjustmentNotes = '';
     public string $adjustmentReference = '';
     public string $adjustmentEffectiveDate = '';
+    public string $stockUnitValue = '';
+    public string $adjustmentUnitValue = '';
     public $image;
     public function mount(): void
     {
-        $today = now()->toDateString();
+        $today = now('Asia/Manila')->toDateString();
         $this->stockEffectiveDate = $today;
         $this->issueEffectiveDate = $today;
         $this->adjustmentEffectiveDate = $today;
@@ -74,12 +76,17 @@ class InventoryManagement extends Component
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
+        if ($this->valuedPostingEnabled() && ! $this->editingId && (float) $validated['qty'] !== 0.0) {
+            throw ValidationException::withMessages(['qty' => 'New items after cutover must start at zero and receive stock through valued movements.']);
+        }
         $item = $this->editingId ? Inventory::findOrFail($this->editingId) : new Inventory;
         $item->fill([
             'name' => $validated['name'],
             'category' => $validated['category'],
             'unit' => $validated['unit'],
-            'unit_cost' => $validated['unitCost'],
+            'unit_cost' => $this->valuedPostingEnabled()
+                ? ($this->editingId ? $item->unit_cost : '0.00')
+                : $validated['unitCost'],
             'selling_price' => $validated['sellingPrice'] === '' ? null : $validated['sellingPrice'],
             'reorder_level' => $validated['reorderLevel'] === '' ? 10 : $validated['reorderLevel'],
             'description' => $validated['description'] ?? null,
@@ -141,81 +148,99 @@ class InventoryManagement extends Component
     public function recordStockOut(): void
     {
         $this->authorizePermission('inventory.movements.record');
+        $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
             'issueItemId' => ['required', 'integer', 'exists:inventories,id'],
             'issueQuantity' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
-            'issueReasonCategory' => ['required', 'in:purchase_receipt,project_use,sale,return,damage_loss,count_correction,other'],
+            'issueReasonCategory' => ['required', $valued ? 'in:project_use,damage_loss,count_correction,other' : 'in:purchase_receipt,project_use,sale,return,damage_loss,count_correction,other'],
             'issueNotes' => ['nullable', 'string', 'max:2000'],
-            'issueReference' => ['nullable', 'string', 'max:255'],
+            'issueReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'issueEffectiveDate' => ['required', 'date'],
         ]);
 
-        app(RecordStockOut::class)->handle(
-            (int) $validated['issueItemId'],
-            (float) $validated['issueQuantity'],
-            $validated['issueReasonCategory'],
-            $validated['issueNotes'] ?: null,
-            $validated['issueReference'] ?: null,
-            $validated['issueEffectiveDate'],
-            (int) auth()->id(),
-        );
+        if ($valued) {
+            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+                (int) $validated['issueItemId'], 'stock_out', $validated['issueQuantity'],
+                $validated['issueReasonCategory'], $validated['issueReference'],
+                $validated['issueEffectiveDate'], (int) auth()->id(), null, $validated['issueNotes'] ?: null,
+            );
+        } else {
+            app(RecordStockOut::class)->handle(
+                (int) $validated['issueItemId'], (float) $validated['issueQuantity'],
+                $validated['issueReasonCategory'], $validated['issueNotes'] ?: null,
+                $validated['issueReference'] ?: null, $validated['issueEffectiveDate'], (int) auth()->id(),
+            );
+        }
 
         $this->reset(['issueQuantity', 'issueReasonCategory', 'issueNotes', 'issueReference']);
-        $this->issueEffectiveDate = now()->toDateString();
+        $this->issueEffectiveDate = now('Asia/Manila')->toDateString();
         $this->resetValidation();
     }
 
     public function recordStockAdjustment(): void
     {
         $this->authorizePermission('inventory.movements.record');
+        $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
             'adjustmentItemId' => ['required', 'integer', 'exists:inventories,id'],
             'countedQuantity' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
-            'adjustmentReasonCategory' => ['required', 'in:purchase_receipt,project_use,sale,return,damage_loss,count_correction,other'],
+            'adjustmentReasonCategory' => ['required', 'in:project_use,damage_loss,count_correction,other'],
             'adjustmentNotes' => ['nullable', 'string', 'max:2000'],
-            'adjustmentReference' => ['nullable', 'string', 'max:255'],
+            'adjustmentReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'adjustmentEffectiveDate' => ['required', 'date'],
+            'adjustmentUnitValue' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
         ]);
 
-        app(RecordStockAdjustment::class)->handle(
-            (int) $validated['adjustmentItemId'],
-            (float) $validated['countedQuantity'],
-            $validated['adjustmentReasonCategory'],
-            $validated['adjustmentNotes'] ?: null,
-            $validated['adjustmentReference'] ?: null,
-            $validated['adjustmentEffectiveDate'],
-            (int) auth()->id(),
-        );
+        if ($valued) {
+            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+                (int) $validated['adjustmentItemId'], 'adjustment', $validated['countedQuantity'],
+                $validated['adjustmentReasonCategory'], $validated['adjustmentReference'],
+                $validated['adjustmentEffectiveDate'], (int) auth()->id(), $validated['adjustmentUnitValue'] ?: null, $validated['adjustmentNotes'] ?: null,
+            );
+        } else {
+            app(RecordStockAdjustment::class)->handle(
+                (int) $validated['adjustmentItemId'], (float) $validated['countedQuantity'],
+                $validated['adjustmentReasonCategory'], $validated['adjustmentNotes'] ?: null,
+                $validated['adjustmentReference'] ?: null, $validated['adjustmentEffectiveDate'], (int) auth()->id(),
+            );
+        }
 
-        $this->reset(['countedQuantity', 'adjustmentReasonCategory', 'adjustmentNotes', 'adjustmentReference']);
-        $this->adjustmentEffectiveDate = now()->toDateString();
+        $this->reset(['countedQuantity', 'adjustmentReasonCategory', 'adjustmentNotes', 'adjustmentReference', 'adjustmentUnitValue']);
+        $this->adjustmentEffectiveDate = now('Asia/Manila')->toDateString();
         $this->resetValidation();
     }
 
     public function recordStockIn(): void
     {
         $this->authorizePermission('inventory.movements.record');
+        $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
             'stockItemId' => ['required', 'integer', 'exists:inventories,id'],
             'stockQuantity' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'stockReasonCategory' => ['required', 'in:purchase_receipt,return,other'],
             'stockNotes' => ['nullable', 'string', 'max:2000'],
-            'stockReference' => ['nullable', 'string', 'max:255'],
+            'stockReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'stockEffectiveDate' => ['required', 'date'],
+            'stockUnitValue' => [$valued ? 'required' : 'nullable', 'numeric', 'min:0', 'decimal:0,2'],
         ]);
 
-        app(RecordStockIn::class)->handle(
-            (int) $validated['stockItemId'],
-            (float) $validated['stockQuantity'],
-            $validated['stockReasonCategory'],
-            $validated['stockNotes'] ?: null,
-            $validated['stockReference'] ?: null,
-            $validated['stockEffectiveDate'],
-            (int) auth()->id(),
-        );
+        if ($valued) {
+            $this->authorizePermission('inventory.valuation.approve');
+            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+                (int) $validated['stockItemId'], 'stock_in', $validated['stockQuantity'],
+                $validated['stockReasonCategory'], $validated['stockReference'],
+                $validated['stockEffectiveDate'], (int) auth()->id(), $validated['stockUnitValue'], $validated['stockNotes'] ?: null,
+            );
+        } else {
+            app(RecordStockIn::class)->handle(
+                (int) $validated['stockItemId'], (float) $validated['stockQuantity'],
+                $validated['stockReasonCategory'], $validated['stockNotes'] ?: null,
+                $validated['stockReference'] ?: null, $validated['stockEffectiveDate'], (int) auth()->id(),
+            );
+        }
 
-        $this->reset(['stockQuantity', 'stockReasonCategory', 'stockNotes', 'stockReference']);
-        $this->stockEffectiveDate = now()->toDateString();
+        $this->reset(['stockQuantity', 'stockReasonCategory', 'stockNotes', 'stockReference', 'stockUnitValue']);
+        $this->stockEffectiveDate = now('Asia/Manila')->toDateString();
         $this->resetValidation();
     }
 
@@ -230,7 +255,7 @@ class InventoryManagement extends Component
     public function render()
     {
         $items = Inventory::query()
-            ->with(['stockMovements.poster', 'stockMovements.reversal'])
+            ->with(['stockMovements.poster', 'stockMovements.reversal', 'stockMovements.accountingJournal'])
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
                     $query->where('name', 'like', '%'.$this->search.'%')
@@ -246,6 +271,7 @@ class InventoryManagement extends Component
             'items' => $items,
             'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
             'activeItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name']),
+            'valuedPostingEnabled' => $this->valuedPostingEnabled(),
         ])->layout('layouts.app', ['title' => 'Inventory Management']);
     }
 
@@ -253,4 +279,10 @@ class InventoryManagement extends Component
     {
         abort_unless(auth()->user()?->can($permission), 403);
     }
+    private function valuedPostingEnabled(): bool
+    {
+        return \App\Models\AccountingJournal::query()
+            ->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists();
+    }
+
 }
