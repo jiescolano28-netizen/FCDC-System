@@ -240,3 +240,115 @@ test('income statement labels and signs an exact net loss', function () {
         ->assertSee('Net Loss')
         ->assertSee('−PHP 30.00');
 });
+
+test('balance sheet presents classified as-of balances and current earnings without a balancing plug', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $equipment = statementAccount('1500', 'equipment', 'Asset', 'debit');
+    $payable = statementAccount('2000', 'accounts_payable', 'Liability', 'credit');
+    $outputVat = statementAccount('2200', 'output_vat', 'Liability', 'credit');
+    $capital = statementAccount('3000', 'capital', 'Equity', 'credit');
+    $retained = statementAccount('3100', 'retained_earnings', 'Equity', 'credit');
+    $sales = statementAccount('4000', 'sales', 'Revenue', 'credit');
+    $expense = statementAccount('6100', 'operating_expense', 'Expense', 'debit');
+    $contraAsset = statementAccount('1090', 'other_current_asset', 'Asset', 'debit');
+
+    statementJournal($period, $viewer, '2026-01-01', 'opening', [
+        [$cash, 100000, 0], [$equipment, 100000, 0], [$payable, 0, 20000],
+        [$capital, 0, 80000], [$retained, 0, 100000],
+    ], 'BS-OPEN');
+    statementJournal($period, $viewer, '2026-03-01', 'sale', [
+        [$cash, 56000, 0], [$sales, 0, 50000], [$outputVat, 0, 6000],
+    ], 'BS-SALE');
+    statementJournal($period, $viewer, '2026-03-02', 'expense', [
+        [$expense, 20000, 0], [$cash, 0, 20000],
+    ], 'BS-EXPENSE');
+    statementJournal($period, $viewer, '2026-03-03', 'adjustment', [
+        [$expense, 500, 0], [$contraAsset, 0, 500],
+    ], 'BS-CONTRA');
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-12-30')
+        ->assertSee('As of December 30, 2026')
+        ->assertSee('Assets')
+        ->assertSee('Liabilities')
+        ->assertSee('Equity')
+        ->assertSee('Cash')
+        ->assertSee('Equipment')
+        ->assertSee('Accounts payable')
+        ->assertSee('Output VAT')
+        ->assertSee('Capital')
+        ->assertSee('Retained / accumulated earnings')
+        ->assertSee('Unclosed earnings')
+        ->assertSee('PHP 1,360.00')
+        ->assertSee('PHP 1,000.00')
+        ->assertSee('PHP 260.00')
+        ->assertSee('PHP 800.00')
+        ->assertSee('−PHP 5.00')
+        ->assertSee('PHP 295.00')
+        ->assertSee('PHP 2,355.00')
+        ->assertSee('Accounting equation balances');
+    statementJournal($period, $viewer, '2026-12-31', 'fiscal_year_closing', [
+        [$sales, 50000, 0], [$expense, 0, 20500], [$retained, 0, 29500],
+    ], 'BS-CLOSE');
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-12-31')
+        ->assertSee('PHP 1,295.00')
+        ->assertSee('PHP 0.00')
+        ->assertSee('Accounting equation balances');
+});
+
+test('balance sheet reports an accounting error for an unbalanced posted ledger without inventing equity', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = statementAccount('3000', 'capital', 'Equity', 'credit');
+    statementJournal($period, $viewer, '2026-01-01', 'opening', [
+        [$cash, 100000, 0], [$capital, 0, 100000],
+    ], 'BS-CORRUPTED-OPENING');
+    statementJournal($period, $viewer, '2026-02-01', 'corrupted', [
+        [$cash, 100, 0],
+    ], 'BS-CORRUPTED-POSTING');
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-02-01')
+        ->assertSee('Accounting error: Assets do not equal Liabilities plus Equity.')
+        ->assertSee('Difference: PHP 1.00')
+        ->assertDontSee('Accounting equation balances');
+});
+
+test('balance sheet includes approved pre-cutover year-to-date earnings separately from opening equity', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = statementAccount('3000', 'capital', 'Equity', 'credit');
+    $sales = statementAccount('4000', 'sales', 'Revenue', 'credit');
+    statementJournal($period, $viewer, '2026-07-01', 'opening', [
+        [$cash, 100000, 0], [$capital, 0, 70000], [$sales, 0, 30000],
+    ], 'BS-YTD-OPEN');
+    $summary = AccountingYtdSummary::create([
+        'book_key' => 'FCDC',
+        'fiscal_year' => 2026,
+        'through_date' => '2026-06-30',
+        'evidence_reference' => 'Approved year-to-date income schedule',
+        'status' => 'draft',
+        'prepared_by' => $viewer->id,
+    ]);
+    $summary->lines()->create(['accounting_account_id' => $sales->id, 'amount_cents' => 30000]);
+    $summary->forceFill([
+        'status' => 'approved',
+        'approved_by' => $viewer->id,
+        'approved_at' => now(),
+    ])->save();
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-07-01')
+        ->assertSee('PHP 300.00')
+        ->assertSee('PHP 1,000.00')
+        ->assertSee('Accounting equation balances');
+});
