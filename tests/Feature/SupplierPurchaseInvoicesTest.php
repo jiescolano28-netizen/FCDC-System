@@ -17,9 +17,22 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 uses(RefreshDatabase::class);
+
+test('supplier purchase invoice migration creates missing lines when the invoice table already exists', function () {
+    Schema::dropIfExists('supplier_purchase_lines');
+    $migration = include database_path('migrations/2026_10_10_060335_create_supplier_purchase_invoices_tables.php');
+    $migration->up();
+
+
+    expect(Schema::hasTable('supplier_purchase_invoices'))->toBeTrue()
+        ->and(Schema::hasTable('supplier_purchase_lines'))->toBeTrue()
+        ->and(Schema::hasColumn('supplier_purchase_invoices', 'invoice_number_normalized'))->toBeTrue()
+        ->and(Schema::hasColumn('supplier_purchase_lines', 'supplier_purchase_invoice_id'))->toBeTrue();
+});
 test('supplier purchase invoice composite index has a MySQL-safe explicit name', function () {
     $indexNames = collect(DB::getSchemaBuilder()->getIndexes('supplier_purchase_invoices'))
         ->pluck('name');
