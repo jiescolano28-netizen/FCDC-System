@@ -5,6 +5,8 @@ namespace App\Livewire\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingYtdSummary;
+use App\Models\Inventory;
+use App\Models\OpeningInventoryValuation;
 use App\Services\Accounting\OpeningBooksService;
 use Livewire\Component;
 
@@ -14,8 +16,12 @@ class OpeningBooks extends Component
 
     public array $lines = [];
 
-    public string $ytdThroughDate = '';
+    public string $inventoryEvidence = '';
 
+    public array $inventoryLines = [];
+    public bool $editingInventoryValuation = false;
+
+    public string $ytdThroughDate = '';
     public string $ytdEvidence = '';
 
     public array $ytdLines = [];
@@ -39,6 +45,18 @@ class OpeningBooks extends Component
             'accountId' => (string) $line->accounting_account_id,
             'amount' => number_format($line->amount_cents / 100, 2, '.', ''),
         ])->all() ?? [['accountId' => '', 'amount' => '']];
+        $valuation = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
+        $this->inventoryEvidence = $valuation?->evidence_reference ?? '';
+        $valuationLines = $valuation?->lines->keyBy('inventory_id') ?? collect();
+        $this->inventoryLines = Inventory::orderBy('id')->get()->map(function ($item) use ($valuationLines) {
+            $line = $valuationLines->get($item->id);
+            return [
+                'inventoryId' => (string) $item->id,
+                'quantity' => $line?->quantity ?? $item->qty,
+                'value' => $line ? number_format($line->carrying_value_cents / 100, 2, '.', '') : '',
+            ];
+        })->all();
+        $this->editingInventoryValuation = $valuation?->status !== 'approved';
     }
 
     public function addOpeningLine(): void
@@ -59,6 +77,34 @@ class OpeningBooks extends Component
         $this->authorizePermission('accounting.approve-opening-books');
         app(OpeningBooksService::class)->approveOpening(auth()->id());
         session()->flash('opening-message', 'Opening journal approved.');
+    }
+
+    public function saveInventoryValuation(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        app(OpeningBooksService::class)->saveInventoryValuation(
+            $this->cutoverDate,
+            $this->inventoryEvidence,
+            $this->inventoryLines,
+            auth()->id(),
+        );
+        session()->flash('opening-message', 'Opening inventory schedule saved. Pending approval.');
+        $this->editingInventoryValuation = false;
+    }
+
+    public function approveInventoryValuation(): void
+    {
+        $this->authorizePermission('accounting.approve-opening-books');
+        app(OpeningBooksService::class)->approveInventoryValuation(auth()->id());
+        session()->flash('opening-message', 'Opening valuation approved.');
+        $this->editingInventoryValuation = false;
+    }
+
+    public function reviseInventoryValuation(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        abort_if(AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists(), 409);
+        $this->editingInventoryValuation = true;
     }
 
     public function addYtdLine(): void
@@ -90,6 +136,8 @@ class OpeningBooks extends Component
         return view('livewire.accounting.opening-books', [
             'accounts' => AccountingAccount::where('is_active', true)->orderBy('code')->get(),
             'journal' => $journal,
+            'inventoryItems' => Inventory::orderBy('id')->get(),
+            'inventoryValuation' => OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines.inventory', 'approver')->first(),
             'ytdSummary' => AccountingYtdSummary::where('book_key', 'FCDC')->where('fiscal_year', (int) substr($this->cutoverDate, 0, 4))->with('lines.account', 'approver')->first(),
             'readiness' => app(OpeningBooksService::class)->readiness(),
         ])->layout('layouts.app', ['title' => 'Opening Books & Cutover']);

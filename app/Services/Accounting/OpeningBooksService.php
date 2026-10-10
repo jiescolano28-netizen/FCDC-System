@@ -7,6 +7,9 @@ use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\AccountingPostingPeriod;
 use App\Models\AccountingYtdSummary;
+use App\Models\Inventory;
+use App\Models\OpeningInventoryValuation;
+use App\Models\StockMovement;
 use App\Models\SupplierOpeningInvoice;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +35,7 @@ class OpeningBooksService
             if ($journal && $journal->status !== 'draft') {
                 throw ValidationException::withMessages(['opening' => 'An approved opening journal already exists.']);
             }
+            $this->assertInventoryOpeningMatches($validatedLines, $date, false);
             $journal ??= new AccountingJournal(['source_type' => 'opening', 'source_id' => 'FCDC']);
             $journal->fill([
                 'book_key' => 'FCDC',
@@ -50,6 +54,74 @@ class OpeningBooksService
             return $journal->load('lines.account');
         });
     }
+    public function saveInventoryValuation(string $date, string $evidence, array $lines, int $actorId): OpeningInventoryValuation
+    {
+        $date = $this->validBusinessDate($date);
+        $evidence = trim($evidence);
+        if ($evidence === '' || strlen($evidence) > 255) {
+            throw ValidationException::withMessages(['inventoryEvidence' => 'Provide a supporting cutover count/value reference of at most 255 characters.']);
+        }
+        return DB::transaction(function () use ($date, $evidence, $lines, $actorId): OpeningInventoryValuation {
+            $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
+            if ($journal?->status === 'posted') {
+                throw ValidationException::withMessages(['inventoryLines' => 'Approved opening inventory is immutable; use a current-period correction.']);
+            }
+            $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->lockForUpdate()->first();
+            $validatedLines = $this->validatedInventoryLines($date, $lines);
+            $schedule ??= new OpeningInventoryValuation(['book_key' => 'FCDC']);
+            $schedule->fill([
+                'cutover_date' => $date,
+                'evidence_reference' => $evidence,
+                'status' => 'draft',
+                'prepared_by' => $actorId,
+                'approved_by' => null,
+                'approved_at' => null,
+            ])->save();
+            $schedule->lines()->delete();
+            foreach ($validatedLines as $line) {
+                $schedule->lines()->create([
+                    'inventory_id' => $line['inventory_id'],
+                    'quantity' => $this->decimalFromHundredths($line['quantity_hundredths']),
+                    'carrying_value_cents' => $line['carrying_value_cents'],
+                ]);
+            }
+
+            return $schedule->load('lines.inventory');
+        });
+    }
+
+    public function approveInventoryValuation(int $actorId): OpeningInventoryValuation
+    {
+        return DB::transaction(function () use ($actorId): OpeningInventoryValuation {
+            $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')
+                ->lockForUpdate()
+                ->with('lines.inventory')
+                ->firstOrFail();
+            $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
+            if ($journal?->status === 'posted') {
+                throw ValidationException::withMessages(['inventoryLines' => 'Approved opening inventory is immutable; use a current-period correction.']);
+            }
+            if ($schedule->status !== 'draft') {
+                throw ValidationException::withMessages(['inventoryLines' => 'This opening inventory valuation is already approved; save a revised schedule for review.']);
+            }
+            $this->validatedInventoryLines(
+                $schedule->cutover_date->toDateString(),
+                $schedule->lines->map(fn ($line) => [
+                    'inventoryId' => (string) $line->inventory_id,
+                    'quantity' => $line->quantity,
+                    'value' => $this->amountFromCents((int) $line->carrying_value_cents),
+                ])->all(),
+            );
+            $schedule->forceFill([
+                'status' => 'approved',
+                'approved_by' => $actorId,
+                'approved_at' => now('UTC'),
+            ])->save();
+
+            return $schedule->refresh()->load('lines.inventory');
+        });
+    }
+
 
     public function approveOpening(int $actorId): AccountingJournal
     {
@@ -73,12 +145,19 @@ class OpeningBooksService
                 if (! $account?->isApprovedForPosting()) {
                     throw ValidationException::withMessages(['opening' => 'Every opening account must be active and approved.']);
                 }
-                if ($account->classification === 'inventory') {
-                    throw ValidationException::withMessages([
-                        'opening' => 'Inventory opening requires an approved per-item valuation schedule, which is not available.',
-                    ]);
+                if ($account->classification === 'inventory' && $line->credit_cents > 0) {
+                    throw ValidationException::withMessages(['opening' => 'Opening Inventory must be a debit matching the approved item schedule.']);
                 }
             }
+            $this->assertInventoryOpeningMatches(
+                $journal->lines->map(fn ($line) => [
+                    'accounting_account_id' => $line->accounting_account_id,
+                    'debit_cents' => $line->debit_cents,
+                    'credit_cents' => $line->credit_cents,
+                ])->all(),
+                $journal->accounting_date->toDateString(),
+                true,
+            );
 
             app(SupplierPayablesService::class)->postOpeningSchedule($journal, $actorId);
 
@@ -188,14 +267,14 @@ class OpeningBooksService
                 : (SupplierOpeningInvoice::where('status', 'draft')->whereNull('reversal_of_id')->exists()
                     ? 'Opening supplier schedule pending approval'
                     : 'Opening supplier schedule required'),
-            'inventory' => 'Inventory valuation schedule unavailable',
+            'inventory' => $this->inventoryReadiness($journal),
             'valuation' => 'Valuation policies not approved',
             'ytd' => $cutoverDate === null
                 ? 'Save a cutover date to determine YTD evidence requirements'
                 : (! $midyear
                     ? 'Not required for January 1 cutover'
                     : ($ytdApproved ? 'Approved pre-cutover YTD evidence' : 'Pre-cutover YTD evidence required')),
-            'production' => 'Production activation unavailable: inventory valuation schedule and valuation policies remain outstanding; chart, mapping, cutover and supplier readiness are listed above.',
+            'production' => 'Production activation unavailable: valuation policies remain outstanding; chart, mapping, cutover, supplier, inventory and YTD readiness are listed above.',
         ];
     }
 
@@ -211,8 +290,8 @@ class OpeningBooksService
             if (! $account?->isApprovedForPosting()) {
                 throw ValidationException::withMessages(["lines.$index.accountId" => 'Select an active approved account.']);
             }
-            if ($account->classification === 'inventory') {
-                throw ValidationException::withMessages(["lines.$index.accountId" => 'Controlled Inventory openings require an approved per-item valuation schedule.']);
+            if ($account->classification === 'inventory' && $this->amountInCents($line['credit'] ?? '') > 0) {
+                throw ValidationException::withMessages(["lines.$index" => 'Opening Inventory must be a debit supported by the approved item schedule.']);
             }
             $debit = $this->amountInCents($line['debit'] ?? '');
             $credit = $this->amountInCents($line['credit'] ?? '');
@@ -228,6 +307,148 @@ class OpeningBooksService
         ], $result));
 
         return $result;
+    }
+
+    private function validatedInventoryLines(string $date, array $lines): array
+    {
+        $items = Inventory::query()->orderBy('id')->lockForUpdate()->get(['id']);
+        if (count($lines) !== $items->count()) {
+            throw ValidationException::withMessages(['inventoryLines' => 'The opening valuation must include every inventory item exactly once.']);
+        }
+        $expectedIds = $items->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $result = [];
+        $seen = [];
+        foreach ($lines as $index => $line) {
+            $id = filter_var($line['inventoryId'] ?? null, FILTER_VALIDATE_INT);
+            if (! $id || ! in_array($id, $expectedIds, true) || isset($seen[$id])) {
+                throw ValidationException::withMessages(["inventoryLines.$index.inventoryId" => 'Select each existing inventory item once.']);
+            }
+            $seen[$id] = true;
+            $quantity = $this->quantityInHundredths($line['quantity'] ?? null);
+            $value = $this->amountInCents($line['value'] ?? null);
+            if (($quantity === 0) !== ($value === 0)) {
+                throw ValidationException::withMessages(["inventoryLines.$index" => 'A zero quantity requires zero carrying value, and positive stock requires positive supported value.']);
+            }
+            $timelineQuantity = 0;
+            foreach (StockMovement::where('inventory_id', $id)->whereDate('effective_date', '<=', $date)->get(['quantity']) as $movement) {
+                $timelineQuantity += $this->quantityInHundredths($movement->quantity, true);
+            }
+            if ($quantity !== $timelineQuantity || $quantity < 0) {
+                throw ValidationException::withMessages(["inventoryLines.$index.quantity" => 'Approved opening quantity must equal the non-negative stock timeline balance at cutover.']);
+            }
+            $result[] = [
+                'inventory_id' => (int) $id,
+                'quantity_hundredths' => $quantity,
+                'carrying_value_cents' => $value,
+            ];
+        }
+        if (count($seen) !== count($expectedIds)) {
+            throw ValidationException::withMessages(['inventoryLines' => 'The opening valuation must include every inventory item exactly once.']);
+        }
+
+        return $result;
+    }
+
+    private function assertInventoryOpeningMatches(array $journalLines, string $date, bool $requireApproved): void
+    {
+        $inventoryAccountIds = AccountingAccount::where('classification', 'inventory')->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $inventoryLines = collect($journalLines)->filter(function (array $line) use ($inventoryAccountIds): bool {
+            $accountId = (int) ($line['accounting_account_id'] ?? $line['accountId'] ?? 0);
+            return in_array($accountId, $inventoryAccountIds, true);
+        });
+        $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
+        if ($inventoryLines->isEmpty() && ! $schedule) {
+            return;
+        }
+        if (! $schedule || $schedule->cutover_date->toDateString() !== $date
+            || ($requireApproved && $schedule->status !== 'approved')) {
+            throw ValidationException::withMessages(['opening' => 'Opening Inventory requires a reviewed per-item valuation schedule for the same cutover date.']);
+        }
+        $scheduleLines = $this->validatedInventoryLines($date, $schedule->lines->map(fn ($line) => [
+            'inventoryId' => (string) $line->inventory_id,
+            'quantity' => $line->quantity,
+            'value' => $this->amountFromCents((int) $line->carrying_value_cents),
+        ])->all());
+        $scheduleTotal = 0;
+        foreach ($scheduleLines as $line) {
+            if ($line['carrying_value_cents'] > PHP_INT_MAX - $scheduleTotal) {
+                throw ValidationException::withMessages(['inventoryLines' => 'Opening Inventory total exceeds supported PHP centavos.']);
+            }
+            $scheduleTotal += $line['carrying_value_cents'];
+        }
+        $journalTotal = 0;
+        foreach ($inventoryLines as $line) {
+            $debit = (int) ($line['debit_cents'] ?? $line['debitCents'] ?? 0);
+            $credit = (int) ($line['credit_cents'] ?? $line['creditCents'] ?? 0);
+            if ($credit > 0 || $debit > PHP_INT_MAX - $journalTotal) {
+                throw ValidationException::withMessages(['opening' => 'Opening Inventory must be a non-negative debit equal to the item valuation schedule.']);
+            }
+            $journalTotal += $debit;
+        }
+        if ($journalTotal !== $scheduleTotal) {
+            throw ValidationException::withMessages(['opening' => 'Opening Inventory debit must exactly match the approved per-item carrying values.']);
+        }
+    }
+
+    private function inventoryReadiness(?AccountingJournal $journal): string
+    {
+        $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
+        if (! $schedule) {
+            return 'Opening inventory valuation schedule required';
+        }
+        if ($schedule->status !== 'approved') {
+            return 'Opening inventory valuation pending approval';
+        }
+        if (! $journal) {
+            return 'Approved item valuation pending opening Inventory reconciliation';
+        }
+        try {
+            $this->assertInventoryOpeningMatches(
+                $journal->lines()->with('account')->get()->map(fn ($line) => [
+                    'accounting_account_id' => $line->accounting_account_id,
+                    'debit_cents' => $line->debit_cents,
+                    'credit_cents' => $line->credit_cents,
+                ])->all(),
+                $journal->accounting_date->toDateString(),
+                true,
+            );
+        } catch (ValidationException) {
+            return 'Opening inventory schedule mismatch';
+        }
+
+        return 'Opening stock schedule reconciled';
+    }
+
+    private function quantityInHundredths(mixed $quantity, bool $allowNegative = false): int
+    {
+        if (! is_string($quantity) && ! is_int($quantity)) {
+            throw ValidationException::withMessages(['inventoryLines' => 'Quantities must be non-negative with at most two decimal places.']);
+        }
+        $quantity = trim((string) $quantity);
+        $pattern = $allowNegative ? '/^-?(?:0|[1-9]\\d*)(?:\\.(\\d{1,2}))?$/D' : '/^(?:0|[1-9]\\d*)(?:\\.(\\d{1,2}))?$/D';
+        if (! preg_match($pattern, $quantity)) {
+            throw ValidationException::withMessages(['inventoryLines' => 'Quantities must be non-negative with at most two decimal places.']);
+        }
+        $negative = str_starts_with($quantity, '-');
+        $quantity = ltrim($quantity, '-');
+        [$whole, $fraction] = array_pad(explode('.', $quantity, 2), 2, '');
+        $hundredths = ltrim($whole.str_pad($fraction, 2, '0'), '0') ?: '0';
+        if (strlen($hundredths) > 12) {
+            throw ValidationException::withMessages(['inventoryLines' => 'Quantity exceeds the supported inventory precision.']);
+        }
+        $value = (int) $hundredths;
+
+        return $negative && $value !== 0 ? -$value : $value;
+    }
+
+    private function decimalFromHundredths(int $hundredths): string
+    {
+        return intdiv($hundredths, 100).'.'.str_pad((string) ($hundredths % 100), 2, '0', STR_PAD_LEFT);
+    }
+
+    private function amountFromCents(int $cents): string
+    {
+        return intdiv($cents, 100).'.'.str_pad((string) ($cents % 100), 2, '0', STR_PAD_LEFT);
     }
 
     private function validatedYtdLines(array $lines): array

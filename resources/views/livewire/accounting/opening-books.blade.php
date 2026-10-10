@@ -63,6 +63,44 @@
         @endif
     </section>
 
+    <section class="chart-account-card" aria-labelledby="opening-inventory-heading">
+        <h2 id="opening-inventory-heading">Opening Inventory valuation</h2>
+        <p>Record accountant-approved quantities and carrying values against each item's stock timeline at cutover. This schedule establishes accounting cost only; it does not add a physical receipt or use editable item unit cost as historical evidence.</p>
+        @if ($inventoryValuation?->status === 'approved' && ! $editingInventoryValuation)
+            <p>Approved for {{ $inventoryValuation->cutover_date->format('F j, Y') }} · evidence: {{ $inventoryValuation->evidence_reference }} · approved by {{ $inventoryValuation->approver?->username ?? 'Unavailable' }}</p>
+            <table><thead><tr><th>Inventory item</th><th>Approved quantity</th><th>Opening unit cost (PHP)</th><th>Remaining value (PHP)</th></tr></thead><tbody>
+                @foreach ($inventoryValuation->lines as $line)
+                    <tr>
+                        <td>{{ $line->inventory->code }} — {{ $line->inventory->name }} ({{ $line->inventory->unit }})</td>
+                        <td>{{ $line->quantity }}</td>
+                        <td>{{ $line->quantity > 0 ? number_format(($line->carrying_value_cents / 100) / (float) $line->quantity, 4) : '0.0000' }}</td>
+                        <td>{{ number_format($line->carrying_value_cents / 100, 2) }}</td>
+                    </tr>
+                @endforeach
+            </tbody></table>
+            @if ($journal?->status !== 'posted')
+                @can('accounting.maintain-opening-books')<button type="button" wire:click="reviseInventoryValuation">Revise opening inventory schedule</button>@endcan
+            @endif
+        @else
+            <form wire:submit="saveInventoryValuation">
+                <label>Cutover count/value evidence<input wire:model="inventoryEvidence" maxlength="255" required></label>
+                @foreach ($inventoryLines as $index => $line)
+                    @php($item = $inventoryItems->firstWhere('id', (int) $line['inventoryId']))
+                    <div wire:key="opening-inventory-line-{{ $index }}">
+                        <strong>{{ $item?->code }} — {{ $item?->name }} ({{ $item?->unit }})</strong>
+                        <label>Approved opening quantity<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.quantity" required></label>
+                        <label>Approved carrying value (PHP)<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.value" required></label>
+                    </div>
+                @endforeach
+                @can('accounting.maintain-opening-books')<button type="submit">Save opening inventory schedule</button>@endcan
+            </form>
+            @if ($inventoryValuation?->status === 'draft')
+                <p>Opening inventory valuation pending approval. Prepared by {{ $inventoryValuation->preparer?->username ?? 'staff member' }}.</p>
+                @can('accounting.approve-opening-books')<button type="button" wire:click="approveInventoryValuation">Approve opening valuation</button>@endcan
+            @endif
+        @endif
+    </section>
+
     <section class="chart-account-card" aria-labelledby="ytd-summary-heading">
         <h2 id="ytd-summary-heading">Pre-cutover year-to-date income and expense summary</h2>
         <p>Separate from balance-sheet opening balances and post-cutover operational activity. Required to claim current-year coverage for a midyear cutover; retain the supporting evidence reference.</p>
