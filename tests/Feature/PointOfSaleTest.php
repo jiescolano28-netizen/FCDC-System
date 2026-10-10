@@ -89,6 +89,7 @@ test('cashier can search by item or category, adjust a bounded decimal cart, and
 test('fractional stock is available and can be sold at two decimal precision', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory(['qty' => 0.50]);
+    setupPosAccountingBooks([$board]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
@@ -106,6 +107,7 @@ test('cash checkout persists VAT, payment, customer, price snapshots, stock move
     $employee = createPosEmployee();
     $this->actingAs($employee);
     $board = createPosInventory();
+    setupPosAccountingBooks([$board]);
     Livewire::test(SettingsPage::class)
         ->set('companyName', 'North Shore Materials')
         ->set('address', '18 Harbor Road')
@@ -161,6 +163,7 @@ test('cash checkout persists VAT, payment, customer, price snapshots, stock move
 test('POS viewers can open and close receipts without checkout permission', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory();
+    setupPosAccountingBooks([$board]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
@@ -187,6 +190,7 @@ test('POS viewers can open and close receipts without checkout permission', func
 test('card and bank transfers require exact payment and a reference number', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory(['qty' => 4]);
+    setupPosAccountingBooks([$board]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
@@ -274,6 +278,7 @@ test('cashier checkout creates its linked VAT record without tax-view permission
     ]), ['pos.checkout']);
     $this->actingAs($cashier);
     $board = createPosInventory(['selling_price' => 180, 'qty' => 2]);
+    setupPosAccountingBooks([$board]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)

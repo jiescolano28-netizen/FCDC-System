@@ -49,13 +49,14 @@ test('Reports is a separately routed authenticated Dashboard page', function () 
 test('Reports separates illustrative trends from persisted transactions and inventory', function () {
     $this->actingAs(createReportsEmployee());
     $board = createReportsInventory();
-    createReportsInventory([
+    $cement = createReportsInventory([
         'name' => 'Cement bag',
         'category' => 'Masonry',
         'qty' => 4,
         'unit' => 'bag',
         'unit_cost' => 8,
     ]);
+    setupPosAccountingBooks([$board, $cement]);
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $board->id)
         ->call('changeQuantity', $board->id, 1)

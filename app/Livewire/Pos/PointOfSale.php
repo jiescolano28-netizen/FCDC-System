@@ -6,9 +6,11 @@ use App\Models\Inventory;
 use App\Models\PosTransaction;
 use App\Models\PosTransactionLine;
 use App\Models\PosVatRecord;
+use App\Services\Accounting\PosSalePostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -30,6 +32,7 @@ class PointOfSale extends Component
 
     public string $paymentReference = '';
 
+    #[Url(as: 'receipt')]
     public ?int $receiptId = null;
 
     public function addToCart(int $inventoryId): void
@@ -145,6 +148,17 @@ class PointOfSale extends Component
                 'receipt_company_phone' => $settings['phone'] ?? null,
             ]);
 
+            PosVatRecord::create([
+                'pos_transaction_id' => $transaction->id,
+                'taxable_sales' => $transaction->subtotal,
+                'vat_rate' => $transaction->vat_rate,
+                'output_vat' => $transaction->vat_amount,
+                'total' => $transaction->total,
+                'completed_at' => $transaction->completed_at,
+            ]);
+            $lineCostSnapshots = app(PosSalePostingService::class)
+                ->post($transaction, $items, auth()->id());
+
             $vatRemaining = $vatCents;
             foreach ($items as $index => $line) {
                 /** @var Inventory $item */
@@ -165,33 +179,12 @@ class PointOfSale extends Component
                     'unit' => $item->unit,
                     'quantity' => $quantity,
                     'selling_price' => $item->selling_price,
-                    'unit_cost' => $item->unit_cost,
+                    'unit_cost' => $lineCostSnapshots[$item->id],
                     'line_subtotal' => $lineSubtotalCents / 100,
                     'vat_amount' => $lineVatCents / 100,
                     'line_total' => ($lineSubtotalCents + $lineVatCents) / 100,
                 ]);
-
-                $item->stockMovements()->create([
-                    'posted_by' => auth()->id(),
-                    'type' => 'stock_out',
-                    'quantity' => -$quantity,
-                    'reason_category' => 'sale',
-                    'reference' => $transaction->transaction_number,
-                    'effective_date' => now()->toDateString(),
-                    'posted_at' => now(),
-                ]);
-
-                Inventory::query()->whereKey($item->id)->update(['qty' => (float) $item->qty - $quantity]);
             }
-
-            PosVatRecord::create([
-                'pos_transaction_id' => $transaction->id,
-                'taxable_sales' => $transaction->subtotal,
-                'vat_rate' => $transaction->vat_rate,
-                'output_vat' => $transaction->vat_amount,
-                'total' => $transaction->total,
-                'completed_at' => $transaction->completed_at,
-            ]);
 
             return $transaction;
         });
