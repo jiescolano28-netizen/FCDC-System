@@ -10,7 +10,7 @@ use App\Services\Accounting\PosSalePostingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Livewire\Attributes\Url;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -32,7 +32,7 @@ class PointOfSale extends Component
 
     public string $paymentReference = '';
 
-    #[Url(as: 'receipt')]
+    #[Locked]
     public ?int $receiptId = null;
 
     public function addToCart(int $inventoryId): void
@@ -179,7 +179,8 @@ class PointOfSale extends Component
                     'unit' => $item->unit,
                     'quantity' => $quantity,
                     'selling_price' => $item->selling_price,
-                    'unit_cost' => $lineCostSnapshots[$item->id],
+                    'unit_cost' => $lineCostSnapshots[$item->id]['unit_cost'],
+                    'line_cost_cents' => $lineCostSnapshots[$item->id]['line_cost_cents'],
                     'line_subtotal' => $lineSubtotalCents / 100,
                     'vat_amount' => $lineVatCents / 100,
                     'line_total' => ($lineSubtotalCents + $lineVatCents) / 100,

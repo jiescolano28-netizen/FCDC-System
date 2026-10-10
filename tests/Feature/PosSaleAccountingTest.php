@@ -62,6 +62,36 @@ test('a completed sale posts recorded cash, sales and VAT plus frozen moving-ave
         ->and($sale->lines->first()->unit_cost)->toBe('50.00');
 });
 
+test('a sale preserves exact rounded line COGS when unit-cost display rounds', function () {
+    $employee = posAccountingEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Low-cost fastener', 'category' => 'Hardware', 'qty' => '3.00', 'unit' => 'piece',
+        'unit_cost' => '0.33', 'selling_price' => '180.00', 'reorder_level' => '0',
+    ]);
+    $accounts = setupPosAccountingBooks([$item], [$item->id => '1.00']);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $item->id)
+        ->call('setQuantity', $item->id, 2)
+        ->set('amountReceived', '403.20')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    $sale = PosTransaction::query()->with('lines')->sole();
+    $journal = AccountingJournal::query()->where('source_type', 'pos_sale')->where('source_id', (string) $sale->id)->with('lines')->sole();
+    $movement = StockMovement::query()->where('reference', $sale->transaction_number)->sole();
+
+    expect($sale->lines->first()->unit_cost)->toBe('0.33')
+        ->and($sale->lines->first()->line_cost_cents)->toBe(67)
+        ->and($journal->lines->firstWhere('accounting_account_id', $accounts['cogs']->id)->debit_cents)->toBe(67)
+        ->and($journal->lines->firstWhere('accounting_account_id', $accounts['inventory']->id)->credit_cents)->toBe(67)
+        ->and($movement->value_cents)->toBe(-67)
+        ->and($movement->carrying_value_after_cents)->toBe(33)
+        ->and($item->fresh()->qty)->toBe('1.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(33);
+});
+
 test('card and confirmed bank-transfer proceeds use their own accounts and later cost edits do not rewrite prior COGS', function () {
     $employee = posAccountingEmployee();
     $this->actingAs($employee);

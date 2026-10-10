@@ -14,4 +14,4 @@
 - [x] Demonstrate PHP 180 Sales plus PHP 21.60 VAT producing PHP 201.60 Cash or card clearing, with the correct separate COGS/Inventory effect.
 - [x] Cover insufficient stock, missing mapping, duplicate completion, frozen cost and transaction rollback; later card settlement/fees remain authorized manual journals.
 
-**Verification:** `php artisan test tests/Feature/PosSaleAccountingTest.php tests/Feature/PointOfSaleTest.php` passes with the PHP 180 + PHP 21.60 example, cash/card/bank routing, moving-average COGS, mapping and closed-period rejection, duplicate posting protection, insufficient stock, saved unit-cost snapshot, and rollback scenarios.
+**Verification:** Focused POS accounting, checkout and reporting tests pass. Coverage includes the PHP 180 + PHP 21.60 example, cash/card/bank routing, moving-average COGS, exact extended COGS cents when rounded unit cost differs, mapping and closed-period rejection, duplicate posting protection, insufficient stock, saved unit-cost snapshot, and rollback scenarios.

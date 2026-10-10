@@ -20,10 +20,10 @@ class PosSalePostingService
 {
     /**
      * Post a completed checkout using the persisted sale values and the valued-stock schedule.
-     * Returns the unit-cost snapshots to persist on immutable POS lines.
+     * Returns rounded unit-cost and exact extended-cost snapshots for immutable POS lines.
      *
      * @param  array<int, array{inventory: Inventory, quantity: float}>  $items
-     * @return array<int, string>
+     * @return array<int, array{unit_cost: string, line_cost_cents: int}>
      */
     public function post(PosTransaction $sale, array $items, int $actorId): array
     {
@@ -131,7 +131,10 @@ class PosSalePostingService
                     throw ValidationException::withMessages(['cart' => 'The sale would leave an unsupported inventory carrying value.']);
                 }
                 $cogsCents += $movementCost;
-                $lineCostSnapshots[$item->id] = number_format($previousValue / $previousQuantity, 2, '.', '');
+                $lineCostSnapshots[$item->id] = [
+                    'unit_cost' => number_format($previousValue / $previousQuantity, 2, '.', ''),
+                    'line_cost_cents' => $movementCost,
+                ];
                 $movements[] = [
                     'item' => $item,
                     'quantity_hundredths' => $quantityHundredths,

@@ -160,6 +160,33 @@ test('cash checkout persists VAT, payment, customer, price snapshots, stock move
         ->toThrow(LogicException::class);
 });
 
+test('POS page query parameters cannot bypass receipt viewing permission', function () {
+    $this->actingAs(createPosEmployee());
+    $board = createPosInventory();
+    setupPosAccountingBooks([$board]);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $board->id)
+        ->set('paymentMethod', 'card')
+        ->set('paymentReference', 'CARD-SECRET-42')
+        ->set('amountReceived', '22.40')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    $sale = PosTransaction::query()->sole();
+    $viewer = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'pos.viewer',
+        'email' => 'pos.viewer@example.com',
+        'password' => Hash::make('pos-password'),
+    ]), ['pos.view']);
+
+    $this->actingAs($viewer)
+        ->get(route('pos').'?receipt='.$sale->id)
+        ->assertOk()
+        ->assertDontSee('Receipt · Completed transaction')
+        ->assertDontSee('CARD-SECRET-42');
+});
+
 test('POS viewers can open and close receipts without checkout permission', function () {
     $this->actingAs(createPosEmployee());
     $board = createPosInventory();
