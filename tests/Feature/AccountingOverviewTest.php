@@ -5,6 +5,12 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
+use App\Models\Inventory;
+use App\Models\OpeningInventoryValuation;
+use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Models\SupplierOpeningInvoice;
+use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -19,6 +25,16 @@ function createAccountingOverviewEmployee(): Employee
         'password' => Hash::make('accounting-password'),
     ]), ['accounting.view']);
 }
+function activateOverviewBooksForTest(): void
+{
+    $readiness = \Mockery::mock(OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn([
+        'production_activated' => true,
+        'production' => 'Production activated',
+    ]);
+    app()->instance(OpeningBooksService::class, $readiness);
+}
+
 
 function overviewAccount(string $code, string $classification, string $type, string $balance): AccountingAccount
 {
@@ -80,18 +96,52 @@ test('accounting overview shows period flows separately from carried closing pos
     $expense = overviewAccount('6000', 'operating_expense', 'Expense', 'debit');
     $equity = overviewAccount('3000', 'capital', 'Equity', 'credit');
 
-    overviewPostJournal($viewer, 'OPEN-OVERVIEW', '2026-09-01', [
+    $item = Inventory::create([
+        'name' => 'Opening inventory item',
+        'category' => 'Building materials',
+        'qty' => '200.00',
+        'unit' => 'piece',
+        'unit_cost' => '100.00',
+        'reorder_level' => '0.00',
+    ]);
+    $valuation = OpeningInventoryValuation::create([
+        'book_key' => 'FCDC',
+        'cutover_date' => '2026-09-01',
+        'evidence_reference' => 'Overview opening schedule',
+        'status' => 'draft',
+        'prepared_by' => $viewer->id,
+    ]);
+    $valuation->lines()->create(['inventory_id' => $item->id, 'quantity' => '200.00', 'carrying_value_cents' => 20000]);
+    $valuation->forceFill(['status' => 'approved', 'approved_at' => now(), 'approved_by' => $viewer->id])->save();
+    $opening = overviewPostJournal($viewer, 'OPEN-OVERVIEW', '2026-09-01', [
         [$cash, 50000, 0], [$receivable, 7000, 0], [$inventory, 20000, 0],
         [$payable, 0, 30000], [$equity, 0, 47000],
-    ], 'opening');
-    overviewPostJournal($viewer, 'OCT-SALE', '2026-10-03', [
+    ], 'opening', 'draft');
+    $supplier = Supplier::create(['code' => 'SUP-OVERVIEW', 'name' => 'Overview Supplier', 'created_by' => $viewer->id]);
+    SupplierOpeningInvoice::create([
+        'supplier_id' => $supplier->id, 'supplier_code_snapshot' => $supplier->code,
+        'supplier_name_snapshot' => $supplier->name, 'invoice_number' => 'OPENING-AP',
+        'invoice_number_normalized' => 'OPENING-AP', 'recognition_date' => '2026-09-01',
+        'due_date' => '2026-09-30', 'amount_cents' => 30000, 'description' => 'Opening payable',
+        'status' => 'posted', 'opening_journal_id' => $opening->id, 'prepared_by' => $viewer->id,
+        'posted_at' => now(), 'posted_by' => $viewer->id, 'approved_at' => now(), 'approved_by' => $viewer->id,
+    ]);
+    $opening->forceFill(['status' => 'posted', 'posted_by' => $viewer->id, 'posted_at' => now()])->save();
+    $sale = overviewPostJournal($viewer, 'OCT-SALE', '2026-10-03', [
         [$cash, 10000, 0], [$sales, 0, 10000], [$cardClearing, 1200, 0], [$outputVat, 0, 1200],
         [$cogs, 3000, 0], [$inventory, 0, 3000],
     ], 'sale');
+    StockMovement::create([
+        'inventory_id' => $item->id, 'posted_by' => $viewer->id, 'type' => 'stock_out',
+        'quantity' => '-30.00', 'reason_category' => 'pos_sale', 'reference' => 'OCT-SALE',
+        'effective_date' => '2026-10-03', 'posted_at' => now(), 'value_cents' => -3000,
+        'carrying_value_after_cents' => 17000, 'accounting_journal_id' => $sale->id,
+    ]);
     overviewPostJournal($viewer, 'OCT-EXPENSE', '2026-10-04', [
         [$expense, 2000, 0], [$cash, 0, 2000],
     ], 'expense');
 
+    activateOverviewBooksForTest();
     Livewire::actingAs($viewer)->test(AccountingOverview::class)
         ->assertSet('fromDate', '2026-10-01')
         ->assertSet('toDate', '2026-10-31')
@@ -146,6 +196,10 @@ test('accounting overview excludes drafts and reports truthful unavailable and e
     overviewPostJournal($viewer, 'OPEN-EMPTY', '2026-09-01', [
         [$cash, 0, 0], [$equity, 0, 0],
     ], 'opening');
+    Livewire::actingAs($viewer)->test(AccountingOverview::class)
+        ->assertSee('Production activation unavailable')
+        ->assertDontSee('PHP 0.00');
+    activateOverviewBooksForTest();
     overviewPostJournal($viewer, 'DRAFT-OVERVIEW', '2026-10-04', [
         [$cash, 90000, 0], [$equity, 0, 90000],
     ], 'manual', 'draft');

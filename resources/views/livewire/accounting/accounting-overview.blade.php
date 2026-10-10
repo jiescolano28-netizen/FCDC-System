@@ -28,7 +28,13 @@
             @foreach ($report['cards'] as $card)
                 <article class="dashboard-card">
                     <p class="dashboard-stat-label">{{ $card['label'] }}</p>
-                    <p class="dashboard-stat-value">PHP {{ number_format($card['amount'] / 100, 2) }}</p>
+                    <p class="dashboard-stat-value">
+                        @if ($card['amount'] === null)
+                            Not available
+                        @else
+                            PHP {{ number_format($card['amount'] / 100, 2) }}
+                        @endif
+                    </p>
                     <p class="dashboard-stat-note">{{ $card['note'] }}</p>
                 </article>
             @endforeach

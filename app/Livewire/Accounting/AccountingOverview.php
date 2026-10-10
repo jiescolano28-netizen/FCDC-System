@@ -5,6 +5,8 @@ namespace App\Livewire\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
+use App\Services\Accounting\AccountingPositionSchedules;
+use App\Services\Accounting\OpeningBooksService;
 use Carbon\CarbonImmutable;
 use Livewire\Component;
 
@@ -58,6 +60,11 @@ class AccountingOverview extends Component
         if ($this->fromDate < $cutoverDate) {
             return $this->unavailable('Selected period begins before approved accounting cutover coverage.');
         }
+        $readiness = app(OpeningBooksService::class)->readiness();
+        if (! ($readiness['production_activated'] ?? false)) {
+            return $this->unavailable($readiness['production'] ?? 'Production activation is unavailable.');
+        }
+
 
         $incomeClassifications = [...self::INCOME_CLASSIFICATIONS, ...self::EXPENSE_CLASSIFICATIONS];
         $incomeAccounts = AccountingAccount::query()->whereIn('type', ['Revenue', 'Expense'])
@@ -139,14 +146,23 @@ class AccountingOverview extends Component
             ->where('source_type', '!=', 'opening')
             ->when($excludedIds !== [], fn ($query) => $query->whereNotIn('id', $excludedIds))
             ->exists();
+        $positionSchedules = app(AccountingPositionSchedules::class);
+        $apScheduleCents = $positionSchedules->accountsPayableAsOf($this->toDate);
+        [$inventoryScheduleCents, $inventoryCoverageError] = $positionSchedules->inventoryValueAsOf($this->toDate, $cutoverDate);
+        $apCard = $apScheduleCents === $positions['accounts_payable']
+            ? ['amount' => $apScheduleCents, 'note' => 'Supplier and invoice schedule as of period end']
+            : ['amount' => null, 'note' => 'Unavailable: Accounts Payable schedule does not match the General Ledger.'];
+        $inventoryCard = $inventoryScheduleCents !== null && $inventoryScheduleCents === $positions['inventory']
+            ? ['amount' => $inventoryScheduleCents, 'note' => 'Approved valued-stock schedule as of period end']
+            : ['amount' => null, 'note' => $inventoryCoverageError ?? 'Unavailable: valued inventory schedule does not match the General Ledger.'];
         $cards = [
             ['label' => 'Revenue', 'amount' => $revenueCents, 'note' => 'VAT-exclusive income for selected period'],
             ['label' => 'Expenses', 'amount' => $expensesCents, 'note' => 'Includes cost of goods sold and all expenses'],
             ['label' => 'Net Income', 'amount' => $revenueCents - $expensesCents, 'note' => 'Revenue less expenses for selected period'],
-            ['label' => 'AP outstanding', 'amount' => $positions['accounts_payable'], 'note' => 'As of period end'],
+            ['label' => 'AP outstanding', ...$apCard],
             ['label' => 'GL-only AR', 'amount' => $positions['accounts_receivable'], 'note' => 'General Ledger receivable as of period end'],
             ['label' => 'Cash & Bank', 'amount' => $positions['cash'] + $positions['bank'], 'note' => 'As of period end; excludes card clearing'],
-            ['label' => 'Inventory', 'amount' => $positions['inventory'], 'note' => 'Valued General Ledger balance as of period end'],
+            ['label' => 'Inventory', ...$inventoryCard],
         ];
         $journals = AccountingJournal::query()->where('book_key', 'FCDC')->where('status', 'posted')
             ->where('source_type', '!=', 'opening')
