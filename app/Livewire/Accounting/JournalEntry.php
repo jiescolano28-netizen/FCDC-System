@@ -5,6 +5,7 @@ namespace App\Livewire\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Services\Accounting\ManualJournalService;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class JournalEntry extends Component
@@ -118,11 +119,20 @@ class JournalEntry extends Component
     public function correct(int $journalId): void
     {
         $this->authorizePermission('accounting.post-journal-entry');
-        app(ManualJournalService::class)->correct($journalId, array_merge($this->formData(), [
-            'reference' => $this->replacementReference,
-            'correctionReason' => $this->correctionReason,
-            'correctionReference' => $this->correctionReference,
-        ]), auth()->id());
+        try {
+            app(ManualJournalService::class)->correct($journalId, array_merge($this->formData(), [
+                'reference' => $this->replacementReference,
+                'correctionReason' => $this->correctionReason,
+                'correctionReference' => $this->correctionReference,
+            ]), auth()->id());
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+            if (isset($errors['reference'])) {
+                $errors['replacementReference'] = $errors['reference'];
+                unset($errors['reference']);
+            }
+            throw ValidationException::withMessages($errors);
+        }
         $this->correctingJournalId = null;
         $this->resetForm();
         session()->flash('journal-entry-message', 'Linked reversal and replacement posted.');

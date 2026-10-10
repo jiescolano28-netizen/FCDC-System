@@ -268,6 +268,15 @@ test('a correction posts a linked reversal and replacement with reason and actor
     $entry = AccountingJournal::where('reference', 'MANUAL-ORIGINAL-001')->firstOrFail();
     Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
     $beforeLines = $entry->fresh()->lines->map(fn ($line) => [$line->accounting_account_id, $line->debit_cents, $line->credit_cents])->all();
+    Livewire::test(JournalEntry::class)
+        ->set('accountingDate', now('Asia/Manila')->toDateString())
+        ->set('description', 'Replacement reference conflict')
+        ->set('correctionReason', 'Correct original amount')
+        ->set('correctionReference', 'CORR-REV-DUP-001')
+        ->set('replacementReference', $entry->reference)
+        ->set('lines', $original['lines'])
+        ->call('correct', $entry->id)
+        ->assertHasErrors('replacementReference');
 
     Livewire::test(JournalEntry::class)
         ->call('beginCorrection', $entry->id)

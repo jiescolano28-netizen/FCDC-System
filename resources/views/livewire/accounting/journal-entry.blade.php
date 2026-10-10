@@ -24,8 +24,7 @@
                 <div class="journal-entry-header-fields">
                     <label><span>Correction reason</span><input type="text" wire:model="correctionReason" maxlength="1000">@error('correctionReason') <small class="settings-error">{{ $message }}</small> @enderror</label>
                     <label><span>Reversal reference</span><input type="text" wire:model="correctionReference" maxlength="80">@error('correctionReference') <small class="settings-error">{{ $message }}</small> @enderror</label>
-                    <label><span>Replacement reference</span><input type="text" wire:model="replacementReference" maxlength="80"></label>
-                    @error('correctionReference') <small class="settings-error">{{ $message }}</small> @enderror
+                    <label><span>Replacement reference</span><input type="text" wire:model="replacementReference" maxlength="80">@error('replacementReference') <small class="settings-error">{{ $message }}</small> @enderror</label>
                 </div>
             @endif
 
