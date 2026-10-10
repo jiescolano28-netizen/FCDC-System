@@ -105,8 +105,29 @@ test('worksheet starts in current Manila quarter and its selectable periods reco
         ->call('viewRecord', PosVatRecord::query()->whereHas('posTransaction', fn ($query) => $query->where('transaction_number', 'Q4-BOUNDARY'))->value('id'))
         ->assertSee('Worksheet Customer')
         ->assertSee('VAT-inclusive total')
-        ->assertSee('Saved worksheet item')
-        ->set('selectedQuarter', 3)
+        ->assertSee('Saved worksheet item');
+
+    $printDocument = new DOMDocument();
+    @$printDocument->loadHTML('<?xml encoding="UTF-8">'. $worksheet->html(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+    $printText = $printDocument->getElementById('vat-return-print')?->textContent;
+    expect($printText)->toContain(
+        'Fabellion Construction and Development Corp.',
+        'Q4 2026',
+        '2026-10-10 20:00:00 +08:00',
+        'Reporting timezone: Asia/Manila',
+        'Taxable sales',
+        '₱360.10',
+        '₱43.22',
+        '₱403.32',
+        'Input VAT not captured',
+        'Deductions applied',
+        'POS-only VAT payable estimate',
+        'not an official Form 2550Q',
+        'not a complete official return',
+        'not a submitted filing',
+    );
+
+    $worksheet->set('selectedQuarter', 3)
         ->assertSee('Q3 2026')
         ->assertSee('Q3-LAST')
         ->assertDontSee('Q4-BOUNDARY');
