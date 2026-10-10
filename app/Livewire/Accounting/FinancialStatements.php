@@ -318,7 +318,8 @@ class FinancialStatements extends Component
             return [0, 'Approved income and expense classifications are unavailable while active accounts await approval.'];
         }
         $incomeAccounts = $incomeAccountsQuery
-            ->where(fn ($query) => $query->whereNotNull('approved_at')->orWhereNotNull('used_at'))
+            ->where(fn ($query) => $query->whereNotNull('approved_at')
+                ->orWhere(fn ($inactive) => $inactive->where('is_active', false)->whereNotNull('used_at')))
             ->get()->keyBy('id');
         $excludedIds = $this->fiscalClosingExclusionIds($closingIds->all());
         $activity = AccountingJournalLine::query()

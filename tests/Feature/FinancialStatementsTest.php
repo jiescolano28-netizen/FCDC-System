@@ -404,4 +404,10 @@ test('balance sheet preserves unclosed earnings from a used income account after
         ->set('toDate', '2026-02-01')
         ->assertSee('PHP 100.00')
         ->assertSee('Accounting equation balances');
+    $sales->update(['is_active' => true]);
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-02-01')
+        ->assertSee('Balance Sheet unavailable.')
+        ->assertSee('active accounts await approval');
 });
