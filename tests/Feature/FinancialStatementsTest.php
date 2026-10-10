@@ -290,9 +290,19 @@ test('balance sheet presents classified as-of balances and current earnings with
         ->assertSee('PHP 295.00')
         ->assertSee('PHP 2,355.00')
         ->assertSee('Accounting equation balances');
-    statementJournal($period, $viewer, '2026-12-31', 'fiscal_year_closing', [
+    $closing = statementJournal($period, $viewer, '2026-12-31', 'fiscal_year_closing', [
         [$sales, 50000, 0], [$expense, 0, 20500], [$retained, 0, 29500],
     ], 'BS-CLOSE');
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-12-31')
+        ->assertSee('PHP 1,295.00')
+        ->assertSee('PHP 0.00')
+        ->assertSee('Accounting equation balances');
+    $reopenPeriod = statementPeriod(2027);
+    statementJournal($reopenPeriod, $viewer, '2027-01-02', 'reversal', [
+        [$sales, 0, 50000], [$expense, 20500, 0], [$retained, 29500, 0],
+    ], 'BS-CLOSE-REVERSAL', 'posted', $closing->id);
     Livewire::actingAs($viewer)->test(FinancialStatements::class)
         ->set('statementType', 'balance-sheet')
         ->set('toDate', '2026-12-31')
@@ -350,5 +360,26 @@ test('balance sheet includes approved pre-cutover year-to-date earnings separate
         ->set('toDate', '2026-07-01')
         ->assertSee('PHP 300.00')
         ->assertSee('PHP 1,000.00')
+        ->assertSee('Accounting equation balances');
+});
+
+test('balance sheet excludes posted ledger history before the approved cutover', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $priorPeriod = statementPeriod(2025);
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = statementAccount('3000', 'capital', 'Equity', 'credit');
+    statementJournal($priorPeriod, $viewer, '2025-12-31', 'manual', [
+        [$cash, 50000, 0], [$capital, 0, 50000],
+    ], 'BS-PRECUTOVER');
+    statementJournal($period, $viewer, '2026-01-01', 'opening', [
+        [$cash, 100000, 0], [$capital, 0, 100000],
+    ], 'BS-CUTOVER');
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-01-01')
+        ->assertSee('PHP 1,000.00')
+        ->assertDontSee('PHP 1,500.00')
         ->assertSee('Accounting equation balances');
 });

@@ -215,7 +215,8 @@ class FinancialStatements extends Component
         $accounts = AccountingAccount::query()->whereIn('type', array_keys(self::BALANCE_TYPES))->get();
         $postedAccountIds = AccountingJournalLine::query()
             ->whereHas('journal', fn ($query) => $query->where('book_key', 'FCDC')
-                ->where('status', 'posted')->whereDate('accounting_date', '<=', $this->toDate))
+                ->where('status', 'posted')->whereDate('accounting_date', '>=', $cutoverDate)
+                ->whereDate('accounting_date', '<=', $this->toDate))
             ->distinct()->pluck('accounting_account_id');
         foreach (self::BALANCE_TYPES as $type => $classifications) {
             if ($accounts->contains(fn (AccountingAccount $account) => $account->type === $type
@@ -233,7 +234,8 @@ class FinancialStatements extends Component
 
         $lines = AccountingJournalLine::query()
             ->whereHas('journal', fn ($query) => $query->where('book_key', 'FCDC')
-                ->where('status', 'posted')->whereDate('accounting_date', '<=', $this->toDate))
+                ->where('status', 'posted')->whereDate('accounting_date', '>=', $cutoverDate)
+                ->whereDate('accounting_date', '<=', $this->toDate))
             ->whereIn('accounting_account_id', $approvedAccounts->keys())
             ->get()
             ->groupBy('accounting_account_id');
@@ -302,6 +304,7 @@ class FinancialStatements extends Component
             ->whereDate('accounting_date', '<=', $this->toDate)->pluck('id');
         $reversedClosingIds = AccountingJournal::query()
             ->where('book_key', 'FCDC')->where('status', 'posted')
+            ->whereDate('accounting_date', '<=', $this->toDate)
             ->whereIn('correction_of_id', $closingIds)->pluck('correction_of_id');
         if ($closingIds->diff($reversedClosingIds)->isNotEmpty()) {
             return [0, null];
