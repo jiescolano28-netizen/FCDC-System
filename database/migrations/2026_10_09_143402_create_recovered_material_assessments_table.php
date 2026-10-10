@@ -11,11 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $indexName = 'rma_material_created_at_idx';
+
         if (Schema::hasTable('recovered_material_assessments')) {
+            Schema::whenTableDoesntHaveIndex(
+                'recovered_material_assessments',
+                $indexName,
+                fn (Blueprint $table) => $table->index(['recovered_material_id', 'created_at'], $indexName),
+            );
+
             return;
         }
-
-        Schema::create('recovered_material_assessments', function (Blueprint $table) {
+        Schema::create('recovered_material_assessments', function (Blueprint $table) use ($indexName) {
             $table->id();
             $table->foreignId('recovered_material_id')->constrained()->restrictOnDelete();
             $table->foreignId('inventory_id')->constrained()->restrictOnDelete();
@@ -26,7 +33,7 @@ return new class extends Migration
             $table->foreignId('supersedes_assessment_id')->nullable()->constrained('recovered_material_assessments')->restrictOnDelete();
             $table->foreignId('stock_movement_id')->nullable()->unique()->constrained('stock_movements')->restrictOnDelete();
             $table->timestamps();
-            $table->index(['recovered_material_id', 'created_at']);
+            $table->index(['recovered_material_id', 'created_at'], $indexName);
         });
     }
 
