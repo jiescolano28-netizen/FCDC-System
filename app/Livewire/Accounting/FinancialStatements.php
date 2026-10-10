@@ -317,7 +317,9 @@ class FinancialStatements extends Component
         if ((clone $incomeAccountsQuery)->where('is_active', true)->whereNull('approved_at')->exists()) {
             return [0, 'Approved income and expense classifications are unavailable while active accounts await approval.'];
         }
-        $incomeAccounts = $incomeAccountsQuery->whereNotNull('approved_at')->get()->keyBy('id');
+        $incomeAccounts = $incomeAccountsQuery
+            ->where(fn ($query) => $query->whereNotNull('approved_at')->orWhereNotNull('used_at'))
+            ->get()->keyBy('id');
         $excludedIds = $this->fiscalClosingExclusionIds($closingIds->all());
         $activity = AccountingJournalLine::query()
             ->whereHas('journal', function ($query) use ($fromDate, $excludedIds): void {
@@ -340,7 +342,7 @@ class FinancialStatements extends Component
                         : (int) $line->debit_cents - (int) $line->credit_cents),
             );
             $summaryLine = $summary?->lines->first(
-                fn ($line) => $line->accounting_account_id === $account->id && $line->account?->approved_at !== null,
+                fn ($line) => $line->accounting_account_id === $account->id && $line->account !== null,
             );
             if ($summaryLine) {
                 $expectedNormalBalance = $account->type === 'Revenue' ? 'credit' : 'debit';

@@ -383,3 +383,25 @@ test('balance sheet excludes posted ledger history before the approved cutover',
         ->assertDontSee('PHP 1,500.00')
         ->assertSee('Accounting equation balances');
 });
+
+test('balance sheet preserves unclosed earnings from a used income account after deactivation', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = statementAccount('3000', 'capital', 'Equity', 'credit');
+    $sales = statementAccount('4000', 'sales', 'Revenue', 'credit');
+    statementJournal($period, $viewer, '2026-01-01', 'opening', [
+        [$cash, 100000, 0], [$capital, 0, 100000],
+    ], 'BS-INACTIVE-OPEN');
+    statementJournal($period, $viewer, '2026-02-01', 'sale', [
+        [$cash, 10000, 0], [$sales, 0, 10000],
+    ], 'BS-INACTIVE-SALE');
+    $sales->markUsed();
+    $sales->update(['is_active' => false]);
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-02-01')
+        ->assertSee('PHP 100.00')
+        ->assertSee('Accounting equation balances');
+});
