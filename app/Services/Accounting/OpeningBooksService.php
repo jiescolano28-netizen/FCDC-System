@@ -171,7 +171,7 @@ class OpeningBooksService
         $mappings = AccountingPostingMapping::whereIn('source', $requiredMappings)->with('account')->get()->keyBy('source');
         $mappingsApproved = collect($requiredMappings)->every(fn (string $source) => $mappings->get($source)?->isApprovedForPosting() === true);
         $ytdApproved = AccountingYtdSummary::where('book_key', 'FCDC')->where('fiscal_year', $year)->where('status', 'approved')->exists();
-        $postedSupplierInvoices = SupplierOpeningInvoice::where('status', 'posted')->get();
+        $postedSupplierInvoices = SupplierOpeningInvoice::activePosted()->get();
         $apLines = $journal ? $journal->lines()->with('account')->get()->filter(
             fn ($line) => $line->account?->classification === 'accounts_payable',
         ) : collect();
@@ -185,7 +185,7 @@ class OpeningBooksService
             'opening' => $journal ? 'Balanced opening journal approved' : 'Opening journal approval required',
             'supplier' => $journal
                 ? ($apScheduleMatches ? 'Opening supplier schedule reconciled' : 'Opening supplier schedule mismatch')
-                : (SupplierOpeningInvoice::where('status', 'draft')->exists()
+                : (SupplierOpeningInvoice::where('status', 'draft')->whereNull('reversal_of_id')->exists()
                     ? 'Opening supplier schedule pending approval'
                     : 'Opening supplier schedule required'),
             'inventory' => 'Inventory valuation schedule unavailable',

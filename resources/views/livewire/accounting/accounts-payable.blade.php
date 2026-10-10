@@ -73,7 +73,7 @@
                             <td>{{ $invoice->supplier_name_snapshot }} <small>({{ $invoice->supplier_code_snapshot }})</small></td>
                             <td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->recognition_date->format('Y-m-d') }}</td><td>{{ $invoice->due_date->format('Y-m-d') }}</td>
                             <td class="numeric">{{ number_format($invoice->amount_cents / 100, 2) }}</td>
-                            <td>{{ $invoice->status === 'draft' ? 'Opening · Draft' : 'Opening · Posted' }}@if ($invoice->status === 'posted' && $invoice->due_date->toDateString() < now('Asia/Manila')->toDateString()) · Overdue @endif</td>
+                            <td>Opening · {{ $invoice->stateAsOf($today) }}</td>
                             <td>
                                 <button type="button" wire:click="showInvoice({{ $invoice->id }})">Invoice detail / print</button>
                                 @if ($invoice->status === 'draft')
@@ -99,7 +99,7 @@
             }
         </style>
         <section id="supplier-invoice-print" class="chart-account-card" aria-labelledby="invoice-detail-heading">
-            <h2 id="invoice-detail-heading">Opening invoice {{ $selectedInvoice->invoice_number }} — {{ ucfirst($selectedInvoice->status) }}</h2>
+            <h2 id="invoice-detail-heading">Opening invoice {{ $selectedInvoice->invoice_number }} — {{ $selectedInvoice->stateAsOf($today) }}</h2>
             <p>{{ $selectedInvoice->supplier_name_snapshot }} ({{ $selectedInvoice->supplier_code_snapshot }})</p>
             @if ($selectedInvoice->supplier_legal_name_snapshot)<p>Legal name: {{ $selectedInvoice->supplier_legal_name_snapshot }}</p>@endif
             @if ($selectedInvoice->supplier_tax_identifier_snapshot)<p>Tax identifier: {{ $selectedInvoice->supplier_tax_identifier_snapshot }}</p>@endif

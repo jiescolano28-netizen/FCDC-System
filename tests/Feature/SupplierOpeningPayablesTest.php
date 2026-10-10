@@ -4,6 +4,8 @@ use App\Livewire\Accounting\AccountsPayable;
 use App\Livewire\Accounting\OpeningBooks;
 use App\Models\AccountingAccount;
 use App\Models\Employee;
+use App\Models\Supplier;
+use App\Models\SupplierOpeningInvoice;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -76,6 +78,10 @@ test('opening supplier invoices post only with an exactly matching AP opening an
 
     $this->actingAs($reviewer);
     Livewire::test(OpeningBooks::class)->call('approveOpening')->assertHasNoErrors()->assertSee('Opening supplier schedule reconciled');
+    $postedInvoice = SupplierOpeningInvoice::firstOrFail();
+    $postApprovalReversal = $postedInvoice->replicate();
+    $postApprovalReversal->reversal_of_id = $postedInvoice->id;
+    expect(fn () => $postApprovalReversal->save())->toThrow(DomainException::class);
 
     $this->actingAs($preparer);
     Livewire::test(AccountsPayable::class)
@@ -185,6 +191,72 @@ test('opening AP approval rejects an invoice schedule that differs from the cont
         ->and(DB::table('supplier_opening_invoices')->where('status', 'draft')->count())->toBe(1);
 });
 
+test('linked posted reversals preserve invoice history without inflating opening AP or overdue totals', function () {
+    $preparer = supplierPayablesEmployee(['accounting.maintain-suppliers', 'accounting.maintain-opening-books'], 'reversal-preparer');
+    $reviewer = supplierPayablesEmployee(['accounting.approve-opening-books'], 'reversal-reviewer');
+    $cash = supplierPayablesAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = supplierPayablesAccount('3000', 'capital', 'Equity', 'credit');
+    $supplier = Supplier::create([
+        'code' => 'SUP-REV',
+        'name' => 'Reversed Supplier',
+        'created_by' => $preparer->id,
+    ]);
+    $history = [
+        'supplier_id' => $supplier->id,
+        'supplier_code_snapshot' => $supplier->code,
+        'supplier_name_snapshot' => $supplier->name,
+        'invoice_number' => 'HIST-001',
+        'invoice_number_normalized' => 'HIST-001',
+        'recognition_date' => '2026-06-01',
+        'due_date' => '2026-06-30',
+        'amount_cents' => 12550,
+        'description' => 'Historical payable subsequently reversed',
+        'status' => 'posted',
+        'prepared_by' => $preparer->id,
+        'posted_at' => now('UTC'),
+        'posted_by' => $preparer->id,
+        'approved_at' => now('UTC'),
+        'approved_by' => $reviewer->id,
+    ];
+    $original = SupplierOpeningInvoice::create($history);
+    expect(fn () => SupplierOpeningInvoice::create([
+        ...$history,
+        'amount_cents' => 12549,
+        'reversal_of_id' => $original->id,
+    ]))->toThrow(DomainException::class);
+
+    $reversal = SupplierOpeningInvoice::create([...$history, 'reversal_of_id' => $original->id]);
+
+    $this->actingAs($preparer);
+    Livewire::test(OpeningBooks::class)
+        ->set('cutoverDate', '2026-07-01')
+        ->set('lines', [
+            ['accountId' => (string) $cash->id, 'debit' => '100.00', 'credit' => ''],
+            ['accountId' => (string) $capital->id, 'debit' => '', 'credit' => '100.00'],
+        ])
+        ->call('saveOpening')->assertHasNoErrors();
+    $this->actingAs($reviewer);
+    Livewire::test(OpeningBooks::class)
+        ->call('approveOpening')
+        ->assertHasNoErrors()
+        ->assertSee('Opening supplier schedule reconciled');
+    expect(fn () => SupplierOpeningInvoice::create([...$history, 'reversal_of_id' => $original->id]))
+        ->toThrow(DomainException::class);
+
+    $this->actingAs($preparer);
+    Livewire::test(AccountsPayable::class)
+        ->assertSee('Opening · Reversed')
+        ->assertSee('Opening · Reversal · Posted')
+        ->assertSee('PHP 0.00')
+        ->call('showInvoice', $original->id)
+        ->assertSee('Opening invoice HIST-001 — Reversed')
+        ->assertSee('Linked historical reversals')
+        ->assertSee('Invoice HIST-001');
+
+    expect(DB::table('supplier_opening_invoices')->where('id', $original->id)->exists())->toBeTrue()
+        ->and(DB::table('supplier_opening_invoices')->where('id', $reversal->id)->value('reversal_of_id'))->toBe($original->id)
+        ->and(DB::table('accounting_journal_lines')->where('accounting_account_id', $cash->id)->sum('debit_cents'))->toBe(10000);
+});
 test('supplier maintenance and opening invoice preparation require their own capabilities', function () {
     $viewer = supplierPayablesEmployee([], 'payable-viewer');
     $this->actingAs($viewer);

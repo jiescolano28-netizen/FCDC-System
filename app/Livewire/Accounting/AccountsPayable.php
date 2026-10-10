@@ -131,19 +131,22 @@ class AccountsPayable extends Component
 
     public function render()
     {
-        $invoices = SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf'])
+        $today = now('Asia/Manila')->toDateString();
+        $matchingInvoices = SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals'])
             ->where(function ($query): void {
                 $query->whereHas('supplier', fn ($supplier) => $supplier->search($this->search))
                     ->orWhere('supplier_name_snapshot', 'like', '%'.trim($this->search).'%')
                     ->orWhere('supplier_code_snapshot', 'like', '%'.trim($this->search).'%')
                     ->orWhere('invoice_number', 'like', '%'.trim($this->search).'%');
             })
-            ->when($this->status === 'Draft', fn ($query) => $query->where('status', 'draft'))
-            ->when($this->status === 'Unpaid', fn ($query) => $query->where('status', 'posted')->whereDate('due_date', '>=', now('Asia/Manila')->toDateString()))
-            ->when($this->status === 'Overdue', fn ($query) => $query->where('status', 'posted')->whereDate('due_date', '<', now('Asia/Manila')->toDateString()))
             ->orderBy('due_date')->orderBy('id')->get();
-        $postedInvoices = SupplierOpeningInvoice::where('status', 'posted')->get();
-        $today = now('Asia/Manila')->toDateString();
+        $invoices = $matchingInvoices->filter(fn (SupplierOpeningInvoice $invoice) => match ($this->status) {
+            'Draft' => $invoice->status === 'draft',
+            'Unpaid' => $invoice->isActivePosted() && ! $invoice->isOverdueOn($today),
+            'Overdue' => $invoice->isOverdueOn($today),
+            default => true,
+        })->values();
+        $postedInvoices = SupplierOpeningInvoice::activePosted()->with('reversals')->get();
         $selectedInvoice = $this->selectedInvoiceId
             ? SupplierOpeningInvoice::with(['supplier', 'preparer', 'approver', 'reversalOf', 'reversals', 'openingJournal'])->find($this->selectedInvoiceId)
             : null;
@@ -153,8 +156,9 @@ class AccountsPayable extends Component
             'visibleSuppliers' => Supplier::search($this->search)->orderBy('name')->get(),
             'invoices' => $invoices,
             'selectedInvoice' => $selectedInvoice,
+            'today' => $today,
             'outstandingCents' => $postedInvoices->sum('amount_cents'),
-            'overdueCents' => $postedInvoices->filter(fn ($invoice) => $invoice->due_date->toDateString() < $today)->sum('amount_cents'),
+            'overdueCents' => $postedInvoices->filter(fn (SupplierOpeningInvoice $invoice) => $invoice->isOverdueOn($today))->sum('amount_cents'),
         ])->layout('layouts.app', ['title' => 'Accounts Payable']);
     }
 

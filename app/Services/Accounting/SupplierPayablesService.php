@@ -88,13 +88,13 @@ class SupplierPayablesService
             if ($invoice->exists && $invoice->status !== 'draft') {
                 throw ValidationException::withMessages(['invoiceNumber' => 'Posted opening invoices are immutable.']);
             }
-            $postedDuplicate = SupplierOpeningInvoice::where('supplier_id', $supplier->id)
+            $postedDuplicate = SupplierOpeningInvoice::activePosted()
+                ->where('supplier_id', $supplier->id)
                 ->where('invoice_number_normalized', $normalized)
-                ->where('status', 'posted')
                 ->when($invoice->exists, fn ($query) => $query->whereKeyNot($invoice->id))
                 ->exists();
             if ($postedDuplicate) {
-                throw ValidationException::withMessages(['invoiceNumber' => 'This normalized invoice number is already posted for this supplier.']);
+                throw ValidationException::withMessages(['invoiceNumber' => 'This normalized invoice number is already active and posted for this supplier.']);
             }
             $invoice->fill([
                 'supplier_id' => $supplier->id,
@@ -136,18 +136,20 @@ class SupplierPayablesService
 
     public function postOpeningSchedule(AccountingJournal $journal, int $actorId): void
     {
-        $activeInvoices = SupplierOpeningInvoice::whereIn('status', ['draft', 'posted'])->lockForUpdate()->get();
-        $duplicate = $activeInvoices
+        $postedInvoices = SupplierOpeningInvoice::activePosted()->lockForUpdate()->get();
+        $draftInvoices = SupplierOpeningInvoice::where('status', 'draft')->whereNull('reversal_of_id')->lockForUpdate()->get();
+        $scheduledInvoices = $postedInvoices->concat($draftInvoices);
+        $duplicate = $scheduledInvoices
             ->groupBy(fn (SupplierOpeningInvoice $invoice) => $invoice->supplier_id.':'.$invoice->invoice_number_normalized)
             ->first(fn ($group) => $group->count() > 1);
         if ($duplicate) {
-            throw ValidationException::withMessages(['opening' => 'Normalized supplier invoice numbers must be unique among posted opening invoices.']);
+            throw ValidationException::withMessages(['opening' => 'Normalized supplier invoice numbers must be unique among active posted opening invoices.']);
         }
-        $invoices = $activeInvoices->where('status', 'draft');
+        $invoices = $draftInvoices;
         $apLines = $journal->lines->filter(fn ($line) => $line->account?->classification === 'accounts_payable');
         $apDebitCents = $apLines->sum('debit_cents');
         $apCreditCents = $apLines->sum('credit_cents');
-        $scheduleCents = $invoices->sum('amount_cents');
+        $scheduleCents = $scheduledInvoices->sum('amount_cents');
         if ($apDebitCents > 0 || $apCreditCents !== $scheduleCents) {
             throw ValidationException::withMessages([
                 'opening' => 'Opening supplier invoice schedule must equal the controlled Accounts Payable credit balance exactly.',
