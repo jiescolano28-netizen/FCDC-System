@@ -133,7 +133,7 @@ test('opening cutover readiness names missing chart and controlled supporting ev
         ->assertSee('Opening Books & Cutover')
         ->assertSee('Chart approval required')
         ->assertSee('Posting mapping approvals required')
-        ->assertSee('Supplier schedule unavailable')
+        ->assertSee('Opening supplier schedule required')
         ->assertSee('Inventory valuation schedule unavailable')
         ->assertSee('Valuation policies not approved')
         ->assertSee('Save a cutover date to determine YTD evidence requirements');
@@ -178,7 +178,7 @@ test('midyear cutover requires separately approved supported YTD income and expe
         ->and(app(OpeningBooksService::class)->readiness()['ytd'])->toBe('Approved pre-cutover YTD evidence');
 });
 
-test('posted opening history is immutable, duplicate posting is rejected, and controlled account openings are blocked', function () {
+test('posted opening history is immutable, duplicate posting is rejected, and inventory openings remain blocked', function () {
     $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);
     $reviewer = openingBooksEmployee(['accounting.view', 'accounting.approve-opening-books']);
     $cash = approvedOpeningAccount('1000', 'cash', 'Asset', 'debit');
@@ -216,15 +216,6 @@ test('posted opening history is immutable, duplicate posting is rejected, and co
         ])
         ->call('saveOpening')
         ->assertHasErrors('lines.0.accountId');
-    Livewire::test(OpeningBooks::class)
-        ->set('cutoverDate', '2026-01-01')
-        ->set('lines', [
-            ['accountId' => (string) $cash->id, 'debit' => '100.00', 'credit' => ''],
-            ['accountId' => (string) $payables->id, 'debit' => '', 'credit' => '100.00'],
-        ])
-        ->call('saveOpening')
-        ->assertHasErrors('lines.1.accountId');
-
     $postedLine = AccountingJournalLine::firstOrFail();
     expect(fn () => $postedLine->forceFill(['debit_cents' => 1])->save())
         ->toThrow(DomainException::class, 'Posted journal lines are immutable.');

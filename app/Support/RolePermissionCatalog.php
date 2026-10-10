@@ -35,9 +35,11 @@ class RolePermissionCatalog
             ],
             'Accounting' => [
                 'accounting.view' => 'View accounting',
-                'accounting.create-journal-entry' => 'Create demonstration journal entries',
+                'accounting.create-journal-entry' => 'Prepare manual journal entries',
+                'accounting.post-journal-entry' => 'Post manual journal entries and corrections',
                 'accounting.maintain-accounts' => 'Create and maintain accounts and posting mappings',
                 'accounting.approve-accounts' => 'Approve accounts and posting mappings',
+                'accounting.maintain-suppliers' => 'Maintain supplier identities and details',
                 'accounting.maintain-opening-books' => 'Prepare accounting cutover and opening schedules',
                 'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
             ],

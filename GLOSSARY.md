@@ -124,6 +124,9 @@ A customer amount owed to FCDC that is recorded through accounting journals with
 **Supplier invoice**:
 A supplier's claim for a recorded purchase, allocated to the inventory, asset or expense acquired. A posted credit-purchase invoice creates an amount owed to that supplier.
 
+**Opening supplier invoice**:
+An unpaid supplier invoice carried into the accounting cutover schedule and posted with the controlled opening Accounts Payable balance, without posting its purchase, expense or stock receipt a second time.
+
 **AP settlement**:
 A posted payment allocated to one or more outstanding invoices of the same supplier, reducing the amounts owed without recognizing the purchase again.
 _Avoid_: Purchase expense when referring to payment of an existing payable

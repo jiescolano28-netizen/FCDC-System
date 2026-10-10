@@ -7,6 +7,7 @@ use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\AccountingPostingPeriod;
 use App\Models\AccountingYtdSummary;
+use App\Models\SupplierOpeningInvoice;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -72,14 +73,14 @@ class OpeningBooksService
                 if (! $account?->isApprovedForPosting()) {
                     throw ValidationException::withMessages(['opening' => 'Every opening account must be active and approved.']);
                 }
-                if (in_array($account->classification, ['accounts_payable', 'inventory'], true)) {
+                if ($account->classification === 'inventory') {
                     throw ValidationException::withMessages([
-                        'opening' => $account->classification === 'accounts_payable'
-                            ? 'Accounts Payable opening requires its controlled supplier schedule, which is not available.'
-                            : 'Inventory opening requires an approved per-item valuation schedule, which is not available.',
+                        'opening' => 'Inventory opening requires an approved per-item valuation schedule, which is not available.',
                     ]);
                 }
             }
+
+            app(SupplierPayablesService::class)->postOpeningSchedule($journal, $actorId);
 
             $journal->forceFill([
                 'status' => 'posted',
@@ -170,13 +171,23 @@ class OpeningBooksService
         $mappings = AccountingPostingMapping::whereIn('source', $requiredMappings)->with('account')->get()->keyBy('source');
         $mappingsApproved = collect($requiredMappings)->every(fn (string $source) => $mappings->get($source)?->isApprovedForPosting() === true);
         $ytdApproved = AccountingYtdSummary::where('book_key', 'FCDC')->where('fiscal_year', $year)->where('status', 'approved')->exists();
+        $postedSupplierInvoices = SupplierOpeningInvoice::where('status', 'posted')->get();
+        $apLines = $journal ? $journal->lines()->with('account')->get()->filter(
+            fn ($line) => $line->account?->classification === 'accounts_payable',
+        ) : collect();
+        $apScheduleMatches = $apLines->sum('credit_cents') === $postedSupplierInvoices->sum('amount_cents')
+            && $apLines->sum('debit_cents') === 0;
 
         return [
             'cutover' => $journal ? 'Approved' : 'Cutover approval required',
             'chart' => $chartApproved ? 'Approved chart available' : 'Chart approval required',
             'mappings' => $mappingsApproved ? 'Posting mappings approved' : 'Posting mapping approvals required',
             'opening' => $journal ? 'Balanced opening journal approved' : 'Opening journal approval required',
-            'supplier' => 'Supplier schedule unavailable',
+            'supplier' => $journal
+                ? ($apScheduleMatches ? 'Opening supplier schedule reconciled' : 'Opening supplier schedule mismatch')
+                : (SupplierOpeningInvoice::where('status', 'draft')->exists()
+                    ? 'Opening supplier schedule pending approval'
+                    : 'Opening supplier schedule required'),
             'inventory' => 'Inventory valuation schedule unavailable',
             'valuation' => 'Valuation policies not approved',
             'ytd' => $cutoverDate === null
@@ -184,7 +195,7 @@ class OpeningBooksService
                 : (! $midyear
                     ? 'Not required for January 1 cutover'
                     : ($ytdApproved ? 'Approved pre-cutover YTD evidence' : 'Pre-cutover YTD evidence required')),
-            'production' => 'Production activation unavailable: posting mappings, supplier/item schedules and approved valuation policies are not available.',
+            'production' => 'Production activation unavailable: inventory valuation schedule and valuation policies remain outstanding; chart, mapping, cutover and supplier readiness are listed above.',
         ];
     }
 
@@ -200,8 +211,8 @@ class OpeningBooksService
             if (! $account?->isApprovedForPosting()) {
                 throw ValidationException::withMessages(["lines.$index.accountId" => 'Select an active approved account.']);
             }
-            if (in_array($account->classification, ['accounts_payable', 'inventory'], true)) {
-                throw ValidationException::withMessages(["lines.$index.accountId" => 'Controlled Accounts Payable and Inventory openings require their approved schedules.']);
+            if ($account->classification === 'inventory') {
+                throw ValidationException::withMessages(["lines.$index.accountId" => 'Controlled Inventory openings require an approved per-item valuation schedule.']);
             }
             $debit = $this->amountInCents($line['debit'] ?? '');
             $credit = $this->amountInCents($line['credit'] ?? '');

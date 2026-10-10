@@ -17,7 +17,7 @@ function createAccountsPayableEmployee(): Employee
     ]), ['accounting.view']);
 }
 
-test('accounts payable is a separate authenticated accounting page with unavailable financial figures and actions', function () {
+test('accounts payable exposes opening supplier schedules without presenting drafts as posted balances', function () {
     $this->get(route('accounting.accounts-payable'))->assertRedirect(route('login'));
 
     $this->actingAs(createAccountsPayableEmployee())
@@ -25,44 +25,37 @@ test('accounts payable is a separate authenticated accounting page with unavaila
         ->assertOk()
         ->assertSee('Accounts Payable')
         ->assertSee('href="'.route('accounting.accounts-payable').'"', false)
-        ->assertSee('Accounting')
-        ->assertSee('No verified payable balances or obligations are available', false)
-        ->assertSee('Amount unavailable', false)
-        ->assertSee('Open invoices unavailable', false)
-        ->assertSee('No supplier invoices are available in this demonstration', false)
+        ->assertSee('Posted opening outstanding')
+        ->assertSee('Posted opening overdue')
+        ->assertSee('Supplier code')
+        ->assertSee('Prepare opening unpaid invoice')
         ->assertSee('Search supplier or invoice')
         ->assertSee('wire:model.live.debounce.250ms="search"', false)
-        ->assertSee('wire:model.live="status"', false)
-        ->assertSee('<option value="Unpaid">Unpaid</option>', false)
-        ->assertSee('<option value="Partially Paid">Partially Paid</option>', false)
-        ->assertSee('<option value="Paid">Paid</option>', false)
-        ->assertSee('Add Payable')
-        ->assertSee('aria-describedby="payable-maintenance-note"', false)
-        ->assertSee('disabled aria-describedby="payable-maintenance-note"', false)
-        ->assertSee('Payable creation, editing, and payment actions are unavailable', false)
+        ->assertSee('<option value="Draft">Draft</option>', false)
+        ->assertSee('<option value="Overdue">Overdue</option>', false)
+        ->assertSee('Drafts remain outside the books')
         ->assertDontSee('backend integration')
         ->assertDontSee('alert(');
 });
 
-test('supplier and invoice search with payable status filters keeps the empty demonstration dataset', function () {
+test('supplier and invoice search with status filters handles an empty schedule', function () {
     $this->actingAs(createAccountsPayableEmployee());
 
     Livewire::test(AccountsPayable::class)
-        ->assertSee('No supplier invoices are available in this demonstration')
+        ->assertSee('No supplier invoices match this search or state.')
         ->set('search', 'Northwind')
         ->assertSet('search', 'Northwind')
-        ->assertSee('No supplier invoices are available in this demonstration')
+        ->assertSee('No supplier invoices match this search or state.')
         ->set('search', 'INV-1001')
         ->assertSet('search', 'INV-1001')
-        ->assertSee('No supplier invoices are available in this demonstration')
+        ->assertSee('No supplier invoices match this search or state.')
+        ->set('status', 'Draft')
+        ->assertSet('status', 'Draft')
         ->set('status', 'Unpaid')
         ->assertSet('status', 'Unpaid')
-        ->assertSee('No supplier invoices are available in this demonstration')
-        ->set('status', 'Partially Paid')
-        ->assertSet('status', 'Partially Paid')
-        ->set('status', 'Paid')
-        ->assertSet('status', 'Paid')
+        ->set('status', 'Overdue')
+        ->assertSet('status', 'Overdue')
         ->set('status', 'All')
         ->assertSet('status', 'All')
-        ->assertSee('No supplier invoices are available in this demonstration');
+        ->assertSee('No supplier invoices match this search or state.');
 });

@@ -20,7 +20,7 @@
                 <dt>{{ ucfirst($name) }}</dt><dd>{{ $state }}</dd>
             @endforeach
         </dl>
-        <p>Opening Accounts Payable requires an approved supplier/invoice schedule. Opening Inventory requires approved per-item quantities and values; neither control account can be approved as an unrestricted general-ledger balance.</p>
+        <p>Opening Accounts Payable requires an opening invoice schedule whose exact total matches the controlled AP credit line. Opening Inventory requires approved per-item quantities and values; neither control account can be approved as an unrestricted general-ledger balance.</p>
     </section>
 
     <section class="chart-account-card" aria-labelledby="opening-journal-heading">
