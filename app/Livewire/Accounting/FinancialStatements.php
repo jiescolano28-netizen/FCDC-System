@@ -132,17 +132,7 @@ class FinancialStatements extends Component
             ->where('book_key', 'FCDC')
             ->where('source_type', self::FISCAL_YEAR_CLOSING_SOURCE_TYPE)
             ->pluck('id');
-        $excludedIds = $closingIds->all();
-        $frontier = $excludedIds;
-        while ($frontier !== []) {
-            $next = AccountingJournal::query()
-                ->where('book_key', 'FCDC')
-                ->whereIn('correction_of_id', $frontier)
-                ->pluck('id')
-                ->all();
-            $frontier = array_values(array_diff($next, $excludedIds));
-            $excludedIds = [...$excludedIds, ...$frontier];
-        }
+        $excludedIds = $this->fiscalClosingExclusionIds($closingIds->all());
 
         $activity = AccountingJournalLine::query()
             ->whereHas('journal', function ($query) use ($cutoverDate, $excludedIds): void {
@@ -325,14 +315,7 @@ class FinancialStatements extends Component
             return [0, 'Approved income and expense classifications are unavailable while active accounts await approval.'];
         }
         $incomeAccounts = $incomeAccountsQuery->whereNotNull('approved_at')->get()->keyBy('id');
-        $excludedIds = $closingIds->all();
-        $frontier = $excludedIds;
-        while ($frontier !== []) {
-            $next = AccountingJournal::query()->where('book_key', 'FCDC')
-                ->whereIn('correction_of_id', $frontier)->pluck('id')->all();
-            $frontier = array_values(array_diff($next, $excludedIds));
-            $excludedIds = [...$excludedIds, ...$frontier];
-        }
+        $excludedIds = $this->fiscalClosingExclusionIds($closingIds->all());
         $activity = AccountingJournalLine::query()
             ->whereHas('journal', function ($query) use ($fromDate, $excludedIds): void {
                 $query->where('book_key', 'FCDC')->where('status', 'posted')
@@ -366,6 +349,23 @@ class FinancialStatements extends Component
         return [$earnings, null];
     }
 
+
+    /** @param array<int, int> $closingIds
+     * @return array<int, int>
+     */
+    private function fiscalClosingExclusionIds(array $closingIds): array
+    {
+        $excludedIds = $closingIds;
+        $frontier = $excludedIds;
+        while ($frontier !== []) {
+            $next = AccountingJournal::query()->where('book_key', 'FCDC')
+                ->whereIn('correction_of_id', $frontier)->pluck('id')->all();
+            $frontier = array_values(array_diff($next, $excludedIds));
+            $excludedIds = [...$excludedIds, ...$frontier];
+        }
+
+        return $excludedIds;
+    }
 
     private function validDate(string $date): bool
     {
