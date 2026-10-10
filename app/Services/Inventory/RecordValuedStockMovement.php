@@ -6,10 +6,14 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\AccountingPostingPeriod;
+use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
+use App\Models\RecoveredMaterial;
+use App\Models\RecoveredMaterialAssessment;
 use App\Models\StockMovement;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -25,8 +29,11 @@ class RecordValuedStockMovement
         int $actorId,
         ?string $receiptUnitValue = null,
         ?string $notes = null,
+        ?int $demolitionProjectId = null,
+        ?int $recoveredMaterialId = null,
+        ?Closure $sourceLink = null,
     ): StockMovement {
-        $actor = \App\Models\Employee::query()->findOrFail($actorId);
+        $actor = Employee::query()->findOrFail($actorId);
         if (! $actor->can('inventory.movements.record')) {
             abort(403);
         }
@@ -34,10 +41,19 @@ class RecordValuedStockMovement
             throw ValidationException::withMessages(['type' => 'Unsupported valued stock movement.']);
         }
         $allowedReasons = $type === 'stock_in'
-            ? ['purchase_receipt', 'return', 'other']
+            ? ['purchase_receipt', 'return', 'recovered_material', 'other']
             : ['project_use', 'damage_loss', 'count_correction', 'other'];
         if (! in_array($reason, $allowedReasons, true)) {
             throw ValidationException::withMessages(['reason' => 'Select a valid reason for this valued movement.']);
+        }
+        if (($reason === 'recovered_material') !== ($demolitionProjectId !== null && $recoveredMaterialId !== null)) {
+            throw ValidationException::withMessages(['sourceReference' => 'Recovered-material receipts require linked project and recovery records.']);
+        }
+        if (($demolitionProjectId === null) !== ($recoveredMaterialId === null)) {
+            throw ValidationException::withMessages(['sourceReference' => 'Both project and recovery links are required.']);
+        }
+        if (($reason === 'recovered_material') !== ($sourceLink !== null)) {
+            throw ValidationException::withMessages(['sourceReference' => 'Recovered-material receipts must be posted with their immutable assessment in one transaction.']);
         }
         if (trim($sourceReference) === '' || strlen($sourceReference) > 255) {
             throw ValidationException::withMessages(['sourceReference' => 'A source reference of at most 255 characters is required.']);
@@ -46,8 +62,15 @@ class RecordValuedStockMovement
             abort(403);
         }
 
-        return DB::transaction(function () use ($inventoryId, $type, $quantity, $reason, $sourceReference, $effectiveDate, $actorId, $actor, $receiptUnitValue, $notes): StockMovement {
+        return DB::transaction(function () use ($inventoryId, $type, $quantity, $reason, $sourceReference, $effectiveDate, $actorId, $actor, $receiptUnitValue, $notes, $demolitionProjectId, $recoveredMaterialId, $sourceLink): StockMovement {
             $item = Inventory::query()->lockForUpdate()->findOrFail($inventoryId);
+            if ($recoveredMaterialId !== null) {
+                $recovery = RecoveredMaterial::query()->lockForUpdate()->findOrFail($recoveredMaterialId);
+                if ($recovery->demolition_project_id !== $demolitionProjectId) {
+                    throw ValidationException::withMessages(['sourceReference' => 'The recovered material does not belong to the supplied project.']);
+                }
+            }
+
             if ($item->status !== 'active') {
                 throw ValidationException::withMessages(['inventoryId' => 'Inactive inventory items cannot be valued.']);
             }
@@ -61,9 +84,8 @@ class RecordValuedStockMovement
                 throw ValidationException::withMessages(['effectiveDate' => 'Valued stock posting requires approved opening books and an effective date on or after cutover.']);
             }
             $openingLine = $schedule->lines->firstWhere('inventory_id', $item->id);
-
             if (! $openingLine) {
-                if ($item->created_at->timezone('Asia/Manila')->toDateString() < $cutoverDate || $this->quantityHundredths((string) $item->qty) !== 0) {
+                if ($item->created_at->timezone('Asia/Manila')->toDateString() < $opening->accounting_date->toDateString() || $this->quantityHundredths((string) $item->qty) !== 0) {
                     throw ValidationException::withMessages(['inventoryId' => 'This item has no approved opening valuation baseline.']);
                 }
             }
@@ -146,6 +168,8 @@ class RecordValuedStockMovement
 
             $movement = StockMovement::create([
                 'inventory_id' => $item->id,
+                'demolition_project_id' => $demolitionProjectId,
+                'recovered_material_id' => $recoveredMaterialId,
                 'posted_by' => $actorId,
                 'type' => $type,
                 'quantity' => number_format($delta / 100, 2, '.', ''),
@@ -189,6 +213,14 @@ class RecordValuedStockMovement
                 'approved_by' => $actorId,
             ])->save();
             $movement->forceFill(['accounting_journal_id' => $journal->id])->saveQuietly();
+            if ($sourceLink !== null) {
+                $assessment = $sourceLink($movement, $counterpart, $unitValueCents, $movementValue);
+                if (! $assessment instanceof RecoveredMaterialAssessment
+                    || $assessment->stock_movement_id !== $movement->id
+                    || $assessment->recovered_material_id !== $recoveredMaterialId) {
+                    throw ValidationException::withMessages(['assessment' => 'A valued recovery receipt must atomically create its linked immutable assessment.']);
+                }
+            }
             Inventory::query()->whereKey($item->id)->update([
                 'qty' => number_format($nextQuantity / 100, 2, '.', ''),
                 'unit_cost' => $nextQuantity === 0 ? '0.00' : number_format($nextValue / $nextQuantity, 2, '.', ''),
@@ -200,6 +232,7 @@ class RecordValuedStockMovement
             return $movement->refresh();
         });
     }
+
 
     private function validPostingDate(string $date): CarbonImmutable
     {

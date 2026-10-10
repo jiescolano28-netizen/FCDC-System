@@ -32,7 +32,7 @@ class ProjectManagement extends Component
     public ?int $inventoryId = null;
     public string $newInventoryName = '';
     public string $newInventoryCategory = '';
-    public string $newInventoryUnitCost = '';
+    public string $recoveryUnitValue = '';
 
 
     public function recordRecovery(): void
@@ -74,6 +74,9 @@ class ProjectManagement extends Component
         $this->acceptedQuantity = $prior?->accepted_quantity ?? $recovery->quantity;
         $this->rejectedQuantity = $prior?->rejected_quantity ?? '0.00';
         $this->rejectionReason = $prior?->rejection_reason ?? '';
+        $this->recoveryUnitValue = $prior?->assigned_unit_value_cents !== null
+            ? number_format($prior->assigned_unit_value_cents / 100, 2, '.', '')
+            : '';
         $this->inventoryId = $prior?->inventory_id;
         $this->inventoryChoice = 'existing';
         $this->resetValidation();
@@ -94,7 +97,7 @@ class ProjectManagement extends Component
             'inventoryId' => ['required_if:inventoryChoice,existing', 'nullable', 'integer', 'exists:inventories,id'],
             'newInventoryName' => ['required_if:inventoryChoice,new', 'nullable', 'string', 'max:255'],
             'newInventoryCategory' => ['required_if:inventoryChoice,new', 'nullable', 'string', 'max:255'],
-            'newInventoryUnitCost' => ['required_if:inventoryChoice,new', 'nullable', 'numeric', 'min:0', 'decimal:0,2'],
+            'recoveryUnitValue' => ['nullable', 'numeric', 'min:0.01', 'decimal:0,2'],
         ]);
 
         $acceptedCents = (int) round((float) $validated['acceptedQuantity'] * 100);
@@ -111,11 +114,11 @@ class ProjectManagement extends Component
             'accepted_quantity' => $validated['acceptedQuantity'],
             'rejected_quantity' => $validated['rejectedQuantity'],
             'rejection_reason' => $validated['rejectionReason'] ?: null,
+            'assigned_unit_value' => $validated['recoveryUnitValue'] ?? null,
             'create_inventory' => $validated['inventoryChoice'] === 'new',
             'inventory_id' => $validated['inventoryId'],
             'new_item_name' => $validated['newInventoryName'],
             'new_item_category' => $validated['newInventoryCategory'],
-            'new_item_unit_cost' => $validated['newInventoryUnitCost'],
         ], (int) auth()->id(), $this->correctingAssessment);
 
         $this->cancelAssessment();
@@ -125,8 +128,8 @@ class ProjectManagement extends Component
     {
         $this->reset([
             'assessmentRecoveryId', 'correctingAssessment', 'acceptedQuantity', 'rejectedQuantity',
-            'rejectionReason', 'inventoryChoice', 'inventoryId', 'newInventoryName',
-            'newInventoryCategory', 'newInventoryUnitCost',
+            'rejectionReason', 'recoveryUnitValue', 'inventoryChoice', 'inventoryId', 'newInventoryName',
+            'newInventoryCategory',
         ]);
         $this->inventoryChoice = 'existing';
         $this->resetValidation();
@@ -180,10 +183,12 @@ class ProjectManagement extends Component
     {
         return view('livewire.demolition-projects.project-management', [
             'projects' => DemolitionProject::query()
-                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal'])
+                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal', 'recoveredMaterials.assessments.stockMovement.accountingJournal', 'recoveredMaterials.assessments.valuationCounterpart', 'recoveredMaterials.assessments.valuationApprover'])
                 ->orderByDesc('id')
                 ->get(),
             'activeItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name', 'unit']),
+            'recoveryCounterpart' => \App\Models\AccountingPostingMapping::query()
+                ->where('source', 'recovery_offset')->with('account')->first(),
         ])->layout('layouts.app', ['title' => 'Demolition Projects']);
     }
 

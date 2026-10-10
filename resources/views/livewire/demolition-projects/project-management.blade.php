@@ -111,10 +111,19 @@
                                         Assessment #{{ $history->id }}:
                                         accepted {{ number_format((float) $history->accepted_quantity, 2) }},
                                         rejected {{ number_format((float) $history->rejected_quantity, 2) }}
-                                        @if ($history->rejection_reason) · {{ $history->rejection_reason }} @endif
+                                        @if ($history->rejection_reason) · Rejection reason: {{ $history->rejection_reason }} @endif
+                                        @if ($history->assigned_value_cents !== null)
+                                            · approved recovery value PHP {{ number_format($history->assigned_value_cents / 100, 2) }}
+                                            · counterpart {{ $history->valuationCounterpart?->code }} {{ $history->valuationCounterpart?->name }}
+                                            · approved by {{ $history->valuationApprover?->username ?? 'unknown' }}
+                                        @endif
                                         · Inventory: {{ $history->inventory->name }}
                                         @if ($history->stockMovement)
                                             · stock movement #{{ $history->stockMovement->id }}
+                                            · effective {{ $history->stockMovement->effective_date->format('Y-m-d') }}
+                                            @if ($history->stockMovement->accountingJournal)
+                                                · journal {{ $history->stockMovement->accountingJournal->reference }}
+                                            @endif
                                             @if ($history->stockMovement->reversal) · reversed by #{{ $history->stockMovement->reversal->id }} @endif
                                         @endif
                                         @if ($history->supersedes_assessment_id) · reassesses #{{ $history->supersedes_assessment_id }} @endif
@@ -146,6 +155,11 @@
         <div class="panel">
             <h2>{{ $correctingAssessment ? 'Correct and reassess' : 'Assess recovered material' }}: {{ $selectedRecovery?->material }}</h2>
             <p class="muted">Recovered: {{ number_format((float) $selectedRecovery?->quantity, 2) }} {{ $selectedRecovery?->unit }}. Accepted and rejected quantities must reconcile exactly.</p>
+            @if ($recoveryCounterpart?->isApprovedForPosting())
+                <p class="muted">Approved recovery/project counterpart: {{ $recoveryCounterpart->account->code }} · {{ $recoveryCounterpart->account->name }}.</p>
+            @else
+                <p class="error">Recovery/project valuation policy is not approved. Acceptance is blocked until an accountant approves the recovery counterpart mapping.</p>
+            @endif
             <form wire:submit="saveAssessment">
                 <div class="fields">
                     <div>
@@ -162,6 +176,11 @@
                         <label for="rejectionReason">Rejection reason (required when rejecting material)</label>
                         <input id="rejectionReason" wire:model="rejectionReason">
                         @error('rejectionReason') <span class="error">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label for="recoveryUnitValue">Approved recovery unit value (PHP; not selling price)</label>
+                        <input id="recoveryUnitValue" type="number" min="0.01" step="0.01" wire:model="recoveryUnitValue">
+                        @error('recoveryUnitValue') <span class="error">{{ $message }}</span> @enderror
                     </div>
                     <fieldset>
                         <legend>Inventory item (unit must match: {{ $selectedRecovery?->unit }})</legend>
@@ -189,11 +208,6 @@
                             <label for="newInventoryCategory">Category</label>
                             <input id="newInventoryCategory" wire:model="newInventoryCategory">
                             @error('newInventoryCategory') <span class="error">{{ $message }}</span> @enderror
-                        </div>
-                        <div>
-                            <label for="newInventoryUnitCost">Unit cost</label>
-                            <input id="newInventoryUnitCost" type="number" min="0" step="0.01" wire:model="newInventoryUnitCost">
-                            @error('newInventoryUnitCost') <span class="error">{{ $message }}</span> @enderror
                         </div>
                     @endif
                 </div>

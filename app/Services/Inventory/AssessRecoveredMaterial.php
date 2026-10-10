@@ -2,6 +2,7 @@
 
 namespace App\Services\Inventory;
 
+use App\Models\AccountingAccount;
 use App\Models\Inventory;
 use App\Models\RecoveredMaterial;
 use App\Models\RecoveredMaterialAssessment;
@@ -54,31 +55,7 @@ class AssessRecoveredMaterial
             if ($item->unit !== $recovery->unit) {
                 throw ValidationException::withMessages(['inventoryId' => 'The inventory unit must exactly match the recovered material unit.']);
             }
-
-            $movement = null;
-
-            if ($accepted > 0) {
-                app(EnsureQuantityOnlyMovementIsPreCutover::class)->assertAllowed(now('Asia/Manila')->toDateString());
-                $movement = StockMovement::create([
-                    'inventory_id' => $item->id,
-                    'demolition_project_id' => $recovery->demolition_project_id,
-                    'recovered_material_id' => $recovery->id,
-                    'posted_by' => $employeeId,
-                    'type' => 'stock_in',
-                    'quantity' => number_format($accepted / 100, 2, '.', ''),
-                    'reason_category' => 'recovered_material',
-                    'notes' => 'Accepted recovered material from project '.$recovery->demolition_project_id,
-                    'reference' => 'Recovery #'.$recovery->id,
-                    'effective_date' => now()->toDateString(),
-                    'posted_at' => now(),
-                ]);
-
-                Inventory::query()->whereKey($item->id)->update([
-                    'qty' => (float) $item->qty + ($accepted / 100),
-                ]);
-            }
-
-            return RecoveredMaterialAssessment::create([
+            $assessmentAttributes = [
                 'recovered_material_id' => $recovery->id,
                 'inventory_id' => $item->id,
                 'assessed_by' => $employeeId,
@@ -86,8 +63,46 @@ class AssessRecoveredMaterial
                 'rejected_quantity' => number_format($rejected / 100, 2, '.', ''),
                 'rejection_reason' => $rejected > 0 ? trim($assessment['rejection_reason']) : null,
                 'supersedes_assessment_id' => $prior?->id,
-                'stock_movement_id' => $movement?->id,
-            ]);
+            ];
+
+            if ($accepted > 0) {
+                if (! isset($assessment['assigned_unit_value']) || trim((string) $assessment['assigned_unit_value']) === '') {
+                    throw ValidationException::withMessages(['recoveryUnitValue' => 'An approved recovery unit value is required for accepted material.']);
+                }
+                $unitValueCents = $this->cents($assessment['assigned_unit_value']);
+                if ($unitValueCents <= 0) {
+                    throw ValidationException::withMessages(['recoveryUnitValue' => 'Recovery unit value must be greater than zero.']);
+                }
+
+                $movement = app(RecordValuedStockMovement::class)->handle(
+                    $item->id,
+                    'stock_in',
+                    number_format($accepted / 100, 2, '.', ''),
+                    'recovered_material',
+                    'Recovery #'.$recovery->id,
+                    now('Asia/Manila')->toDateString(),
+                    $employeeId,
+                    number_format($unitValueCents / 100, 2, '.', ''),
+                    'Accepted recovered material from project '.$recovery->demolition_project_id,
+                    $recovery->demolition_project_id,
+                    $recovery->id,
+                    function (StockMovement $movement, AccountingAccount $counterpart, int $approvedUnitValueCents, int $movementValueCents) use ($assessmentAttributes, $employeeId): RecoveredMaterialAssessment {
+                        return RecoveredMaterialAssessment::create([
+                            ...$assessmentAttributes,
+                            'stock_movement_id' => $movement->id,
+                            'assigned_unit_value_cents' => $approvedUnitValueCents,
+                            'assigned_value_cents' => $movementValueCents,
+                            'counterpart_accounting_account_id' => $counterpart->id,
+                            'valuation_approved_by' => $employeeId,
+                            'valuation_approved_at' => now('UTC'),
+                        ]);
+                    },
+                );
+
+                return RecoveredMaterialAssessment::query()->where('stock_movement_id', $movement->id)->firstOrFail();
+            }
+
+            return RecoveredMaterialAssessment::create($assessmentAttributes);
 
         });
     }
@@ -100,7 +115,7 @@ class AssessRecoveredMaterial
                 'category' => $assessment['new_item_category'],
                 'qty' => 0,
                 'unit' => $recovery->unit,
-                'unit_cost' => $assessment['new_item_unit_cost'],
+                'unit_cost' => '0.00',
                 'selling_price' => null,
                 'reorder_level' => 0,
                 'status' => 'active',
