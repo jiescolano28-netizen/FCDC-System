@@ -108,9 +108,9 @@ The authenticated `/accounting` route uses the Accounting-grouped `AccountingOve
 
 The authenticated `/accounting/cash-disbursements` Livewire page supports direct non-inventory disbursements and supplier settlements allocated to posted received-purchase invoices or active posted opening invoices. Supplier settlements require explicit positive allocations totaling the payment and limited to one supplier; posting debits Accounts Payable and credits the selected Cash/Bank account atomically. Returned or voided released checks and other payment corrections use linked reversals that preserve evidence and allocation history. Both payable registers derive status and balances from posted allocations net of reversals and print invoice payment allocation/correction history. Production release still requires approved accounts, mappings, and cutover controls.
 
-## Financial Statements demonstration
+## Financial Statements
 
-The authenticated `/accounting/financial-statements` Livewire page offers Income Statement and Balance Sheet selectors with date controls. Its selected document shows the selected title, dates, and an explicit limitation; posted manual journals are persisted but are not yet included in financial calculations. Print styles isolate the document from the application shell.
+The authenticated `/accounting/financial-statements` Livewire page generates an Income Statement from posted FCDC journal lines and approved statement classifications. It shows VAT-exclusive Sales, COGS, Gross Profit, operating expenses, other income/expenses and signed Net Income/Loss; opening balances, tax accounts, drafts and fiscal closing entries with linked reversals are excluded. It includes an approved pre-cutover YTD summary only for eligible full-year/YTD coverage and rejects unsupported earlier ranges. The page shows inclusive Manila dates, FCDC scope, generation time, and explicit unavailable/unapproved versus no-activity states. Balance Sheet selection remains unavailable; print styles isolate the selected document from the application shell.
 
 ## Trial Balance
 
