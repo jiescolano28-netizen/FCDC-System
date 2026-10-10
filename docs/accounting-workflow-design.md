@@ -167,10 +167,16 @@ The user confirmed the complete design, operating contract and shared understand
 - `docs/vat-compliance-design.md` confirms a POS-only tax scope and explicitly excludes purchase-based and accountant-entered input VAT. Extending accounting treatment does not implicitly change that tax scope.
 - Some earlier current-state documentation describes POS as session-only. Current persisted checkout code is the source evidence for this interview; unrelated documentation is not revised here.
 
-No accounting implementation or runtime verification is claimed by this document.
+At initial design approval, no accounting implementation or runtime verification was claimed.
 
 ## Implemented chart and mapping maintenance
 
 The chart-of-accounts issue adds persisted production account and source-account mapping records without seeding the demonstration reference accounts or journal history. Account maintenance (`accounting.maintain-accounts`) and approval (`accounting.approve-accounts`) are separate from viewing. New or changed accounts require approval; changed source mappings return to pending approval. These approval resets and used-account identity restrictions are enforced by the persisted models as well as the Livewire actions. Only active approved accounts and mappings with a source-compatible statement classification pass the posting-eligibility checks. Used accounts retain their records when deactivated, cannot be deleted, and cannot change code, type or statement classification.
 
-This increment does not implement persisted journals or connect operational posting paths to the mappings; those callers must mark an account used when they record a posted line. Until then, no production account is used for posting by this application.
+The chart/mapping increment did not implement journals or connect operational posting paths. The later opening-books increment below establishes persisted journal rules only for approved opening balances and YTD summaries; operational callers still do not post accounting entries.
+
+## Implemented cutover and opening books
+
+`accounting.opening-books` provides separate `accounting.maintain-opening-books` and `accounting.approve-opening-books` actions. It persists the Manila accounting date, January–December posting period, source identity, prepared/posted actors, UTC approval/posting timestamps, approved opening lines and separately approved pre-cutover YTD income/expense schedules. Opening balances use exact PHP centavos and approved active accounts. Posted journals and lines, plus approved YTD summaries and lines, cannot be edited or deleted through their models.
+
+Accounts Payable and Inventory openings are rejected because controlled supplier and per-item valuation schedules are not yet implemented. Readiness explicitly reports missing account approvals, controlled schedules, valuation policies and applicable YTD evidence; production activation remains unavailable. This path does not enable operational posting, general-ledger reports, or production activation.

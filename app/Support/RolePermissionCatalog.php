@@ -38,6 +38,8 @@ class RolePermissionCatalog
                 'accounting.create-journal-entry' => 'Create demonstration journal entries',
                 'accounting.maintain-accounts' => 'Create and maintain accounts and posting mappings',
                 'accounting.approve-accounts' => 'Approve accounts and posting mappings',
+                'accounting.maintain-opening-books' => 'Prepare accounting cutover and opening schedules',
+                'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
             ],
             'Settings' => [
                 'settings.view' => 'View company settings',

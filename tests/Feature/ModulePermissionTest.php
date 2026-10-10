@@ -50,6 +50,7 @@ test('application modules deny routes unless the employee has the module view pe
         ['tax.vat-return-preparation', 'tax.view'],
         ['accounting.overview', 'accounting.view'],
         ['accounting.chart-of-accounts', 'accounting.view'],
+        ['accounting.opening-books', 'accounting.view'],
         ['accounting.accounts-payable', 'accounting.view'],
         ['accounting.cash-disbursements', 'accounting.view'],
         ['accounting.journal-entry', 'accounting.view'],
