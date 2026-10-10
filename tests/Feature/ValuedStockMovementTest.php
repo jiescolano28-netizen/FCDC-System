@@ -199,3 +199,124 @@ test('counted increases require authorized approved value and preserve exact car
         ->and($movement->accountingJournal->lines->sum('credit_cents'))->toBe(30000)
         ->and(fn () => $item->fresh()->update(['unit_cost' => '999.00']))->toThrow(LogicException::class);
 });
+test('value corrections after consumption preserve quantity and original journals while updating remaining and consumed schedules', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Corrected timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-19',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '4.00', 'project_use', 'ISSUE-19',
+        now('Asia/Manila')->toDateString(), $employee->id,
+    );
+    $sourceJournal = $receipt->accountingJournal()->with('lines')->firstOrFail();
+
+    $correction = app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Receipt value was overstated', -1000, -1000, AccountingAccount::where('code', '6100')->value('id'), $employee->id,
+    );
+
+    expect((float) $item->fresh()->qty)->toBe(16.0)
+        ->and($item->fresh()->carrying_value_cents)->toBe(95000)
+        ->and($correction->quantity)->toBe('0.00')
+        ->and($correction->correction_of_movement_id)->toBe($receipt->id)
+        ->and($correction->correction_reason)->toBe('Receipt value was overstated')
+        ->and($sourceJournal->fresh()->lines->sum('debit_cents'))->toBe(20000)
+        ->and($sourceJournal->fresh()->lines->sum('credit_cents'))->toBe(20000)
+        ->and($correction->accountingJournal->lines->sum('debit_cents'))->toBe(2000)
+        ->and($correction->accountingJournal->lines->sum('credit_cents'))->toBe(2000);
+});
+
+test('value correction exceeding its source amount rolls back all correction effects', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Bounded timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-BOUND',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    $movementCount = StockMovement::count();
+    $journalCount = DB::table('accounting_journals')->count();
+
+    expect(fn () => app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Unsupported reduction', -20001, 0, null, $employee->id,
+    ))->toThrow(ValidationException::class);
+
+    expect(StockMovement::count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->carrying_value_cents)->toBe(120000);
+});
+
+test('failure while linking a value correction rolls back its journal and stock history', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Atomic timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-ATOMIC',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    $movementCount = StockMovement::count();
+    $journalCount = DB::table('accounting_journals')->count();
+    StockMovement::creating(function (StockMovement $movement): void {
+        if ($movement->type === 'valuation_correction') {
+            throw new RuntimeException('injected movement persistence failure');
+        }
+    });
+
+    expect(fn () => app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Injected failure', -1000, 0, null, $employee->id,
+    ))->toThrow(RuntimeException::class);
+
+    expect(StockMovement::count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->carrying_value_cents)->toBe(120000);
+});
+
+test('a reversed valued receipt cannot receive a later source-linked value correction', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Reversed timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-REVERSED',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    StockMovement::create([
+        'inventory_id' => $item->id,
+        'posted_by' => $employee->id,
+        'type' => 'reversal',
+        'quantity' => '-10.00',
+        'reason_category' => 'other',
+        'reference' => 'REV-RECEIPT-REVERSED',
+        'effective_date' => now('Asia/Manila')->toDateString(),
+        'posted_at' => now('UTC'),
+        'reverses_movement_id' => $receipt->id,
+    ]);
+    $movementCount = StockMovement::count();
+    $journalCount = DB::table('accounting_journals')->count();
+
+    expect(fn () => app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Do not correct reversed source', -1000, 0, null, $employee->id,
+    ))->toThrow(ValidationException::class);
+
+    expect(StockMovement::count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->qty)->toBe('20.00');
+});

@@ -29,6 +29,7 @@ class InventoryManagement extends Component
     public string $sellingPrice = '';
     public string $reorderLevel = '';
     public string $description = '';
+    public string $status = 'active';
 
     #[Url(as: 'item')]
     public ?int $historyItemId = null;
@@ -53,6 +54,11 @@ class InventoryManagement extends Component
     public string $adjustmentEffectiveDate = '';
     public string $stockUnitValue = '';
     public string $adjustmentUnitValue = '';
+    public ?int $correctionMovementId = null;
+    public string $correctionReason = '';
+    public string $remainingValueDelta = '0.00';
+    public string $consumedValueDelta = '0.00';
+    public ?int $consumedExpenseAccountId = null;
     public $image;
     public function mount(): void
     {
@@ -146,6 +152,47 @@ class InventoryManagement extends Component
             throw ValidationException::withMessages(['stockMovement' => 'Recovered-material receipts must be corrected from the Demolition Projects recovery history.']);
         }
         app(ReverseStockMovement::class)->handle($movementId, (int) auth()->id());
+    }
+
+    public function beginValuationCorrection(int $movementId): void
+    {
+        $this->authorizePermission('inventory.movements.record');
+        $this->authorizePermission('inventory.valuation.approve');
+        $movement = StockMovement::query()->findOrFail($movementId);
+        if ($movement->value_cents === null || $movement->value_cents <= 0 || $movement->quantity <= 0
+            || $movement->correction_of_movement_id !== null) {
+            throw ValidationException::withMessages(['movement' => 'Only an original valued receipt can be corrected.']);
+        }
+        $this->correctionMovementId = $movement->id;
+        $this->resetValidation();
+    }
+
+    public function saveValuationCorrection(): void
+    {
+        $this->authorizePermission('inventory.movements.record');
+        $this->authorizePermission('inventory.valuation.approve');
+        $validated = $this->validate([
+            'correctionMovementId' => ['required', 'integer', 'exists:stock_movements,id'],
+            'correctionReason' => ['required', 'string', 'max:4000'],
+            'remainingValueDelta' => ['required', 'numeric', 'decimal:0,2'],
+            'consumedValueDelta' => ['required', 'numeric', 'decimal:0,2'],
+            'consumedExpenseAccountId' => ['nullable', 'integer', 'exists:accounting_accounts,id'],
+        ]);
+        app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+            (int) $validated['correctionMovementId'],
+            $validated['correctionReason'],
+            $this->amountToCents($validated['remainingValueDelta']),
+            $this->amountToCents($validated['consumedValueDelta']),
+            $validated['consumedExpenseAccountId'] ? (int) $validated['consumedExpenseAccountId'] : null,
+            (int) auth()->id(),
+        );
+        $this->reset(['correctionMovementId', 'correctionReason', 'remainingValueDelta', 'consumedValueDelta', 'consumedExpenseAccountId']);
+    }
+
+    public function cancelValuationCorrection(): void
+    {
+        $this->reset(['correctionMovementId', 'correctionReason', 'remainingValueDelta', 'consumedValueDelta', 'consumedExpenseAccountId']);
+        $this->resetValidation();
     }
 
     public function recordStockOut(): void
@@ -275,7 +322,23 @@ class InventoryManagement extends Component
             'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
             'activeItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name']),
             'valuedPostingEnabled' => $this->valuedPostingEnabled(),
+            'approvedExpenseAccounts' => \App\Models\AccountingAccount::query()->where('type', 'Expense')
+                ->where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get(),
         ])->layout('layouts.app', ['title' => 'Inventory Management']);
+    }
+
+    private function amountToCents(string $amount): int
+    {
+        if (! preg_match('/^(-?)(\\d+)(?:\\.(\\d{1,2}))?$/', trim($amount), $parts)) {
+            throw ValidationException::withMessages(['valuation' => 'Enter a monetary amount with no more than two decimal places.']);
+        }
+        $whole = (int) $parts[2];
+        if ($whole > intdiv(PHP_INT_MAX - 99, 100)) {
+            throw ValidationException::withMessages(['valuation' => 'The monetary amount exceeds the supported centavo range.']);
+        }
+        $cents = $whole * 100 + (int) str_pad($parts[3] ?? '', 2, '0');
+
+        return ($parts[1] ?? '') === '-' ? -$cents : $cents;
     }
 
     private function authorizePermission(string $permission): void

@@ -25,6 +25,7 @@ class ProjectManagement extends Component
     public string $recoveryNotes = '';
     public ?int $assessmentRecoveryId = null;
     public bool $correctingAssessment = false;
+    public string $assessmentCorrectionReason = '';
     public string $acceptedQuantity = '';
     public string $rejectedQuantity = '';
     public string $rejectionReason = '';
@@ -79,6 +80,7 @@ class ProjectManagement extends Component
             : '';
         $this->inventoryId = $prior?->inventory_id;
         $this->inventoryChoice = 'existing';
+        $this->assessmentCorrectionReason = '';
         $this->resetValidation();
     }
 
@@ -93,6 +95,7 @@ class ProjectManagement extends Component
             'acceptedQuantity' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'rejectedQuantity' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'rejectionReason' => ['nullable', 'string', 'max:255'],
+            'assessmentCorrectionReason' => $this->correctingAssessment ? ['required', 'string', 'max:4000'] : ['nullable', 'string', 'max:4000'],
             'inventoryChoice' => ['required', 'in:existing,new'],
             'inventoryId' => ['required_if:inventoryChoice,existing', 'nullable', 'integer', 'exists:inventories,id'],
             'newInventoryName' => ['required_if:inventoryChoice,new', 'nullable', 'string', 'max:255'],
@@ -114,6 +117,7 @@ class ProjectManagement extends Component
             'accepted_quantity' => $validated['acceptedQuantity'],
             'rejected_quantity' => $validated['rejectedQuantity'],
             'rejection_reason' => $validated['rejectionReason'] ?: null,
+            'correction_reason' => $validated['assessmentCorrectionReason'] ?: null,
             'assigned_unit_value' => $validated['recoveryUnitValue'] ?? null,
             'create_inventory' => $validated['inventoryChoice'] === 'new',
             'inventory_id' => $validated['inventoryId'],
@@ -127,7 +131,7 @@ class ProjectManagement extends Component
     public function cancelAssessment(): void
     {
         $this->reset([
-            'assessmentRecoveryId', 'correctingAssessment', 'acceptedQuantity', 'rejectedQuantity',
+            'assessmentRecoveryId', 'correctingAssessment', 'assessmentCorrectionReason', 'acceptedQuantity', 'rejectedQuantity',
             'rejectionReason', 'recoveryUnitValue', 'inventoryChoice', 'inventoryId', 'newInventoryName',
             'newInventoryCategory',
         ]);
@@ -183,7 +187,7 @@ class ProjectManagement extends Component
     {
         return view('livewire.demolition-projects.project-management', [
             'projects' => DemolitionProject::query()
-                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal', 'recoveredMaterials.assessments.stockMovement.accountingJournal', 'recoveredMaterials.assessments.valuationCounterpart', 'recoveredMaterials.assessments.valuationApprover'])
+                ->with(['recoveredMaterials.latestAssessment.inventory', 'recoveredMaterials.assessments.inventory', 'recoveredMaterials.assessments.stockMovement.reversal', 'recoveredMaterials.assessments.stockMovement.accountingJournal', 'recoveredMaterials.assessments.stockMovement.valuationCorrections.accountingJournal', 'recoveredMaterials.assessments.valuationCounterpart', 'recoveredMaterials.assessments.valuationApprover'])
                 ->orderByDesc('id')
                 ->get(),
             'activeItems' => Inventory::query()->where('status', 'active')->orderBy('name')->get(['id', 'code', 'name', 'unit']),

@@ -182,6 +182,8 @@
                                 @forelse ($item->stockMovements as $movement)
                                     <div>
                                         {{ $movement->type === 'adjustment' ? 'Stock adjustment' : ucfirst(str_replace('_', ' ', $movement->type)) }} · {{ number_format((float) $movement->quantity, 2) }} {{ $item->unit }} · {{ ucfirst(str_replace('_', ' ', $movement->reason_category)) }} · effective {{ $movement->effective_date->format('Y-m-d') }} · posted {{ $movement->posted_at->format('Y-m-d H:i') }} · by {{ $movement->poster?->username ?? 'System migration' }}@if ($movement->reference) · ref {{ $movement->reference }}@endif @if ($movement->value_cents !== null) · value PHP {{ number_format(abs($movement->value_cents) / 100, 2) }} · carrying PHP {{ number_format($movement->carrying_value_after_cents / 100, 2) }} · journal {{ $movement->accountingJournal?->reference }}@endif @if ($movement->demolition_project_id) · project #{{ $movement->demolition_project_id }} · recovery #{{ $movement->recovered_material_id }}@endif @if ($movement->notes) · {{ $movement->notes }}@endif
+                                        @if ($movement->correction_of_movement_id) · corrects movement #{{ $movement->correction_of_movement_id }} @endif
+                                        @if ($movement->correction_reason) · reason: {{ $movement->correction_reason }} @endif
                                         @if ($movement->reversal)
                                             · Reversed by movement #{{ $movement->reversal->id }}
                                         @elseif ($movement->type !== 'reversal')
@@ -191,7 +193,32 @@
                                                 @endif
                                             @endcan
                                         @endif
-                                    </div>
+                                        @if ($movement->type !== 'valuation_correction' && $movement->correction_of_movement_id === null && $movement->quantity > 0 && $movement->value_cents > 0)
+                                            @can('inventory.movements.record')
+                                                @can('inventory.valuation.approve')
+                                                    <button class="secondary" type="button" wire:click="beginValuationCorrection({{ $movement->id }})">Correct value</button>
+                                                @endcan
+                                            @endcan
+                                        @endif
+                                        @if ($correctionMovementId === $movement->id)
+                                            <form wire:submit="saveValuationCorrection" class="panel" style="margin-top:10px;">
+                                                <strong>Forward-only value correction for movement #{{ $movement->id }}</strong>
+                                                <p class="muted">Quantity remains unchanged. Enter signed remaining and consumed cost changes; both must move in the same direction.</p>
+                                                <label>Correction reason<input wire:model="correctionReason"></label>
+                                                @error('correctionReason') <span class="error">{{ $message }}</span> @enderror
+                                                <label>Remaining Inventory value change (PHP)<input type="number" step="0.01" wire:model="remainingValueDelta"></label>
+                                                @error('remainingValueDelta') <span class="error">{{ $message }}</span> @enderror
+                                                <label>Consumed value change (PHP)<input type="number" step="0.01" wire:model="consumedValueDelta"></label>
+                                                @error('consumedValueDelta') <span class="error">{{ $message }}</span> @enderror
+                                                <label>Consumed cost account<select wire:model="consumedExpenseAccountId"><option value="">Select when consumed value changes</option>@foreach ($approvedExpenseAccounts as $account)<option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }}</option>@endforeach</select></label>
+                                                @error('consumedExpenseAccountId') <span class="error">{{ $message }}</span> @enderror
+                                                @error('movement') <span class="error">{{ $message }}</span> @enderror
+                                                @error('valuation') <span class="error">{{ $message }}</span> @enderror
+                                                @error('accounting') <span class="error">{{ $message }}</span> @enderror
+                                                @error('remainingValue') <span class="error">{{ $message }}</span> @enderror
+                                                <div class="actions"><button class="primary" type="submit">Post value correction</button><button class="secondary" type="button" wire:click="cancelValuationCorrection">Cancel</button></div>
+                                            </form>
+                                        @endif
                                 @empty
                                     <p class="muted">No stock movements recorded.</p>
                                 @endforelse

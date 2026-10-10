@@ -27,7 +27,7 @@ class RecoveredMaterial extends Model
     {
         static::updating(function (RecoveredMaterial $recovery): void {
             if ($recovery->assessments()->exists()) {
-                throw new \LogicException('Assessed recovered materials are immutable; reverse the receipt and reassess instead.');
+                throw new \LogicException('Assessed recovered materials are immutable; post a linked correction and reassessment.');
             }
         });
 
