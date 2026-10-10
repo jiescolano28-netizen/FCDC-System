@@ -85,6 +85,7 @@ test('statement classifications follow account type and keep COGS within Expense
 
     Livewire::test(ChartOfAccounts::class)
         ->set('type', 'Expense')
+        ->assertSet('classification', 'cost_of_goods_sold')
         ->assertSee('Cost of goods sold (Expense)')
         ->assertDontSee('Cash</option>');
 });

@@ -96,6 +96,21 @@ class ChartOfAccounts extends Component
 
     public array $mappingAccounts = [];
 
+    public function updatedType(string $type): void
+    {
+        if ((self::CLASSIFICATIONS[$this->classification][1] ?? null) === $type) {
+            return;
+        }
+
+        foreach (self::CLASSIFICATIONS as $classification => [, $classificationType]) {
+            if ($classificationType === $type) {
+                $this->classification = $classification;
+
+                return;
+            }
+        }
+    }
+
     public function editAccount(int $id): void
     {
         $this->authorizePermission('accounting.maintain-accounts');
