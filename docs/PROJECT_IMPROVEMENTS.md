@@ -33,7 +33,7 @@ This list is based on a static review of the Laravel, Livewire, inventory/POS, r
 Do not treat the following documented limits as accidental omissions within the current demonstration scope:
 
 - **Accounting:** Production posting, payables/disbursements, ledgers, and financial calculations are deferred pending approved accounting rules and report definitions (`docs/livewire-setup-and-structure.md`, “Accounting boundary” and “Accounting demonstration pages”).
-- **Tax:** VAT fixtures and return-preparation pages are illustrative/non-filing, not statutory compliance functionality (`docs/livewire-setup-and-structure.md`, “VAT demonstration pages”; `GLOSSARY.md`).
+- **Tax:** VAT Records and the monthly/quarterly VAT Summary use recorded POS VAT. The Tax Report and VAT Return Preparation remain illustrative/non-filing; no current tax screen provides statutory compliance functionality (`docs/livewire-setup-and-structure.md`, “VAT summary and demonstration pages”; `GLOSSARY.md`).
 - **POS and settings:** POS sales/stock and Settings are employee/session-scoped demonstration state; POS sales do not update persisted inventory or constitute recorded business sales (`docs/livewire-setup-and-structure.md`, “Implemented authenticated shell and Settings slice” and “Completed module-page cutover”).
 
 Production-like use remains subject to the documented business-rule prerequisites; these findings do not change that boundary.

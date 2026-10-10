@@ -80,8 +80,8 @@ Example: a taxable sale of PHP 180.00 produces VAT of PHP 21.60 and a VAT-inclus
 
 - `app/Livewire/Pos/PointOfSale.php` persists completed sales and stock changes atomically, calculates 12% VAT, and saves subtotal/VAT/total snapshots.
 - `app/Models/PosTransaction.php` rejects updates and deletion of completed sales.
-- The four `app/Livewire/TaxCompliance` components currently read `app/Support/VatDemonstrationData.php`, not persisted POS records.
+- At design time, the four `app/Livewire/TaxCompliance` components read `app/Support/VatDemonstrationData.php`, not persisted POS records.
 - No persisted purchase-invoice/input-VAT source or POS refund/void workflow was found in the inspected application paths.
 - `php artisan about --only=environment` confirmed the application timezone is UTC. A read-only `php artisan tinker` scenario confirmed the Manila date conversion and the transaction-versus-aggregate rounding difference.
 
-These observations are investigation evidence, not verification that this agreed workflow has been implemented. Existing current-state product documentation remains accurate until implementation replaces the demonstration tax surfaces.
+These observations describe the repository at design time. VAT Records and the recorded monthly/quarterly VAT Summary are now implemented; Tax Report and VAT Return Preparation remain illustrative/demo-backed. Current implementation status is maintained in `docs/livewire-setup-and-structure.md`.

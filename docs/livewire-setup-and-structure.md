@@ -89,9 +89,11 @@ The authenticated `/tax/vat-records` Livewire page requires `tax.view` and lists
 
 Search matches transaction-number substrings; inclusive date filters and displayed completion dates use `Asia/Manila`, while timestamps remain stored in UTC. Details use the transaction's saved item-line snapshots. VAT records cannot be edited or deleted. The list contains POS activity only, not company-wide tax results.
 
-## VAT demonstration pages
+## VAT summary and demonstration pages
 
-VAT Summary, Tax Report, and VAT Return Preparation continue to use `VatDemonstrationData`; those screens remain illustrative and are not calculated from persisted POS activity. The VAT Records link from those pages leads to actual POS-sourced records, not the demonstration fixtures.
+VAT Summary requires `tax.view` and aggregates saved `PosVatRecord` amounts by selected Manila calendar month or quarter. Its recorded-period service also supports custom inclusive date ranges for later report and worksheet consumers. Empty periods show zero totals and an explicit no-recorded-sales state; figures identify POS-only scope, input VAT not captured, zero deductions applied, and a POS-only VAT payable estimate. VAT Summary does not establish the company’s final liability.
+
+Tax Report and VAT Return Preparation remain illustrative/demo-backed and are not calculated from persisted POS activity. Their current screens are not functional reports or preparation worksheets. The VAT Records link leads to actual POS-sourced records, separate from those remaining demonstration surfaces.
 
 ## Accounting overview demonstration
 
