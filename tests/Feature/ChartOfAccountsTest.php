@@ -253,3 +253,60 @@ test('unauthorized account maintenance and approval are rejected on the server',
     expect(AccountingAccount::count())->toBe(1)
         ->and($account->fresh()->approved_at)->toBeNull();
 });
+
+test('persisted account and mapping changes require renewed approval outside the UI', function () {
+    $account = AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Cash',
+        'description' => 'Cash on hand',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+        'approved_at' => now(),
+    ]);
+    $replacement = AccountingAccount::create([
+        'code' => '1020',
+        'name' => 'Bank',
+        'type' => 'Asset',
+        'classification' => 'bank',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]);
+
+    $mapping = AccountingPostingMapping::create([
+        'source' => 'cash',
+        'accounting_account_id' => $account->id,
+        'approved_at' => now(),
+    ]);
+
+    $account->update(['name' => 'Cash on hand new']);
+    expect($account->fresh()->approved_at)->toBeNull();
+
+    $account->forceFill(['approved_at' => now()])->save();
+    $mapping->update(['accounting_account_id' => $replacement->id]);
+
+    expect($mapping->fresh()->approved_at)->toBeNull();
+});
+
+test('approved mappings cannot post through an account with a mismatched classification', function () {
+    $account = AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Cash',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+        'approved_at' => now(),
+    ]);
+    $mapping = AccountingPostingMapping::create([
+        'source' => 'cash',
+        'accounting_account_id' => $account->id,
+        'approved_at' => now(),
+    ]);
+
+    $account->update(['classification' => 'bank']);
+    $account->forceFill(['approved_at' => now()])->save();
+
+    expect($mapping->fresh()->isApprovedForPosting())->toBeFalse();
+});

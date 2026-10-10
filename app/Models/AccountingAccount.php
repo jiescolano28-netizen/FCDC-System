@@ -16,6 +16,14 @@ class AccountingAccount extends Model
                 && $account->isDirty(['code', 'type', 'classification'])) {
                 throw new DomainException('Used account identity is historically immutable.');
             }
+
+            if ($account->exists && (
+                $account->isDirty(['code', 'name', 'description', 'type', 'classification', 'normal_balance'])
+                || ($account->isDirty('is_active') && $account->is_active)
+            )) {
+                $account->approved_at = null;
+                $account->approved_by = null;
+            }
         });
 
         static::deleting(function (AccountingAccount $account): void {

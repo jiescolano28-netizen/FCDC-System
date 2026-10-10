@@ -48,17 +48,6 @@ class ChartOfAccounts extends Component
         'adjustment' => 'Adjustment counterpart',
     ];
 
-    private const MAPPING_CLASSIFICATIONS = [
-        'cash' => 'cash',
-        'bank' => 'bank',
-        'card_clearing' => 'card_clearing',
-        'sales' => 'sales',
-        'output_vat' => 'output_vat',
-        'cogs' => 'cost_of_goods_sold',
-        'inventory' => 'inventory',
-        'accounts_payable' => 'accounts_payable',
-    ];
-
     public function mount(): void
     {
         $this->mappingAccounts = AccountingPostingMapping::pluck('accounting_account_id', 'source')
@@ -224,8 +213,8 @@ class ChartOfAccounts extends Component
         $this->authorizePermission('accounting.maintain-accounts');
         abort_unless(isset(self::MAPPING_SOURCES[$source]), 404);
         $accountRule = Rule::exists('accounting_accounts', 'id')->where('is_active', true);
-        if (isset(self::MAPPING_CLASSIFICATIONS[$source])) {
-            $accountRule->where('classification', self::MAPPING_CLASSIFICATIONS[$source]);
+        if (isset(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source])) {
+            $accountRule->where('classification', AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source]);
         }
         $validated = $this->validate([
             "mappingAccounts.$source" => ['required', 'integer', $accountRule],
