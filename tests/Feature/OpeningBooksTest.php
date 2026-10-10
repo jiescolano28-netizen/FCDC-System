@@ -136,7 +136,7 @@ test('opening cutover readiness names missing chart and controlled supporting ev
         ->assertSee('Supplier schedule unavailable')
         ->assertSee('Inventory valuation schedule unavailable')
         ->assertSee('Valuation policies not approved')
-        ->assertSee('Pre-cutover YTD evidence required');
+        ->assertSee('Save a cutover date to determine YTD evidence requirements');
 });
 
 test('midyear cutover requires separately approved supported YTD income and expense and preserves approval identity', function () {
@@ -174,7 +174,8 @@ test('midyear cutover requires separately approved supported YTD income and expe
 
     expect(DB::table('accounting_ytd_summaries')->value('approved_by'))->toBe($reviewer->id)
         ->and(DB::table('accounting_ytd_summary_lines')->value('amount_cents'))->toBe(25000)
-        ->and(app(OpeningBooksService::class)->readiness()['ytd'])->toBe('YTD coverage recorded');
+        ->and($sales->fresh()->used_at)->not->toBeNull()
+        ->and(app(OpeningBooksService::class)->readiness()['ytd'])->toBe('Approved pre-cutover YTD evidence');
 });
 
 test('posted opening history is immutable, duplicate posting is rejected, and controlled account openings are blocked', function () {
@@ -196,6 +197,7 @@ test('posted opening history is immutable, duplicate posting is rejected, and co
         ->assertHasNoErrors();
     $this->actingAs($reviewer);
     Livewire::test(OpeningBooks::class)->call('approveOpening')->assertHasNoErrors();
+    Livewire::test(OpeningBooks::class)->assertSee('Not required for January 1 cutover');
 
     $this->actingAs($preparer);
     Livewire::test(OpeningBooks::class)

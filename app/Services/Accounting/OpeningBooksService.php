@@ -24,10 +24,14 @@ class OpeningBooksService
                 ['book_key' => 'FCDC', 'fiscal_year' => $year],
                 ['starts_on' => "$year-01-01", 'ends_on' => "$year-12-31", 'status' => 'open'],
             );
-            $journal = AccountingJournal::firstOrNew(['source_type' => 'opening', 'source_id' => 'FCDC']);
-            if ($journal->exists && $journal->status !== 'draft') {
+            $journal = AccountingJournal::where('source_type', 'opening')
+                ->where('source_id', 'FCDC')
+                ->lockForUpdate()
+                ->first();
+            if ($journal && $journal->status !== 'draft') {
                 throw ValidationException::withMessages(['opening' => 'An approved opening journal already exists.']);
             }
+            $journal ??= new AccountingJournal(['source_type' => 'opening', 'source_id' => 'FCDC']);
             $journal->fill([
                 'book_key' => 'FCDC',
                 'reference' => 'OPENING-FCDC-'.$year,
@@ -145,6 +149,7 @@ class OpeningBooksService
                 if (! $line->account?->isApprovedForPosting() || ! in_array($line->account->type, ['Revenue', 'Expense'], true)) {
                     throw ValidationException::withMessages(['ytdLines' => 'YTD summaries may use only active approved income and expense accounts.']);
                 }
+                $line->account->markUsed();
             }
             $summary->forceFill(['status' => 'approved', 'approved_at' => now('UTC'), 'approved_by' => $actorId])->save();
 
@@ -154,9 +159,11 @@ class OpeningBooksService
 
     public function readiness(): array
     {
-        $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->first();
-        $year = $journal ? (int) substr($journal->accounting_date, 0, 4) : now('Asia/Manila')->year;
-        $midyear = ! $journal || $journal->accounting_date !== "$year-01-01";
+        $openingJournal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->first();
+        $journal = $openingJournal?->status === 'posted' ? $openingJournal : null;
+        $cutoverDate = $openingJournal?->accounting_date?->toDateString();
+        $year = $cutoverDate ? (int) substr($cutoverDate, 0, 4) : now('Asia/Manila')->year;
+        $midyear = $cutoverDate !== null && $cutoverDate !== "$year-01-01";
         $chartApproved = AccountingAccount::where('is_active', true)->exists()
             && ! AccountingAccount::where('is_active', true)->whereNull('approved_at')->exists();
         $requiredMappings = [...array_keys(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS), 'recovery_offset', 'adjustment'];
@@ -172,7 +179,11 @@ class OpeningBooksService
             'supplier' => 'Supplier schedule unavailable',
             'inventory' => 'Inventory valuation schedule unavailable',
             'valuation' => 'Valuation policies not approved',
-            'ytd' => ! $midyear || $ytdApproved ? 'YTD coverage recorded' : 'Pre-cutover YTD evidence required',
+            'ytd' => $cutoverDate === null
+                ? 'Save a cutover date to determine YTD evidence requirements'
+                : (! $midyear
+                    ? 'Not required for January 1 cutover'
+                    : ($ytdApproved ? 'Approved pre-cutover YTD evidence' : 'Pre-cutover YTD evidence required')),
             'production' => 'Production activation unavailable: posting mappings, supplier/item schedules and approved valuation policies are not available.',
         ];
     }
