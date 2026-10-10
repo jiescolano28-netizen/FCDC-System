@@ -63,9 +63,7 @@ class OpeningBooksService
         }
         return DB::transaction(function () use ($date, $evidence, $lines, $actorId): OpeningInventoryValuation {
             $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
-            if ($journal?->status === 'posted') {
-                throw ValidationException::withMessages(['inventoryLines' => 'Approved opening inventory is immutable; use a current-period correction.']);
-            }
+            $this->assertOpeningInventoryIsEditable($journal);
             $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->lockForUpdate()->first();
             $validatedLines = $this->validatedInventoryLines($date, $lines);
             $schedule ??= new OpeningInventoryValuation(['book_key' => 'FCDC']);
@@ -98,9 +96,7 @@ class OpeningBooksService
                 ->with('lines.inventory')
                 ->firstOrFail();
             $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->lockForUpdate()->first();
-            if ($journal?->status === 'posted') {
-                throw ValidationException::withMessages(['inventoryLines' => 'Approved opening inventory is immutable; use a current-period correction.']);
-            }
+            $this->assertOpeningInventoryIsEditable($journal);
             if ($schedule->status !== 'draft') {
                 throw ValidationException::withMessages(['inventoryLines' => 'This opening inventory valuation is already approved; save a revised schedule for review.']);
             }
@@ -110,6 +106,14 @@ class OpeningBooksService
                 'approved_by' => $actorId,
                 'approved_at' => now('UTC'),
             ])->save();
+            foreach ($schedule->lines as $line) {
+                $quantityHundredths = $this->quantityInHundredths($line->quantity);
+                Inventory::query()->whereKey($line->inventory_id)->update([
+                    'unit_cost' => $quantityHundredths === 0
+                        ? '0.00'
+                        : number_format($line->carrying_value_cents / $quantityHundredths, 2, '.', ''),
+                ]);
+            }
 
             return $schedule->refresh()->load('lines.inventory');
         });
@@ -351,6 +355,15 @@ class OpeningBooksService
         });
         $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
         if ($inventoryLines->isEmpty() && ! $schedule) {
+            $hasCutoverStock = StockMovement::query()
+                ->whereDate('effective_date', '<=', $date)
+                ->select('inventory_id')
+                ->groupBy('inventory_id')
+                ->havingRaw('SUM(quantity) <> 0')
+                ->exists();
+            if ($hasCutoverStock) {
+                throw ValidationException::withMessages(['opening' => 'Opening Inventory with on-hand stock requires a per-item valuation schedule.']);
+            }
             return;
         }
         if (! $schedule || $schedule->cutover_date->toDateString() !== $date
@@ -438,6 +451,13 @@ class OpeningBooksService
 
         return $negative && $value !== 0 ? -$value : $value;
     }
+    private function assertOpeningInventoryIsEditable(?AccountingJournal $journal): void
+    {
+        if ($journal?->status === 'posted') {
+            throw ValidationException::withMessages(['inventoryLines' => 'Approved opening inventory is immutable; use a current-period correction.']);
+        }
+    }
+
 
     private function decimalFromHundredths(int $hundredths): string
     {

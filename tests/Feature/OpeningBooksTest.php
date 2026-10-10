@@ -18,6 +18,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
     $reviewer = openingBooksEmployee(['accounting.view', 'accounting.approve-opening-books']);
     $inventoryAccount = approvedOpeningAccount('1200', 'inventory', 'Asset', 'debit');
     $capital = approvedOpeningAccount('3000', 'capital', 'Equity', 'credit');
+    $cash = approvedOpeningAccount('1000', 'cash', 'Asset', 'debit');
     $item = Inventory::create([
         'name' => 'Opening cement',
         'category' => 'Cement',
@@ -38,6 +39,14 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
     ]);
 
     $this->actingAs($preparer);
+    Livewire::test(OpeningBooks::class)
+        ->set('cutoverDate', $cutover)
+        ->set('lines', [
+            ['accountId' => (string) $cash->id, 'debit' => '35.25', 'credit' => ''],
+            ['accountId' => (string) $capital->id, 'debit' => '', 'credit' => '35.25'],
+        ])
+        ->call('saveOpening')
+        ->assertHasErrors('opening');
     Livewire::test(OpeningBooks::class)
         ->set('cutoverDate', $cutover)
         ->set('inventoryEvidence', 'Negative quantity')
