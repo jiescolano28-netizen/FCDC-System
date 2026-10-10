@@ -35,7 +35,7 @@ class CorrectValuedStockMovement
         return DB::transaction(function () use ($movementId, $reason, $remainingValueDeltaCents, $consumedValueDeltaCents, $consumedExpenseAccountId, $actor): StockMovement {
             $source = StockMovement::query()->lockForUpdate()->findOrFail($movementId);
             if ($source->value_cents === null || $source->value_cents <= 0 || $source->quantity <= 0 || $source->accounting_journal_id === null
-                || $source->correction_of_movement_id !== null || $source->type !== 'stock_in'
+                || $source->correction_of_movement_id !== null || $source->type !== 'stock_in' || $source->reversal()->exists()
                 || $source->cash_disbursement_line_id !== null
                 || str_starts_with((string) $source->source_reference, 'supplier_purchase')) {
                 throw ValidationException::withMessages(['movement' => 'Only an original non-purchase positively valued receipt can receive a value correction.']);

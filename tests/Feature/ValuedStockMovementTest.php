@@ -285,3 +285,38 @@ test('failure while linking a value correction rolls back its journal and stock 
         ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
         ->and($item->fresh()->carrying_value_cents)->toBe(120000);
 });
+
+test('a reversed valued receipt cannot receive a later source-linked value correction', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Reversed timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+    $receipt = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_in', '10.00', 'other', 'RECEIPT-REVERSED',
+        now('Asia/Manila')->toDateString(), $employee->id, '20.00',
+    );
+    StockMovement::create([
+        'inventory_id' => $item->id,
+        'posted_by' => $employee->id,
+        'type' => 'reversal',
+        'quantity' => '-10.00',
+        'reason_category' => 'other',
+        'reference' => 'REV-RECEIPT-REVERSED',
+        'effective_date' => now('Asia/Manila')->toDateString(),
+        'posted_at' => now('UTC'),
+        'reverses_movement_id' => $receipt->id,
+    ]);
+    $movementCount = StockMovement::count();
+    $journalCount = DB::table('accounting_journals')->count();
+
+    expect(fn () => app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        $receipt->id, 'Do not correct reversed source', -1000, 0, null, $employee->id,
+    ))->toThrow(ValidationException::class);
+
+    expect(StockMovement::count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount)
+        ->and($item->fresh()->qty)->toBe('20.00');
+});
