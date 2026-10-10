@@ -4,10 +4,10 @@ namespace App\Services\Inventory;
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
-use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\StockMovement;
+use App\Services\Accounting\AccountingPeriodService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -78,12 +78,11 @@ class CorrectValuedStockMovement
                 throw ValidationException::withMessages(['consumedExpenseAccountId' => 'Select an approved expense account for consumed-value corrections.']);
             }
 
-            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
-                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
-                ->lockForUpdate()->first();
-            if (! $period || $period->status !== 'open') {
-                throw ValidationException::withMessages(['effectiveDate' => 'Value corrections require the current open accounting period.']);
-            }
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date->toDateString(),
+                'effectiveDate',
+                'Value corrections require the current open accounting period.',
+            );
             $originalJournal = AccountingJournal::query()->with('lines')->findOrFail($source->accounting_journal_id);
             $inventoryAccountLine = $originalJournal->lines->first(fn ($line) => $line->account->classification === 'inventory');
             $counterpartLine = $originalJournal->lines->first(fn ($line) => $line->accounting_account_id !== $inventoryAccountLine?->accounting_account_id);

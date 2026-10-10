@@ -225,8 +225,12 @@ class ManualJournalService
         if (! $cutoverValue || $dateValue->lt($cutoverValue)) {
             throw ValidationException::withMessages(['journal' => 'Posting date is outside approved accounting cutover coverage.']);
         }
-        $period = $this->periodFor($date);
-        if ($period->status !== 'open' || $dateValue->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
+        $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+            $date,
+            'journal',
+            'The accounting date is not in an open accounting period.',
+        );
+        if ($dateValue->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
             || $dateValue->gt(CarbonImmutable::parse($period->ends_on, 'Asia/Manila'))) {
             throw ValidationException::withMessages(['journal' => 'The accounting date is not in an open accounting period.']);
         }
@@ -261,11 +265,8 @@ class ManualJournalService
 
     private function periodFor(string $date): AccountingPostingPeriod
     {
-        $year = (int) substr($date, 0, 4);
-
-        return AccountingPostingPeriod::firstOrCreate(
-            ['book_key' => 'FCDC', 'fiscal_year' => $year],
-            ['starts_on' => "$year-01-01", 'ends_on' => "$year-12-31", 'status' => 'open'],
+        return AccountingPostingPeriod::query()->lockForUpdate()->findOrFail(
+            AccountingPostingPeriod::firstOrCreateForDate($date)->id,
         );
     }
 

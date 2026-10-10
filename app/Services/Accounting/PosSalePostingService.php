@@ -54,12 +54,11 @@ class PosSalePostingService
             if (! $schedule) {
                 throw ValidationException::withMessages(['accounting' => 'An approved opening inventory valuation is required before POS posting.']);
             }
-            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
-                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
-                ->lockForUpdate()->first();
-            if (! $period || $period->status !== 'open') {
-                throw ValidationException::withMessages(['accounting' => 'The sale date must be in an open accounting period.']);
-            }
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date->toDateString(),
+                'accounting',
+                'The sale date must be in an open accounting period.',
+            );
             $vat = PosVatRecord::query()->where('pos_transaction_id', $sale->id)->firstOrFail();
             $subtotalCents = $this->cents((string) $sale->subtotal);
             $vatCents = $this->cents((string) $sale->vat_amount);

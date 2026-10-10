@@ -4,12 +4,12 @@ namespace App\Services\Inventory;
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
-use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\RecoveredMaterial;
 use App\Models\RecoveredMaterialAssessment;
 use App\Models\StockMovement;
+use App\Services\Accounting\AccountingPeriodService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -63,12 +63,11 @@ class CorrectRecoveredMaterialAssessment
 
         return DB::transaction(function () use ($recovery, $prior, $input, $actor, $reason, $acceptedHundredths, $rejectedHundredths, $priorAcceptedHundredths, $item, $source): RecoveredMaterialAssessment {
             $date = CarbonImmutable::now('Asia/Manila')->startOfDay();
-            $period = AccountingPostingPeriod::query()->where('book_key', 'FCDC')
-                ->whereDate('starts_on', '<=', $date->toDateString())->whereDate('ends_on', '>=', $date->toDateString())
-                ->lockForUpdate()->first();
-            if (! $period || $period->status !== 'open') {
-                throw ValidationException::withMessages(['assessment' => 'Recovery corrections require the current open accounting period.']);
-            }
+            $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
+                $date->toDateString(),
+                'assessment',
+                'Recovery corrections require the current open accounting period.',
+            );
             if ($source->effective_date->toDateString() > $date->toDateString()) {
                 throw ValidationException::withMessages(['assessment' => 'A recovery correction cannot precede its original valued receipt.']);
             }
