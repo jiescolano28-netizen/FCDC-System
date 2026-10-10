@@ -8,24 +8,29 @@ use App\Models\AccountingJournalLine;
 use App\Models\CashDisbursement;
 use App\Models\PosTransaction;
 use App\Models\StockMovement;
-use App\Models\SupplierPurchaseInvoice;
 use App\Models\SupplierPurchaseCorrection;
+use App\Models\SupplierPurchaseInvoice;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class GeneralLedger extends Component
 {
+    #[Url]
     public string $accountId = '';
 
+    #[Url]
     public string $fromDate = '';
 
+    #[Url]
     public string $toDate = '';
 
     public function mount(): void
     {
-        $this->fromDate = now('Asia/Manila')->startOfMonth()->toDateString();
-        $this->toDate = now('Asia/Manila')->toDateString();
+        $today = CarbonImmutable::now('Asia/Manila');
+        $this->fromDate = $this->fromDate !== '' ? $this->fromDate : $today->startOfMonth()->toDateString();
+        $this->toDate = $this->toDate !== '' ? $this->toDate : $today->toDateString();
     }
 
     public function render()

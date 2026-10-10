@@ -71,10 +71,18 @@ class FinancialStatements extends Component
             'balance-sheet' => $this->balanceSheet(),
             default => ['available' => false, 'error' => 'Select a supported financial statement.'],
         };
+        $fiscalClosings = $this->validDate($this->toDate)
+            ? AccountingJournal::query()->where('book_key', 'FCDC')
+                ->where('source_type', self::FISCAL_YEAR_CLOSING_SOURCE_TYPE)
+                ->where('status', 'posted')->whereDate('accounting_date', '<=', $this->toDate)
+                ->with(['lines.account', 'corrections' => fn ($query) => $query->where('status', 'posted')])
+                ->orderBy('accounting_date')->get()
+            : collect();
 
         return view('livewire.accounting.financial-statements', [
             'statementTitle' => $statementTitle,
             'report' => $report,
+            'fiscalClosings' => $fiscalClosings,
             'generatedAt' => CarbonImmutable::now('Asia/Manila')->format('F j, Y g:i:s A').' Asia/Manila',
         ])->layout('layouts.app', ['title' => 'Financial Statements']);
     }
@@ -190,6 +198,7 @@ class FinancialStatements extends Component
             'netIncome' => $netIncome,
         ];
     }
+
     private function balanceSheet(): array
     {
         if (! $this->validDate($this->toDate)) {
@@ -348,9 +357,8 @@ class FinancialStatements extends Component
         return [$earnings, null];
     }
 
-
     /**
-     * @param array<int, int> $closingIds
+     * @param  array<int, int>  $closingIds
      * @return array<int, int>
      */
     private function fiscalClosingExclusionIds(array $closingIds): array

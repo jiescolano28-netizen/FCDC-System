@@ -46,6 +46,42 @@
         </table></div>
     </section>
 
+    <section class="chart-account-card" aria-labelledby="fiscal-close-heading">
+        <h2 id="fiscal-close-heading">Fiscal year {{ $year }} closing</h2>
+        @forelse ($fiscalClosings as $closing)
+            @php($reversal = $closing->corrections->first())
+            <p>
+                {{ $reversal ? 'Reversed' : 'Fiscal year closed' }}:
+                <a href="{{ route('accounting.general-ledger', ['accountId' => $closing->lines->firstWhere('account.classification', 'retained_earnings')?->accounting_account_id, 'fromDate' => $closing->accounting_date->toDateString(), 'toDate' => $reversal?->accounting_date?->toDateString() ?? $closing->accounting_date->toDateString()]) }}">{{ $closing->reference }}</a>
+                — {{ $closing->description }}
+                @if ($reversal)
+                    <br>Reversal <a href="{{ route('accounting.general-ledger', ['accountId' => $reversal->lines->firstWhere('accounting_account_id', $closing->lines->firstWhere('account.classification', 'retained_earnings')?->accounting_account_id)?->accounting_account_id, 'fromDate' => $reversal->accounting_date->toDateString(), 'toDate' => $reversal->accounting_date->toDateString()]) }}">{{ $reversal->reference }}</a>
+                    — {{ $reversal->correction_reason }}
+                @endif
+            </p>
+        @empty
+            <p>No fiscal closing entry is recorded for this year.</p>
+        @endforelse
+        @if ($allMonthsClosed && ! $hasActiveFiscalClose && auth()->user()?->can('accounting.close-fiscal-year'))
+            <form wire:submit="closeFiscalYear">
+                <label>Approved retained earnings account
+                    <select wire:model="retainedEarningsAccountId" required>
+                        <option value="">Select account</option>
+                        @foreach ($retainedEarningsAccounts as $account)
+                            <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label>Fiscal close reason <textarea wire:model="fiscalCloseReason" maxlength="4000" required></textarea></label>
+                <button type="submit" @disabled($retainedEarningsAccounts->isEmpty())>Close fiscal year</button>
+            </form>
+        @elseif (! $allMonthsClosed)
+            <p>Close and reconcile every month before the fiscal-year transfer is available.</p>
+        @elseif ($hasActiveFiscalClose)
+            <p role="status">Fiscal year closed. Reopen reverses its linked entry before corrections.</p>
+        @endif
+    </section>
+
     @if ($selectedPeriod)
         <section class="chart-account-card" aria-labelledby="reopen-period-heading">
             <h2 id="reopen-period-heading">Reopen {{ $selectedPeriod->starts_on->format('F Y') }}</h2>
