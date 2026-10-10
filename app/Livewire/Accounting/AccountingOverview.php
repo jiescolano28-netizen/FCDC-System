@@ -45,18 +45,18 @@ class AccountingOverview extends Component
     private function report(): array
     {
         if (! $this->validDate($this->fromDate) || ! $this->validDate($this->toDate) || $this->fromDate > $this->toDate) {
-            return ['available' => false, 'error' => 'Select a valid inclusive Manila reporting period.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Select a valid inclusive Manila reporting period.');
         }
 
         $cutover = AccountingJournal::query()
             ->where('book_key', 'FCDC')->where('source_type', 'opening')->where('source_id', 'FCDC')
             ->where('status', 'posted')->value('accounting_date');
         if (! $cutover) {
-            return ['available' => false, 'error' => 'Accounting results are unavailable until approved opening balances establish accounting coverage.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Accounting results are unavailable until approved opening balances establish accounting coverage.');
         }
         $cutoverDate = CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString();
         if ($this->fromDate < $cutoverDate) {
-            return ['available' => false, 'error' => 'Selected period begins before approved accounting cutover coverage.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Selected period begins before approved accounting cutover coverage.');
         }
 
         $incomeClassifications = [...self::INCOME_CLASSIFICATIONS, ...self::EXPENSE_CLASSIFICATIONS];
@@ -66,12 +66,12 @@ class AccountingOverview extends Component
         if ($incomeAccounts->contains(fn (AccountingAccount $account) => $account->is_active && (
             $account->approved_at === null || ! in_array($account->classification, $incomeClassifications, true)
         ))) {
-            return ['available' => false, 'error' => 'Approved Revenue and Expense classifications are unavailable.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Approved Revenue and Expense classifications are unavailable.');
         }
         $incomeAccounts = $incomeAccounts->filter(fn (AccountingAccount $account) => $account->approved_at !== null
             && in_array($account->classification, $incomeClassifications, true));
         if ($incomeAccounts->isEmpty()) {
-            return ['available' => false, 'error' => 'Approved Revenue and Expense classifications are unavailable.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Approved Revenue and Expense classifications are unavailable.');
         }
 
         $postedPositionAccountIds = AccountingJournalLine::query()
@@ -83,7 +83,7 @@ class AccountingOverview extends Component
             ->get();
         if ($balanceAccounts->contains(fn (AccountingAccount $account) => $account->approved_at === null
             || ! in_array($account->classification, self::POSITION_CLASSIFICATIONS, true))) {
-            return ['available' => false, 'error' => 'Approved Asset and Liability classifications are unavailable.', 'cards' => [], 'journals' => collect()];
+            return $this->unavailable('Approved Asset and Liability classifications are unavailable.');
         }
 
         $closingIds = AccountingJournal::query()->where('book_key', 'FCDC')
@@ -156,6 +156,11 @@ class AccountingOverview extends Component
             'available' => true, 'error' => null, 'cards' => $cards, 'journals' => $journals,
             'hasActivity' => $hasActivity, 'from' => $this->fromDate, 'to' => $this->toDate,
         ];
+    }
+
+    private function unavailable(string $error): array
+    {
+        return ['available' => false, 'error' => $error, 'cards' => [], 'journals' => collect()];
     }
 
     /** @param array<int, int> $closingIds
