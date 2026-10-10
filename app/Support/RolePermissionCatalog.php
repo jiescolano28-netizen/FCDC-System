@@ -36,6 +36,8 @@ class RolePermissionCatalog
             'Accounting' => [
                 'accounting.view' => 'View accounting',
                 'accounting.create-journal-entry' => 'Create demonstration journal entries',
+                'accounting.maintain-accounts' => 'Create and maintain accounts and posting mappings',
+                'accounting.approve-accounts' => 'Approve accounts and posting mappings',
             ],
             'Settings' => [
                 'settings.view' => 'View company settings',

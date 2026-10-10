@@ -168,3 +168,9 @@ The user confirmed the complete design, operating contract and shared understand
 - Some earlier current-state documentation describes POS as session-only. Current persisted checkout code is the source evidence for this interview; unrelated documentation is not revised here.
 
 No accounting implementation or runtime verification is claimed by this document.
+
+## Implemented chart and mapping maintenance
+
+The chart-of-accounts issue adds persisted production account and source-account mapping records without seeding the demonstration reference accounts or journal history. Account maintenance (`accounting.maintain-accounts`) and approval (`accounting.approve-accounts`) are separate from viewing. New or changed accounts require approval; changed source mappings return to pending approval. Only active approved accounts and mappings pass the posting-eligibility checks. Used accounts retain their records when deactivated, cannot be deleted, and cannot change code, type or statement classification.
+
+This increment does not implement persisted journals or connect operational posting paths to the mappings; those callers must mark an account used when they record a posted line. Until then, no production account is used for posting by this application.
