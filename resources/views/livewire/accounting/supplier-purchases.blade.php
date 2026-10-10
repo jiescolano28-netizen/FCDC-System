@@ -116,9 +116,8 @@
                     <button type="submit">Post linked financial correction</button>
                 </form>
             @endif
-            @php($purchasePayments = $selectedInvoice->correction_of_id ? ($selectedInvoice->correctionParent?->paymentAllocations ?? collect()) : $selectedInvoice->paymentAllocations)
             <h3>Payment allocation and correction history</h3><table class="reports-table"><thead><tr><th>Date</th><th>Payment reference</th><th>Evidence</th><th>Journal</th><th>Actor</th><th class="numeric">Allocation</th><th>Correction</th></tr></thead><tbody>
-                @forelse ($purchasePayments->filter(fn ($allocation) => $allocation->disbursement->status === 'posted')->sortBy(fn ($allocation) => [$allocation->disbursement->payment_date, $allocation->disbursement->id]) as $allocation)
+                @forelse ($selectedPaymentAllocations->filter(fn ($allocation) => $allocation->disbursement->status === 'posted')->sortBy(fn ($allocation) => [$allocation->disbursement->payment_date, $allocation->disbursement->id]) as $allocation)
                     @php($payment = $allocation->disbursement)
                     <tr><td>{{ $payment->payment_date->format('Y-m-d') }}</td><td>{{ $payment->reference }} · {{ $payment->method }}</td><td>{{ $payment->evidence_reference }}</td><td>{{ $payment->journal?->reference ?? 'Not posted' }}</td><td>{{ $payment->posted_by }}</td><td class="numeric">{{ $payment->reversal_of_id ? '−' : '' }}PHP {{ number_format($allocation->amount_cents / 100, 2) }}</td><td>@if ($payment->reversal_of_id) Reversal of {{ $payment->reversalOf?->reference }}: {{ $payment->correction_reason }} @elseif ($payment->reversals->isNotEmpty()) Reversed by {{ $payment->reversals->first()->reference }}: {{ $payment->reversals->first()->correction_reason }} @else — @endif</td></tr>
                 @empty<tr><td colspan="7">No posted payment allocations.</td></tr>@endforelse

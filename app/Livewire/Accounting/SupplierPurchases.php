@@ -3,6 +3,7 @@
 namespace App\Livewire\Accounting;
 
 use App\Models\AccountingAccount;
+use App\Models\CashDisbursementLine;
 use App\Models\Inventory;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -233,12 +234,16 @@ class SupplierPurchases extends Component
             ])->find($this->selectedId)
             : null;
         $selectedCorrections = collect();
+        $selectedPaymentAllocations = collect();
         $receiptMovements = collect();
         if ($selected) {
             $chainIds = $selected->correctionChainInvoiceIds();
             $selectedCorrections = SupplierPurchaseCorrection::query()
                 ->with(['journal.lines.account', 'refundReceipts.journal', 'replacementInvoice'])
                 ->whereIn('supplier_purchase_invoice_id', $chainIds)->orderBy('id')->get();
+            $selectedPaymentAllocations = CashDisbursementLine::query()
+                ->with(['disbursement.journal', 'disbursement.reversalOf', 'disbursement.reversals'])
+                ->whereIn('supplier_purchase_invoice_id', $chainIds)->get();
             $sourceReferences = collect($chainIds)->map(fn ($id) => 'supplier_purchase:'.$id)
                 ->concat($selectedCorrections->pluck('id')->map(fn ($id) => 'supplier_purchase_correction:'.$id));
             $receiptMovements = StockMovement::query()->whereIn('source_reference', $sourceReferences)
@@ -251,6 +256,7 @@ class SupplierPurchases extends Component
             'invoices' => $invoices,
             'selectedInvoice' => $selected,
             'selectedCorrections' => $selectedCorrections,
+            'selectedPaymentAllocations' => $selectedPaymentAllocations,
             'receiptMovements' => $receiptMovements,
             'suppliers' => Supplier::query()->orderBy('name')->get(),
             'accounts' => AccountingAccount::query()->where('is_active', true)->whereNotNull('approved_at')

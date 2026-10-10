@@ -331,8 +331,9 @@ test('a fully paid PHP 50,000 purchase correction creates and clears a linked PH
         ->and((int) $secondCorrection->journal->lines->firstWhere('accounting_account_id', $ap->id)->credit_cents)->toBe(500_000);
     Livewire::actingAs($actor)->test(\App\Livewire\Accounting\SupplierPurchases::class)
         ->assertSee('Correct purchase')
-        ->call('showInvoice', $invoice->id)
+        ->call('showInvoice', $secondCorrection->replacementInvoice->id)
         ->assertSee('Financial correction and supplier refund history')
+        ->assertSee('PAY-COR-'.$actor->id)
         ->assertSee('REF-COR-'.$actor->id)
         ->assertSee($secondCorrection->replacementInvoice->invoice_number)
         ->assertSee('Supplier refund receivable outstanding');
