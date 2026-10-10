@@ -7,12 +7,14 @@ use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\CashDisbursement as CashDisbursementRecord;
 use App\Services\Accounting\CashDisbursementService;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class CashDisbursements extends Component
 {
     public ?int $editingId = null;
 
+    #[Url(as: 'disbursement')]
     public ?int $selectedId = null;
 
     public string $payee = '';

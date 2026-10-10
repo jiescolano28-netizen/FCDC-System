@@ -6,6 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Services\Accounting\ManualJournalService;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class JournalEntry extends Component
@@ -22,6 +23,7 @@ class JournalEntry extends Component
 
     public ?int $editingDraftId = null;
 
+    #[Url(as: 'journal')]
     public ?int $selectedJournalId = null;
 
     public string $search = '';
@@ -154,7 +156,7 @@ class JournalEntry extends Component
 
         return view('livewire.accounting.journal-entry', [
             'journals' => $journals,
-            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'correctionOf'])->find($this->selectedJournalId) : null,
+            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'correctionOf'])->where('status', 'posted')->find($this->selectedJournalId) : null,
             'accounts' => AccountingAccount::where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get(),
             'isCorrecting' => $this->correctingJournalId !== null,
         ])->layout('layouts.app', ['title' => 'Journal Entry']);

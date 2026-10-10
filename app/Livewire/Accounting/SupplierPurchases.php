@@ -8,12 +8,14 @@ use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierPurchaseInvoice;
 use App\Services\Accounting\SupplierPurchaseService;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class SupplierPurchases extends Component
 {
     public ?int $editingId = null;
 
+    #[Url(as: 'invoice')]
     public ?int $selectedId = null;
 
     public string $supplierId = '';

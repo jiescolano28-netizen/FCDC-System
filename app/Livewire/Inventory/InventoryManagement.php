@@ -8,8 +8,9 @@ use App\Services\Inventory\RecordStockAdjustment;
 use App\Services\Inventory\RecordStockIn;
 use App\Services\Inventory\RecordStockOut;
 use App\Services\Inventory\ReverseStockMovement;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -28,8 +29,10 @@ class InventoryManagement extends Component
     public string $sellingPrice = '';
     public string $reorderLevel = '';
     public string $description = '';
-    public string $status = 'active';
+
+    #[Url(as: 'item')]
     public ?int $historyItemId = null;
+
     public ?int $stockItemId = null;
     public string $stockQuantity = '';
     public string $stockReasonCategory = '';
