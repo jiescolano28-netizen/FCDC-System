@@ -148,6 +148,13 @@ class OpeningBooks extends Component
         session()->flash('opening-message', 'Existing source included without creating another operational record.');
     }
 
+    public function activateProduction(): void
+    {
+        $this->authorizePermission('accounting.activate-books');
+        app(OpeningBooksService::class)->activateProduction((int) auth()->id());
+        session()->flash('opening-message', 'Production accounting activated.');
+    }
+
     public function render()
     {
         $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->with('lines.account', 'approver')->first();

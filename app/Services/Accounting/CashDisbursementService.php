@@ -359,8 +359,8 @@ class CashDisbursementService
             'paymentDate',
             'Payment date is not in an open accounting period.',
         );
-        if ($date->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
-            || $date->gt(CarbonImmutable::parse($period->ends_on, 'Asia/Manila'))) {
+        if ($date->toDateString() < $period->starts_on->toDateString()
+            || $date->toDateString() > $period->ends_on->toDateString()) {
             throw ValidationException::withMessages(['paymentDate' => 'Payment date is not in an open accounting period.']);
         }
         $moneyAccount = AccountingAccount::query()->lockForUpdate()->find($disbursement->money_account_id);

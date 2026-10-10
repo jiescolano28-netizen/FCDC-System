@@ -52,6 +52,7 @@ class RolePermissionCatalog
                 'accounting.close-fiscal-year' => 'Authorize reconciled fiscal-year closing transfers',
                 'accounting.reopen-period' => 'Reopen accounting months and dependent periods',
                 'accounting.approve-opening-books' => 'Approve accounting cutover and opening schedules',
+                'accounting.activate-books' => 'Activate reconciled production accounting',
                 'accounting.reconcile-sources' => 'Reconcile existing post-cutover source activity',
                 'accounting.post-reconciled-sources' => 'Post reconciled existing source activity',
             ],

@@ -144,7 +144,7 @@ class SupplierPurchaseService
             }
             $cutover = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')
                 ->where('status', 'posted')->value('accounting_date');
-            if (! $cutover || $dateValue->lt(CarbonImmutable::parse($cutover, 'Asia/Manila'))) {
+            if (! $cutover || $date < CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString()) {
                 throw ValidationException::withMessages(['recognition_date' => 'Purchase date is outside approved accounting cutover coverage.']);
             }
             $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(

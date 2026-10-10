@@ -50,6 +50,10 @@ class AccountingOverview extends Component
             return $this->unavailable('Select a valid inclusive Manila reporting period.');
         }
 
+        $readiness = app(OpeningBooksService::class)->readiness();
+        if (! ($readiness['production_activated'] ?? false)) {
+            return $this->unavailable($readiness['production'] ?? 'Production activation is unavailable.');
+        }
         $cutover = AccountingJournal::query()
             ->where('book_key', 'FCDC')->where('source_type', 'opening')->where('source_id', 'FCDC')
             ->where('status', 'posted')->value('accounting_date');
@@ -59,10 +63,6 @@ class AccountingOverview extends Component
         $cutoverDate = CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString();
         if ($this->fromDate < $cutoverDate) {
             return $this->unavailable('Selected period begins before approved accounting cutover coverage.');
-        }
-        $readiness = app(OpeningBooksService::class)->readiness();
-        if (! ($readiness['production_activated'] ?? false)) {
-            return $this->unavailable($readiness['production'] ?? 'Production activation is unavailable.');
         }
 
 

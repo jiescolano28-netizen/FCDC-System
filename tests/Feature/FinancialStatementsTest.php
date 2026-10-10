@@ -5,12 +5,22 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\AccountingYtdSummary;
+use App\Services\Accounting\OpeningBooksService;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $readiness = Mockery::mock(OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn([
+        'production_activated' => true,
+        'production' => 'Production activated',
+    ]);
+    app()->instance(OpeningBooksService::class, $readiness);
+});
 
 function createFinancialStatementsEmployee(array $permissions = ['accounting.view']): Employee
 {

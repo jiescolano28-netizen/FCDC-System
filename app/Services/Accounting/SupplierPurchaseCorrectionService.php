@@ -543,7 +543,7 @@ class SupplierPurchaseCorrectionService
         }
         $opening = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')
             ->where('status', 'posted')->first();
-        if (! $opening || $date->lt(CarbonImmutable::parse($opening->accounting_date, 'Asia/Manila'))) {
+        if (! $opening || $date->toDateString() < $opening->accounting_date->toDateString()) {
             throw ValidationException::withMessages(['date' => 'Supplier corrections and refunds require an accounting date on or after approved cutover.']);
         }
         return app(AccountingPeriodService::class)->lockOpenPeriodForDate(

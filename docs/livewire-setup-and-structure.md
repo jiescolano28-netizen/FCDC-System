@@ -52,11 +52,9 @@ Exact component boundaries and model names should follow existing Laravel conven
 
 ## Approval and prerequisite
 
-Production activation remains gated on approved accounts and mappings, cutover evidence, operational posting prerequisites and complete reporting rules. Accounting functionality described below is limited to the persisted records and supported coverage each workflow documents; it does not certify release readiness.
+Approved chart accounts, required posting mappings, cutover/opening evidence, reconciled supplier and item schedules, valuation policies, required pre-cutover YTD summaries, and intervening source reconciliation gate activation. `accounting.activate-books` separately authorizes activation after server-side readiness revalidation; activation records its actor/time once. Overview, General Ledger, Trial Balance and Financial Statements remain explicitly unavailable before activation. This is an operational readiness control, not an audit, filing or legal certification.
 
-## Accounting implementation status
-
-Production activation remains gated on approved accounts, mappings, cutover evidence and other prerequisites. Chart of Accounts records and approvals persist in the accounting tables; the page does not use illustrative ReferenceAccounts fixtures.
+Chart of Accounts records and approvals persist in the accounting tables. The production books contain no illustrative reference accounts or demonstration journal fixtures.
 
 Journal Entry persists manual drafts, posted entries and linked corrections in the shared accounting journal tables. Drafts have no ledger effect; posted journals and lines are immutable and corrections preserve linked reversal/replacement history.
 
@@ -106,7 +104,7 @@ The authenticated `/accounting` route uses the Accounting-grouped `AccountingOve
 
 ## Cash Disbursements
 
-The authenticated `/accounting/cash-disbursements` Livewire page supports direct non-inventory disbursements and supplier settlements allocated to posted received-purchase invoices or active posted opening invoices. Supplier settlements require explicit positive allocations totaling the payment and limited to one supplier; posting debits Accounts Payable and credits the selected Cash/Bank account atomically. Returned or voided released checks and other payment corrections use linked reversals that preserve evidence and allocation history. Both payable registers derive status and balances from posted allocations net of reversals and print invoice payment allocation/correction history. Production release still requires approved accounts, mappings, and cutover controls.
+The authenticated `/accounting/cash-disbursements` Livewire page supports direct non-inventory disbursements and supplier settlements allocated to posted received-purchase invoices or active posted opening invoices. Supplier settlements require explicit positive allocations totaling the payment and limited to one supplier; posting debits Accounts Payable and credits the selected Cash/Bank account atomically. Returned or voided released checks and other payment corrections use linked reversals that preserve evidence and allocation history. Both payable registers derive status and balances from posted allocations net of reversals and print invoice payment allocation/correction history. Production activation is an explicit permission-gated action that remains unavailable until approved books, policies and post-cutover sources reconcile.
 
 ## Financial Statements
 
@@ -130,6 +128,4 @@ Navigation uses normal named-route links, route-derived active states, and route
 
 POS transactions and VAT records persist across sessions; approved POS accounting postings link completed sales and valued stock effects. Settings values remain session-scoped. Manual journal drafts, posted history and corrections persist in the accounting journal tables across logout. Inventory and POS behavior remains subject to approved operational and statutory rules; the presence of persisted activity does not establish production readiness.
 
-Inventory and POS remain subject to approved operational and statutory rules. The General Ledger displays posted journal history within supported cutover coverage; Journal Entry and source workflows persist their documented records. Accounting Overview summarizes posted period flows, end-date ledger positions and recent posted journal detail only after the production activation readiness flag is true; AP and Inventory are withheld on schedule mismatch. Trial Balance and Financial Statements retain their documented calculation limits. VAT Return Preparation remains a live POS-only preparation aid, not an official return or filing. Do not interpret these implementations as approval to release production accounting or tax functionality; retain the prerequisites above.
-
-Verification for this cutover: the authenticated browser smoke reached each of the 18 direct URLs and found the shared shell and one active navigation link on every page. Browser checks also confirmed Back/Forward, the active/expanded VAT Return Preparation navigation, mobile navigation without document overflow, and logout followed by guest redirection. `APP_ENV=testing SESSION_DRIVER=array DB_CONNECTION=sqlite DB_DATABASE=:memory: DB_URL= php artisan test` passed all 80 tests (680 assertions). `npm run build` completed; Vite noted that `/image/construction-bg.jpg` remains a runtime URL, served from `public/image/`.
+POS transactions, VAT records and approved source-linked accounting postings persist across sessions. Settings values remain session-scoped. Overview, General Ledger, Trial Balance and Financial Statements are unavailable until an authorized production activation follows complete readiness reconciliation; report calculations remain subject to their documented coverage and schedule checks. VAT Return Preparation remains a live POS-only preparation aid, not an official return or filing. Activation verifies operational readiness only and does not claim audit, statutory filing or legal certification.

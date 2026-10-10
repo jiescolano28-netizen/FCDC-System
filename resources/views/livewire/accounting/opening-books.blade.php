@@ -17,10 +17,26 @@
         <h2 id="cutover-readiness-heading">Readiness and historical coverage</h2>
         <dl>
             @foreach ($readiness as $name => $state)
-                <dt>{{ ucfirst($name) }}</dt><dd>{{ $state }}</dd>
+                @if (is_string($state))
+                    <dt>{{ ucfirst($name) }}</dt><dd>{{ $state }}</dd>
+                @endif
             @endforeach
         </dl>
         <p>Opening Accounts Payable requires an opening invoice schedule whose exact total matches the controlled AP credit line. Opening Inventory requires approved per-item quantities and values; neither control account can be approved as an unrestricted general-ledger balance.</p>
+    </section>
+
+    <section class="chart-account-card" aria-labelledby="production-activation-heading">
+        <h2 id="production-activation-heading">Production accounting activation</h2>
+        <p role="status">{{ $readiness['production'] }}</p>
+        @if (! $readiness['production_activated'])
+            @can('accounting.activate-books')
+                @if ($readiness['production_ready'])
+                    <button type="button" wire:click="activateProduction">Activate production accounting</button>
+                @else
+                    <button type="button" disabled>Resolve readiness blockers before activation</button>
+                @endif
+            @endcan
+        @endif
     </section>
 
     <section class="chart-account-card" aria-labelledby="opening-journal-heading">

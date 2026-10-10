@@ -9,11 +9,21 @@ use App\Models\CashDisbursement;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
+use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function () {
+    $readiness = Mockery::mock(OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn([
+        'production_activated' => true,
+        'production' => 'Production activated',
+    ]);
+    app()->instance(OpeningBooksService::class, $readiness);
+});
 
 function createTrialBalanceEmployee(): Employee
 {

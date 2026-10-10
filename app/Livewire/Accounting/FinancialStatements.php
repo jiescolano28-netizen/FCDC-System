@@ -6,6 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingYtdSummary;
+use App\Services\Accounting\OpeningBooksService;
 use Carbon\CarbonImmutable;
 use Livewire\Component;
 
@@ -65,6 +66,7 @@ class FinancialStatements extends Component
     public function render()
     {
         abort_unless(auth()->user()?->can('accounting.view'), 403);
+        $readiness = app(OpeningBooksService::class)->readiness();
         $statementTitle = $this->statementType === 'balance-sheet' ? 'Balance Sheet' : 'Income Statement';
         $report = match ($this->statementType) {
             'income-statement' => $this->incomeStatement(),
