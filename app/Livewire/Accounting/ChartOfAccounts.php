@@ -44,6 +44,7 @@ class ChartOfAccounts extends Component
         'cogs' => 'COGS',
         'inventory' => 'Inventory',
         'accounts_payable' => 'Accounts Payable',
+        'disbursement_method:Other' => 'Other disbursement method',
         'recovery_offset' => 'Recovery counterpart',
         'adjustment' => 'Adjustment counterpart',
     ];
@@ -213,7 +214,9 @@ class ChartOfAccounts extends Component
         $this->authorizePermission('accounting.maintain-accounts');
         abort_unless(isset(self::MAPPING_SOURCES[$source]), 404);
         $accountRule = Rule::exists('accounting_accounts', 'id')->where('is_active', true);
-        if (isset(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source])) {
+        if ($source === 'disbursement_method:Other') {
+            $accountRule->whereIn('classification', ['cash', 'bank']);
+        } elseif (isset(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source])) {
             $accountRule->where('classification', AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source]);
         }
         $validated = $this->validate([

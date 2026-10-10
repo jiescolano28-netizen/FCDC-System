@@ -4,12 +4,12 @@
 
 **Blocked by:** 03: Post and correct persistent manual journals.
 
-**Status:** ready-for-agent
+**Status:** implemented
 
-- [ ] Capture payee, payment/release date, approved method, amount, actual Cash/Bank account, reference, description and supporting document or reference; require non-cash reference and check number where applicable.
-- [ ] Support draft preparation/edit/delete and posted search/filter/detail; drafts change no cash, accounts or stock. Allocate direct payments across approved non-control debit accounts, exactly matching the payment credit.
-- [ ] Posting debits actual acquired asset/expense accounts and credits the selected approved money account atomically; method labels alone never determine the account.
-- [ ] Prepared/unreleased checks stay drafts. Post on release to the payee, not bank clearance; a voided/returned released check uses a reasoned linked reversal, retaining the original.
-- [ ] Only explicitly approved Other methods are accepted; validate authority, active mappings, dates and open periods at execution.
-- [ ] Do not add a bank-clearing, supplier-advance or receiving module. Inventory payments become available only through their later linked-valued-purchase slice.
-- [ ] Demonstrate a PHP 2,000 direct utility payment and a released-check reversal; cover allocation inequality, missing evidence/reference, permissions and rollback.
+- [x] Capture payee, payment/release date, approved method, amount, actual Cash/Bank account, reference, description and supporting document or reference; require non-cash reference and check number where applicable.
+- [x] Support draft preparation/edit/delete and posted search/filter/detail; drafts change no cash, accounts or stock. Allocate direct payments across approved non-control debit accounts, exactly matching the payment credit.
+- [x] Posting debits actual acquired asset/expense accounts and credits the selected approved money account atomically; method labels alone never determine the account.
+- [x] Prepared/unreleased checks stay drafts. Post on release to the payee, not bank clearance; a voided/returned released check uses a reasoned linked reversal, retaining the original.
+- [x] Only explicitly approved Other methods are accepted; validate authority, active mappings, dates and open periods at execution.
+- [x] Do not add a bank-clearing, supplier-advance or receiving module. Inventory payments become available only through their later linked-valued-purchase slice.
+- [x] Demonstrate a PHP 2,000 direct utility payment and a released-check reversal; cover allocation inequality, missing evidence/reference, permissions and rollback.
