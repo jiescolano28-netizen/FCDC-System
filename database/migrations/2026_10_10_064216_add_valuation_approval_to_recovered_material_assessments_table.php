@@ -32,16 +32,16 @@ return new class extends Migration
             });
         }
         foreach ([
-            'counterpart_accounting_account_id' => 'accounting_accounts',
-            'valuation_approved_by' => 'employees',
-        ] as $column => $referencedTable) {
+            'counterpart_accounting_account_id' => ['accounting_accounts', 'rma_counterpart_account_fk'],
+            'valuation_approved_by' => ['employees', 'rma_valuation_approved_by_fk'],
+        ] as $column => [$referencedTable, $foreignKeyName]) {
             $hasForeignKey = collect(Schema::getForeignKeys('recovered_material_assessments'))
                 ->contains(fn (array $foreignKey): bool => $foreignKey['columns'] === [$column]
                     && $foreignKey['foreign_table'] === $referencedTable);
 
             if (! $hasForeignKey) {
-                Schema::table('recovered_material_assessments', function (Blueprint $table) use ($column, $referencedTable) {
-                    $table->foreign($column)->references('id')->on($referencedTable)->nullOnDelete();
+                Schema::table('recovered_material_assessments', function (Blueprint $table) use ($column, $referencedTable, $foreignKeyName) {
+                    $table->foreign($column, $foreignKeyName)->references('id')->on($referencedTable)->nullOnDelete();
                 });
             }
         }
@@ -55,9 +55,15 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('recovered_material_assessments', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('valuation_approved_by');
-            $table->dropConstrainedForeignId('counterpart_accounting_account_id');
-            $table->dropColumn(['assigned_unit_value_cents', 'assigned_value_cents', 'valuation_approved_at']);
+            $table->dropForeign('rma_valuation_approved_by_fk');
+            $table->dropForeign('rma_counterpart_account_fk');
+            $table->dropColumn([
+                'valuation_approved_by',
+                'counterpart_accounting_account_id',
+                'assigned_unit_value_cents',
+                'assigned_value_cents',
+                'valuation_approved_at',
+            ]);
         });
     }
 };

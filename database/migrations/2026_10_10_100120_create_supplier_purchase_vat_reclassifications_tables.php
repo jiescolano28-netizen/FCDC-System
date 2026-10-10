@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('supplier_purchase_vat_reclassifications', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('supplier_purchase_invoice_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('cash_disbursement_id')->nullable()->constrained()->restrictOnDelete();
+            $table->foreignId('supplier_purchase_invoice_id')->nullable()->constrained(indexName: 'vatr_invoice_fk')->restrictOnDelete();
+            $table->foreignId('cash_disbursement_id')->nullable()->constrained(indexName: 'vatr_cash_disbursement_fk')->restrictOnDelete();
             $table->uuid('idempotency_key')->unique();
             $table->foreignId('journal_id')->unique()->constrained('accounting_journals')->restrictOnDelete();
             $table->unsignedBigInteger('amount_cents');
@@ -26,12 +26,12 @@ return new class extends Migration
 
         Schema::create('supplier_purchase_vat_reclassification_lines', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('supplier_purchase_vat_reclassification_id')->constrained()->restrictOnDelete();
-            $table->foreignId('supplier_purchase_line_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('cash_disbursement_line_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('inventory_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('accounting_account_id')->constrained('accounting_accounts')->restrictOnDelete();
-            $table->foreignId('consumed_accounting_account_id')->nullable()->constrained('accounting_accounts')->restrictOnDelete();
+            $table->foreignId('supplier_purchase_vat_reclassification_id')->constrained('supplier_purchase_vat_reclassifications', indexName: 'vatrl_reclassification_fk')->restrictOnDelete();
+            $table->foreignId('supplier_purchase_line_id')->nullable()->constrained('supplier_purchase_lines', indexName: 'vatrl_purchase_line_fk')->restrictOnDelete();
+            $table->foreignId('cash_disbursement_line_id')->nullable()->constrained('cash_disbursement_lines', indexName: 'vatrl_cash_disbursement_line_fk')->restrictOnDelete();
+            $table->foreignId('inventory_id')->nullable()->constrained(indexName: 'vatrl_inventory_fk')->restrictOnDelete();
+            $table->foreignId('accounting_account_id')->constrained('accounting_accounts', indexName: 'vatrl_account_fk')->restrictOnDelete();
+            $table->foreignId('consumed_accounting_account_id')->nullable()->constrained('accounting_accounts', indexName: 'vatrl_consumed_account_fk')->restrictOnDelete();
             $table->unsignedBigInteger('remaining_inventory_cents')->default(0);
             $table->unsignedBigInteger('consumed_cost_cents')->default(0);
             $table->unsignedBigInteger('amount_cents');

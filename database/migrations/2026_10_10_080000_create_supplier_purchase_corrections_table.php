@@ -17,7 +17,7 @@ return new class extends Migration
 
         Schema::create('supplier_purchase_corrections', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('supplier_purchase_invoice_id')->nullable()->constrained()->restrictOnDelete();
+            $table->foreignId('supplier_purchase_invoice_id')->nullable()->constrained(indexName: 'spc_invoice_fk')->restrictOnDelete();
             $table->foreignId('cash_disbursement_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('replacement_invoice_id')->nullable()->constrained('supplier_purchase_invoices')->restrictOnDelete();
             $table->foreignId('journal_id')->constrained('accounting_journals')->restrictOnDelete();
@@ -36,12 +36,12 @@ return new class extends Migration
         });
         Schema::create('supplier_purchase_correction_lines', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('supplier_purchase_correction_id')->constrained('supplier_purchase_corrections')->restrictOnDelete();
-            $table->foreignId('supplier_purchase_line_id')->nullable()->constrained('supplier_purchase_lines')->restrictOnDelete();
+            $table->foreignId('supplier_purchase_correction_id')->constrained('supplier_purchase_corrections', indexName: 'spcl_correction_fk')->restrictOnDelete();
+            $table->foreignId('supplier_purchase_line_id')->nullable()->constrained('supplier_purchase_lines', indexName: 'spcl_purchase_line_fk')->restrictOnDelete();
             $table->foreignId('inventory_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('accounting_account_id')->constrained('accounting_accounts')->restrictOnDelete();
-            $table->foreignId('consumed_accounting_account_id')->nullable()->constrained('accounting_accounts')->restrictOnDelete();
-            $table->foreignId('cash_disbursement_line_id')->nullable()->constrained('cash_disbursement_lines')->restrictOnDelete();
+            $table->foreignId('consumed_accounting_account_id')->nullable()->constrained('accounting_accounts', indexName: 'spcl_consumed_account_fk')->restrictOnDelete();
+            $table->foreignId('cash_disbursement_line_id')->nullable()->constrained('cash_disbursement_lines', indexName: 'spcl_cash_disbursement_line_fk')->restrictOnDelete();
             $table->string('direction', 10);
             $table->unsignedBigInteger('amount_cents');
             $table->unsignedBigInteger('remaining_inventory_cents')->default(0);
