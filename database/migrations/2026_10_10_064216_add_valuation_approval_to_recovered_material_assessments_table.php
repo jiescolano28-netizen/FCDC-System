@@ -23,13 +23,27 @@ return new class extends Migration
         }
         if (! Schema::hasColumn('recovered_material_assessments', 'counterpart_accounting_account_id')) {
             Schema::table('recovered_material_assessments', function (Blueprint $table) {
-                $table->foreignId('counterpart_accounting_account_id')->nullable()->constrained('accounting_accounts')->nullOnDelete();
+                $table->foreignId('counterpart_accounting_account_id')->nullable();
             });
         }
         if (! Schema::hasColumn('recovered_material_assessments', 'valuation_approved_by')) {
             Schema::table('recovered_material_assessments', function (Blueprint $table) {
-                $table->foreignId('valuation_approved_by')->nullable()->constrained('employees')->nullOnDelete();
+                $table->foreignId('valuation_approved_by')->nullable();
             });
+        }
+        foreach ([
+            'counterpart_accounting_account_id' => 'accounting_accounts',
+            'valuation_approved_by' => 'employees',
+        ] as $column => $referencedTable) {
+            $hasForeignKey = collect(Schema::getForeignKeys('recovered_material_assessments'))
+                ->contains(fn (array $foreignKey): bool => $foreignKey['columns'] === [$column]
+                    && $foreignKey['foreign_table'] === $referencedTable);
+
+            if (! $hasForeignKey) {
+                Schema::table('recovered_material_assessments', function (Blueprint $table) use ($column, $referencedTable) {
+                    $table->foreign($column)->references('id')->on($referencedTable)->nullOnDelete();
+                });
+            }
         }
         if (! Schema::hasColumn('recovered_material_assessments', 'valuation_approved_at')) {
             Schema::table('recovered_material_assessments', function (Blueprint $table) {
