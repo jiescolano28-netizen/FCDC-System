@@ -11,13 +11,31 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('recovered_material_assessments', function (Blueprint $table) {
-            $table->unsignedBigInteger('assigned_unit_value_cents')->nullable();
-            $table->unsignedBigInteger('assigned_value_cents')->nullable();
-            $table->foreignId('counterpart_accounting_account_id')->nullable()->constrained('accounting_accounts')->nullOnDelete();
-            $table->foreignId('valuation_approved_by')->nullable()->constrained('employees')->nullOnDelete();
-            $table->timestamp('valuation_approved_at')->nullable();
-        });
+        if (! Schema::hasColumn('recovered_material_assessments', 'assigned_unit_value_cents')) {
+            Schema::table('recovered_material_assessments', function (Blueprint $table) {
+                $table->unsignedBigInteger('assigned_unit_value_cents')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('recovered_material_assessments', 'assigned_value_cents')) {
+            Schema::table('recovered_material_assessments', function (Blueprint $table) {
+                $table->unsignedBigInteger('assigned_value_cents')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('recovered_material_assessments', 'counterpart_accounting_account_id')) {
+            Schema::table('recovered_material_assessments', function (Blueprint $table) {
+                $table->foreignId('counterpart_accounting_account_id')->nullable()->constrained('accounting_accounts')->nullOnDelete();
+            });
+        }
+        if (! Schema::hasColumn('recovered_material_assessments', 'valuation_approved_by')) {
+            Schema::table('recovered_material_assessments', function (Blueprint $table) {
+                $table->foreignId('valuation_approved_by')->nullable()->constrained('employees')->nullOnDelete();
+            });
+        }
+        if (! Schema::hasColumn('recovered_material_assessments', 'valuation_approved_at')) {
+            Schema::table('recovered_material_assessments', function (Blueprint $table) {
+                $table->timestamp('valuation_approved_at')->nullable();
+            });
+        }
     }
 
     public function down(): void
