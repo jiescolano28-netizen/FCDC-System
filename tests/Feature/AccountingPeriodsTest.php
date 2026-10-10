@@ -157,30 +157,22 @@ test('reopening records the whole explicitly authorized chain and requires chron
         ->toThrow(ValidationException::class);
 });
 
-test('fiscal closing entries must have posted linked reversals before a month reopens', function () {
+test('reopening automatically preserves and reverses linked fiscal closing history', function () {
     $period = accountingMonth('2026-01', 'closed');
     $laterOpenPeriod = accountingMonth('2026-12');
     $actor = accountingPeriodActor(['accounting.reopen-period'], 'period-fiscal-reopener');
     $closingId = DB::table('accounting_journals')->insertGetId([
         'book_key' => 'FCDC', 'reference' => 'FISCAL-CLOSE-DEC', 'source_type' => 'fiscal_year_closing',
-        'source_id' => '2026', 'accounting_date' => '2026-12-31', 'posting_period_id' => $laterOpenPeriod->id,
+        'source_id' => '2026:1', 'accounting_date' => '2026-12-31', 'posting_period_id' => $laterOpenPeriod->id,
         'description' => 'Fiscal close', 'status' => 'posted', 'prepared_by' => $actor->id,
         'posted_at' => now(), 'posted_by' => $actor->id, 'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    expect(fn () => app(AccountingPeriodService::class)->reopen($period->id, [], 'Correct and reconcile', $actor))
-        ->toThrow(ValidationException::class);
-
-    DB::table('accounting_journals')->insert([
-        'book_key' => 'FCDC', 'reference' => 'FISCAL-CLOSE-REVERSAL', 'source_type' => 'reversal',
-        'source_id' => 'FISCAL-CLOSE-REVERSAL', 'accounting_date' => '2027-01-01', 'posting_period_id' => accountingMonth('2027-01')->id,
-        'description' => 'Reverse fiscal close', 'correction_of_id' => $closingId,
-        'correction_reason' => 'Reopen year', 'status' => 'posted', 'prepared_by' => $actor->id,
-        'posted_at' => now(), 'posted_by' => $actor->id, 'created_at' => now(), 'updated_at' => now(),
-    ]);
     expect(app(AccountingPeriodService::class)->reopen($period->id, [], 'Correct and reconcile', $actor))
         ->toHaveCount(1)
-        ->and($period->fresh()->status)->toBe('open');
+        ->and($period->fresh()->status)->toBe('open')
+        ->and(DB::table('accounting_journals')->where('correction_of_id', $closingId)->where('status', 'posted')->value('correction_reason'))
+        ->toBe('Correct and reconcile');
 });
 
 test('period readiness blocks closing when Accounts Payable differs from its invoice schedule', function () {

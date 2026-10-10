@@ -229,7 +229,13 @@ Recovery reassessment creates a new immutable assessment linked to its predecess
 
 Closing locks the month record inside the same transaction used by posting paths, so manual journals, completed POS sales, supplier purchases/corrections, disbursements/refunds, opening approval, recoveries and valued-stock movements recheck the month at execution. Drafts can remain but do not enter balances. Existing annual period records are expanded into month records with their journal links moved by accounting date.
 
-Reopening an earlier month lists all later closed months and requires an explicit selection of the complete dependent chain. No periods reopen on an incomplete or unauthorized request. An affected posted fiscal-year closing entry must already have a posted linked reversal before reopening. The reopened chain remains subject to forward-only inventory chronology; reopened months must be reconciled and closed chronologically.
+Reopening an earlier month lists all later closed months and requires an explicit selection of the complete dependent chain. No periods reopen on an incomplete or unauthorized request. Reopening a year with an active fiscal close first posts an immutable linked reversal in the original close date and posting period, preserving as-of balances and correction history. The reopened chain remains subject to forward-only inventory chronology; reopened months must be reconciled and closed chronologically.
+
+## Implemented fiscal-year closing
+
+`accounting.periods` offers fiscal-year close only after all twelve monthly periods are closed. `accounting.close-fiscal-year` separately authorizes an immutable, linked closing journal; the selected retained-earnings account must be active, approved and classified as Equity / retained earnings. The service rechecks cumulative book balance, AP and valued-Inventory schedules, the accounting equation and approved pre-cutover YTD coverage before transferring each approved Revenue/Expense balance.
+
+Fiscal closings are dated to December 31 and retain the accountant's reason. A repeated close is rejected while the prior linked close remains active. Reopening an affected year creates a posted reversing journal linked to the original close before periods reopen; after reconciliation, a new numbered close preserves the earlier close and reversal history. Income Statement and current-earnings calculations exclude each fiscal-close correction chain; Trial Balance and Balance Sheet include the journals, so transferred earnings are not double-counted. Period administration and statement detail link the close and reversal to the General Ledger and display both reasons.
 
 ## Implemented post-cutover source reconciliation
 

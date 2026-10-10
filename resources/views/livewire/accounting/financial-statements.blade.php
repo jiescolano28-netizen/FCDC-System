@@ -36,6 +36,24 @@
             @endif
             <p>Generated: {{ $generatedAt }}</p>
             <p>Scope: approved FCDC posted accounting activity; historical detail is not inferred. This report is not audited, filed or legally certified.</p>
+            @if ($fiscalClosings->isNotEmpty())
+                <section class="financial-statement-coverage" aria-label="Fiscal closing history">
+                    <h3>Fiscal closing history through {{ $toDate }}</h3>
+                    @foreach ($fiscalClosings as $closing)
+                        @php($retainedLine = $closing->lines->first(fn ($line) => $line->account?->classification === 'retained_earnings'))
+                        @php($reversal = $closing->corrections->first())
+                        <p>
+                            {{ $reversal ? 'Reversed' : 'Active' }} fiscal close
+                            <a href="{{ route('accounting.general-ledger', ['accountId' => $retainedLine?->accounting_account_id, 'fromDate' => $closing->accounting_date->toDateString(), 'toDate' => $reversal?->accounting_date?->toDateString() ?? $closing->accounting_date->toDateString()]) }}">{{ $closing->reference }}</a>
+                            — {{ $closing->description }}
+                            @if ($reversal)
+                                <br>Reversal <a href="{{ route('accounting.general-ledger', ['accountId' => $retainedLine?->accounting_account_id, 'fromDate' => $reversal->accounting_date->toDateString(), 'toDate' => $reversal->accounting_date->toDateString()]) }}">{{ $reversal->reference }}</a>
+                                — {{ $reversal->correction_reason }}
+                            @endif
+                        </p>
+                    @endforeach
+                </section>
+            @endif
         </header>
 
         @if (! $report['available'])

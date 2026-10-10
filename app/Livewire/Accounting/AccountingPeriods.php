@@ -2,8 +2,11 @@
 
 namespace App\Livewire\Accounting;
 
+use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Services\Accounting\AccountingPeriodService;
+use App\Services\Accounting\FiscalYearClosingService;
 use Carbon\CarbonImmutable;
 use Livewire\Component;
 
@@ -16,6 +19,22 @@ class AccountingPeriods extends Component
     public array $dependentPeriodIds = [];
 
     public string $reason = '';
+
+    public string $fiscalCloseReason = '';
+
+    public ?int $retainedEarningsAccountId = null;
+
+    public function closeFiscalYear(): void
+    {
+        app(FiscalYearClosingService::class)->close(
+            $this->year,
+            (int) $this->retainedEarningsAccountId,
+            $this->fiscalCloseReason,
+            auth()->user(),
+        );
+        $this->reset('fiscalCloseReason');
+        session()->flash('period-message', 'Fiscal year closed and operating income transferred to retained earnings.');
+    }
 
     public function mount(): void
     {
@@ -70,12 +89,27 @@ class AccountingPeriods extends Component
             ? AccountingPostingPeriod::query()->where('book_key', $selectedPeriod->book_key)->where('status', 'closed')
                 ->where('starts_on', '>', $selectedPeriod->starts_on)->orderBy('starts_on')->get()
             : collect();
+        $fiscalClosings = AccountingJournal::query()->where('book_key', 'FCDC')
+            ->where('source_type', 'fiscal_year_closing')
+            ->where(fn ($query) => $query->where('source_id', 'like', $this->year.':%')
+                ->orWhereYear('accounting_date', $this->year))
+            ->with(['corrections' => fn ($query) => $query->where('status', 'posted')])
+            ->orderBy('id')->get();
+        $retainedEarningsAccounts = AccountingAccount::query()->where('type', 'Equity')
+            ->where('classification', 'retained_earnings')->where('is_active', true)
+            ->whereNotNull('approved_at')->orderBy('code')->get();
+        $allMonthsClosed = $months->every(fn (array $row) => $row['period']->status === 'closed');
+        $hasActiveFiscalClose = $fiscalClosings->contains(fn (AccountingJournal $journal) => $journal->corrections->isEmpty());
 
         return view('livewire.accounting.accounting-periods', [
             'availableYears' => $availableYears,
             'months' => $months,
             'selectedPeriod' => $selectedPeriod,
             'dependentPeriods' => $dependentPeriods,
+            'fiscalClosings' => $fiscalClosings,
+            'retainedEarningsAccounts' => $retainedEarningsAccounts,
+            'allMonthsClosed' => $allMonthsClosed,
+            'hasActiveFiscalClose' => $hasActiveFiscalClose,
         ])->layout('layouts.app', ['title' => 'Accounting Periods']);
     }
 }

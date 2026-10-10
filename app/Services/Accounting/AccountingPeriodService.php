@@ -213,20 +213,8 @@ class AccountingPeriodService
             }
 
             $periods = $laterClosed->prepend($period);
-            $fiscalClosingPeriodIds = AccountingPostingPeriod::query()->where('book_key', $period->book_key)
-                ->where('starts_on', '>=', $period->starts_on)->pluck('id');
-            $fiscalClosingIds = AccountingJournal::query()->whereIn('posting_period_id', $fiscalClosingPeriodIds)
-                ->where('source_type', 'fiscal_year_closing')->where('status', 'posted')->pluck('id');
-            if ($fiscalClosingIds->isNotEmpty()) {
-                $reversedIds = AccountingJournal::query()->whereIn('correction_of_id', $fiscalClosingIds)->where('status', 'posted')
-                    ->pluck('correction_of_id')->unique();
-                if ($reversedIds->count() !== $fiscalClosingIds->count()) {
-                    throw ValidationException::withMessages([
-                        'period' => 'Reverse every affected fiscal-year closing entry before reopening its accounting month.',
-                    ]);
-                }
-            }
 
+            app(FiscalYearClosingService::class)->reverseClosingsForReopen($periods, $reason, $actor);
             foreach ($periods as $affected) {
                 $old = ['status' => $affected->status];
                 $affected->forceFill([
