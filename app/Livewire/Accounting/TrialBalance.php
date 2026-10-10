@@ -154,6 +154,10 @@ class TrialBalance extends Component
             ->join('cash_disbursements', 'cash_disbursements.id', '=', 'cash_disbursement_lines.cash_disbursement_id')
             ->where('cash_disbursements.status', 'posted')
             ->whereDate('cash_disbursements.payment_date', '<=', $date)
+            ->where(function ($query): void {
+                $query->whereNotNull('cash_disbursement_lines.supplier_purchase_invoice_id')
+                    ->orWhereNotNull('cash_disbursement_lines.supplier_opening_invoice_id');
+            })
             ->selectRaw('COALESCE(SUM(CASE WHEN cash_disbursements.reversal_of_id IS NULL THEN cash_disbursement_lines.amount_cents ELSE -cash_disbursement_lines.amount_cents END), 0) as paid_cents')
             ->value('paid_cents');
 

@@ -5,6 +5,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingPostingPeriod;
+use App\Models\CashDisbursement;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
@@ -147,6 +148,47 @@ test('trial balance includes both boundary days, cumulative closing and reports 
         ->set('fromDate', '2026-03-01')
         ->set('toDate', '2026-02-28')
         ->assertSee('Choose a valid inclusive date range.');
+});
+
+test('direct cash disbursements do not reduce the supplier accounts payable schedule', function () {
+    $viewer = createTrialBalanceEmployee();
+    $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
+    trialBalanceAccount('2000', 'accounts_payable', 'Liability', 'credit');
+    $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
+    $expense = trialBalanceAccount('6000', 'operating_expense', 'Expense', 'debit');
+    postTrialBalanceJournal('OPENING-DIRECT-PAYMENT-TB', '2026-01-01', [
+        [$cash, 10000, 0], [$equity, 0, 10000],
+    ], 'opening', 'FCDC');
+    postTrialBalanceJournal('DIRECT-PAYMENT-TB', '2026-02-10', [
+        [$expense, 2500, 0], [$cash, 0, 2500],
+    ], 'cash_disbursement', 'direct-payment');
+    $actor = Employee::query()->firstOrFail();
+    $disbursement = CashDisbursement::create([
+        'reference' => 'DIRECT-TB-001',
+        'payee' => 'Utility provider',
+        'payment_date' => '2026-02-10',
+        'method' => 'Cash',
+        'money_account_id' => $cash->id,
+        'description' => 'Direct utility disbursement',
+        'evidence_reference' => 'Receipt 001',
+        'amount_cents' => 2500,
+        'status' => 'posted',
+        'posting_period_id' => AccountingPostingPeriod::query()->where('book_key', 'FCDC')->where('fiscal_year', 2026)->value('id'),
+        'prepared_by' => $actor->id,
+    ]);
+    $disbursement->lines()->create([
+        'accounting_account_id' => $expense->id,
+        'description' => 'Utility expense',
+        'amount_cents' => 2500,
+    ]);
+
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
+        ->set('fromDate', '2026-02-01')
+        ->set('toDate', '2026-02-28')
+        ->assertSee('Books balance')
+        ->assertSee('Accounts Payable: book 0.00; supplier and invoice schedule 0.00.')
+        ->assertSee('Reconciled.')
+        ->assertDontSee('Schedule mismatch.');
 });
 
 test('trial balance reports an inventory schedule mismatch independently of balanced books', function () {
