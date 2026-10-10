@@ -114,6 +114,9 @@
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.accounts-payable') ? 'active' : '' }}" href="{{ route('accounting.accounts-payable') }}" @if (request()->routeIs('accounting.accounts-payable')) aria-current="page" @endif>
                                 <span class="nav-label">Accounts Payable</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.supplier-purchases') ? 'active' : '' }}" href="{{ route('accounting.supplier-purchases') }}" @if (request()->routeIs('accounting.supplier-purchases')) aria-current="page" @endif>
+                                <span class="nav-label">Supplier Purchases</span>
+                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.cash-disbursements') ? 'active' : '' }}" href="{{ route('accounting.cash-disbursements') }}" @if (request()->routeIs('accounting.cash-disbursements')) aria-current="page" @endif>
                                 <span class="nav-label">Cash Disbursements</span>
                             </a>

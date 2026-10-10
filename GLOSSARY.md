@@ -182,3 +182,9 @@ An approved summary of the current fiscal year's income and expenses before acco
 
 **Supplier refund receivable**:
 An amount owed back to FCDC after an authorized correction reduces an already-paid supplier purchase. It is distinct from outstanding AP and an intentional supplier advance.
+
+**Received supplier credit purchase**:
+A posted supplier invoice whose approved allocations recognize Accounts Payable and the acquired inventory, asset or expense in one atomic source-linked journal; inventory allocations also record valued stock receipts.
+
+**Purchase allocation**:
+The portion of a supplier invoice assigned to an inventory item and receipt quantity or to an approved non-inventory asset or expense account.
