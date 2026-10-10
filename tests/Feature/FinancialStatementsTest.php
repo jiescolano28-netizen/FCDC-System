@@ -112,7 +112,7 @@ test('income statement classifies posted activity and excludes drafts, tax and f
     statementJournal($period, $viewer, '2026-03-03', 'income', [[$opening, 500, 0], [$otherIncome, 0, 500]], 'OTHER-IN-1');
     statementJournal($period, $viewer, '2026-03-04', 'expense', [[$otherExpense, 700, 0], [$opening, 0, 700]], 'OTHER-OUT-1');
     $closing = statementJournal($period, $viewer, '2026-03-05', 'fiscal_year_closing', [[$sales, 10000, 0], [$opening, 0, 10000]], 'CLOSE-26');
-    statementJournal($period, $viewer, '2026-03-06', 'reversal', [[$sales, 0, 10000], [$opening, 10000, 0]], 'CLOSE-REV-26', 'posted', $closing->id);
+    statementJournal($period, $viewer, '2026-04-06', 'reversal', [[$sales, 0, 10000], [$opening, 10000, 0]], 'CLOSE-REV-26', 'posted', $closing->id);
 
     statementJournal($period, $viewer, '2026-03-06', 'draft-sale', [[$sales, 0, 90000]], 'DRAFT-1', 'draft');
 
@@ -132,6 +132,12 @@ test('income statement classifies posted activity and excludes drafts, tax and f
         ->assertSee('PHP 7.00')
         ->assertSee('PHP 48.00')
         ->assertDontSee('PHP 1,000.00');
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('fromDate', '2026-04-01')
+        ->set('toDate', '2026-04-30')
+        ->assertSee('No posted income or expense activity in this period.')
+        ->assertSee('<td>PHP 0.00</td>', false);
 });
 
 test('an eligible YTD report labels its approved pre-cutover summary and arbitrary earlier ranges are unavailable', function () {

@@ -110,7 +110,7 @@ The authenticated `/accounting/cash-disbursements` Livewire page supports direct
 
 ## Financial Statements
 
-The authenticated `/accounting/financial-statements` Livewire page generates an Income Statement from posted FCDC journal lines and approved statement classifications. It shows VAT-exclusive Sales, COGS, Gross Profit, operating expenses, other income/expenses and signed Net Income/Loss; opening balances, tax accounts, drafts and fiscal closing entries with linked reversals are excluded. It includes an approved pre-cutover YTD summary only for eligible full-year/YTD coverage and rejects unsupported earlier ranges. The page shows inclusive Manila dates, FCDC scope, generation time, and explicit unavailable/unapproved versus no-activity states. Balance Sheet selection remains unavailable; print styles isolate the selected document from the application shell.
+The authenticated `/accounting/financial-statements` Livewire page generates an Income Statement from posted FCDC journal lines and approved statement classifications. It shows VAT-exclusive Sales, COGS, Gross Profit, operating expenses, other income/expenses and signed Net Income/Loss; opening balances, tax accounts, drafts, `fiscal_year_closing` journals and their linked corrections/reversals are excluded. It includes an approved pre-cutover YTD summary only for eligible full-year/YTD coverage and rejects unsupported earlier ranges. The page shows inclusive Manila dates, FCDC scope, generation time, and explicit unavailable/unapproved versus no-activity states. Balance Sheet selection remains unavailable; print styles isolate the selected document from the application shell.
 
 ## Trial Balance
 

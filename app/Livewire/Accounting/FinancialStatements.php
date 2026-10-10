@@ -11,6 +11,8 @@ use Livewire\Component;
 
 class FinancialStatements extends Component
 {
+    private const FISCAL_YEAR_CLOSING_SOURCE_TYPE = 'fiscal_year_closing';
+
     private const INCOME_CLASSIFICATIONS = [
         'sales', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
     ];
@@ -91,9 +93,8 @@ class FinancialStatements extends Component
 
         $closingIds = AccountingJournal::query()
             ->where('book_key', 'FCDC')
-            ->where(function ($query): void {
-                $query->whereRaw('LOWER(source_type) LIKE ?', ['%clos%']);
-            })->pluck('id');
+            ->where('source_type', self::FISCAL_YEAR_CLOSING_SOURCE_TYPE)
+            ->pluck('id');
         $excludedIds = $closingIds->all();
         $frontier = $excludedIds;
         while ($frontier !== []) {
