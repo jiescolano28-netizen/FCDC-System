@@ -103,7 +103,7 @@ class OpeningBooks extends Component
     public function reviseInventoryValuation(): void
     {
         $this->authorizePermission('accounting.maintain-opening-books');
-        abort_if(AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists(), 409);
+        abort_if(OpeningInventoryValuation::openingJournalPosted(), 409);
         $this->editingInventoryValuation = true;
     }
 

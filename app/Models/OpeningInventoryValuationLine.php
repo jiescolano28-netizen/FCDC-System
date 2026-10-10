@@ -28,7 +28,7 @@ class OpeningInventoryValuationLine extends Model
     private function assertEditableSchedule(): void
     {
         $schedule = OpeningInventoryValuation::find($this->opening_inventory_valuation_id);
-        $postedOpening = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists();
+        $postedOpening = OpeningInventoryValuation::openingJournalPosted();
         if ($postedOpening || $schedule?->status === 'approved') {
             throw new LogicException('Approved opening inventory valuation lines are immutable.');
         }

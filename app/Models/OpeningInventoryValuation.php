@@ -13,7 +13,7 @@ class OpeningInventoryValuation extends Model
     protected static function booted(): void
     {
         static::updating(function (OpeningInventoryValuation $valuation): void {
-            if (AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
+            if (self::openingJournalPosted()) {
                 throw new LogicException('Posted opening inventory valuation is immutable.');
             }
             if ($valuation->getOriginal('status') === 'approved'
@@ -24,10 +24,15 @@ class OpeningInventoryValuation extends Model
         });
         static::deleting(function (OpeningInventoryValuation $valuation): void {
             if ($valuation->status === 'approved'
-                || AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
+                || self::openingJournalPosted()) {
                 throw new LogicException('Approved opening inventory valuation is immutable.');
             }
         });
+    }
+
+    public static function openingJournalPosted(): bool
+    {
+        return AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists();
     }
     protected $fillable = ['book_key', 'cutover_date', 'evidence_reference', 'status', 'prepared_by', 'approved_by', 'approved_at'];
 

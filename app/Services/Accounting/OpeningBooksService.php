@@ -104,14 +104,7 @@ class OpeningBooksService
             if ($schedule->status !== 'draft') {
                 throw ValidationException::withMessages(['inventoryLines' => 'This opening inventory valuation is already approved; save a revised schedule for review.']);
             }
-            $this->validatedInventoryLines(
-                $schedule->cutover_date->toDateString(),
-                $schedule->lines->map(fn ($line) => [
-                    'inventoryId' => (string) $line->inventory_id,
-                    'quantity' => $line->quantity,
-                    'value' => $this->amountFromCents((int) $line->carrying_value_cents),
-                ])->all(),
-            );
+            $this->validatedInventoryLines($schedule->cutover_date->toDateString(), $this->inventoryScheduleLines($schedule));
             $schedule->forceFill([
                 'status' => 'approved',
                 'approved_by' => $actorId,
@@ -364,11 +357,7 @@ class OpeningBooksService
             || ($requireApproved && $schedule->status !== 'approved')) {
             throw ValidationException::withMessages(['opening' => 'Opening Inventory requires a reviewed per-item valuation schedule for the same cutover date.']);
         }
-        $scheduleLines = $this->validatedInventoryLines($date, $schedule->lines->map(fn ($line) => [
-            'inventoryId' => (string) $line->inventory_id,
-            'quantity' => $line->quantity,
-            'value' => $this->amountFromCents((int) $line->carrying_value_cents),
-        ])->all());
+        $scheduleLines = $this->validatedInventoryLines($date, $this->inventoryScheduleLines($schedule));
         $scheduleTotal = 0;
         foreach ($scheduleLines as $line) {
             if ($line['carrying_value_cents'] > PHP_INT_MAX - $scheduleTotal) {
@@ -418,6 +407,15 @@ class OpeningBooksService
 
         return 'Opening stock schedule reconciled';
     }
+    private function inventoryScheduleLines(OpeningInventoryValuation $schedule): array
+    {
+        return $schedule->lines->map(fn ($line) => [
+            'inventoryId' => (string) $line->inventory_id,
+            'quantity' => $line->quantity,
+            'value' => $this->amountFromCents((int) $line->carrying_value_cents),
+        ])->all();
+    }
+
 
     private function quantityInHundredths(mixed $quantity, bool $allowNegative = false): int
     {
