@@ -50,6 +50,26 @@ test('inventory management rejects a negative selling price without persisting a
     expect(Inventory::count())->toBe(0);
 });
 
+test('inventory category filtering is tucked behind an expandable advanced filter', function () {
+    $this->actingAs(createInventoryManager());
+    $timber = Inventory::create(inventoryAttributes(['name' => 'Reclaimed timber', 'category' => 'Lumber']));
+    $concrete = Inventory::create(inventoryAttributes(['name' => 'Concrete block', 'category' => 'Concrete']));
+
+    Livewire::test(InventoryManagement::class)
+        ->assertSee('Advanced filters')
+        ->assertDontSeeHtml('id="categoryFilter"')
+        ->call('toggleAdvancedFilters')
+        ->assertSeeHtml('id="categoryFilter"')
+        ->assertSeeHtml('aria-expanded="true"')
+        ->set('categoryFilter', 'Concrete')
+        ->assertSeeHtml('<td><strong>'.$concrete->code.'</strong><br>'.$concrete->name.'</td>')
+        ->assertDontSeeHtml('<td><strong>'.$timber->code.'</strong><br>'.$timber->name.'</td>')
+        ->call('toggleAdvancedFilters')
+        ->assertDontSeeHtml('id="categoryFilter"')
+        ->assertSee('1 active')
+        ->assertSeeHtml('aria-expanded="false"');
+});
+
 test('authenticated employees can create, search, edit, and delete priced inventory', function () {
     $this->actingAs(createInventoryManager());
 
@@ -146,6 +166,57 @@ test('only priced positive-stock inventory is available for sale', function () {
         ->not->toContain($legacyItem->id)
         ->not->toContain($outOfStockItem->id);
 });
+
+test('inventory create and edit routes render the shared form in the correct mode', function () {
+    $manager = createInventoryManager();
+    $item = Inventory::create(inventoryAttributes(['selling_price' => 11.50]));
+
+    $this->actingAs($manager)
+        ->get(route('inventory.management.create'))
+        ->assertOk()
+        ->assertSee('Add inventory item')
+        ->assertSee('Opening quantity')
+        ->assertSee('Add item')
+        ->assertDontSee('Save changes');
+
+    $this->get(route('inventory.management.edit', $item->id))
+        ->assertOk()
+        ->assertSee('Edit inventory item')
+        ->assertSee('Reclaimed timber')
+        ->assertSee('Save changes')
+        ->assertDontSee('Opening quantity')
+        ->assertDontSee('Add item');
+
+    $this->get(route('inventory.management'))
+        ->assertOk()
+        ->assertSee(route('inventory.management.create'), false)
+        ->assertSee(route('inventory.management.edit', $item->id), false);
+});
+test('inventory form routes enforce create and update permissions separately', function () {
+    $creator = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'inventory.creator',
+        'email' => 'inventory.creator@example.com',
+        'password' => Hash::make('secret-password'),
+    ]), ['inventory.create']);
+    $item = Inventory::create(inventoryAttributes());
+
+    $this->actingAs($creator)
+        ->get(route('inventory.management.create'))
+        ->assertOk();
+    $this->get(route('inventory.management.edit', $item->id))->assertForbidden();
+
+    $updater = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'inventory.updater',
+        'email' => 'inventory.updater@example.com',
+        'password' => Hash::make('secret-password'),
+    ]), ['inventory.update']);
+
+    $this->actingAs($updater)
+        ->get(route('inventory.management.edit', $item->id))
+        ->assertOk();
+    $this->get(route('inventory.management.create'))->assertForbidden();
+});
+
 
 test('inventory management renders inside the authenticated application shell', function () {
     $this->actingAs(createInventoryManager())

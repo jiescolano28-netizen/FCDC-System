@@ -88,6 +88,19 @@
 .inventory-page .status.empty { color: #b91c1c; background: #fee2e2; }
 .inventory-page .error { color: #b91c1c; font-size: 12px; }
 .inventory-page .muted { color: #666; }
+.inventory-page .inventory-toolbar { align-items: flex-end; }
+.inventory-page .inventory-search { min-width: min(100%, 220px); flex: 1; }
+.inventory-page .inventory-filter-toggle { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 9px; padding: 8px 12px; color: var(--slate-700); font: inherit; font-size: 13px; font-weight: 600; }
+.inventory-page .inventory-filter-toggle:hover { border-color: var(--emerald-700); color: var(--emerald-800); background: var(--emerald-50); }
+.inventory-page .inventory-filter-toggle:focus-visible { outline: 2px solid var(--emerald-700); outline-offset: 2px; }
+.inventory-page .inventory-filter-count { padding: 2px 7px; border-radius: 999px; color: var(--emerald-800); background: var(--emerald-100); font-size: 11px; }
+.inventory-page .inventory-advanced-filters { flex: 0 0 100%; padding-top: 14px; border-top: 1px solid #edf1ed; }
+.inventory-page .inventory-advanced-filters > div { width: min(100%, 260px); }
+.inventory-page .inventory-advanced-filters select { min-height: 40px; }
+
+@media (max-width: 520px) {
+    .inventory-page .inventory-filter-toggle { width: 100%; }
+}
 
 
 .settings-page { max-width: 900px; margin: 0 auto; }

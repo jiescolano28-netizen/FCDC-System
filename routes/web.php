@@ -82,6 +82,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:demolition-projects.view')
         ->name('demolition-projects.index');
 
+    Route::get('/inventory/manage/create', InventoryManagement::class)
+        ->middleware('permission:inventory.create')->name('inventory.management.create');
+    Route::get('/inventory/manage/edit/{id}', InventoryManagement::class)
+        ->middleware('permission:inventory.update')->name('inventory.management.edit');
     Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
     Route::get('/tax/vat-summary', VatSummary::class)->middleware('permission:tax.view')->name('tax.vat-summary');
     Route::get('/tax/report', TaxReport::class)->middleware('permission:tax.view')->name('tax.report');

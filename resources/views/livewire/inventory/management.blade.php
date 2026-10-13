@@ -4,44 +4,13 @@
             <h1>Inventory management</h1>
             <p class="muted">Persisted stock records. Unit cost and customer selling price are separate values.</p>
         </div>
-        <span>{{ $items->count() }} matching item(s)</span>
-    </div>
-
-    @if (auth()->user()->can('inventory.create') || auth()->user()->can('inventory.update'))
-        <div class="panel">
-            <h2>{{ $editingId ? 'Edit inventory item' : 'Add inventory item' }}</h2>
-            <form wire:submit="save">
-                <div class="fields">
-                    <div><label for="name">Material name</label><input id="name" wire:model="name">@error('name') <span class="error">{{ $message }}</span> @enderror</div>
-                    <div><label for="category">Category</label><input id="category" wire:model="category">@error('category') <span class="error">{{ $message }}</span> @enderror</div>
-                    @if (! $editingId)
-                        <div><label for="qty">Opening quantity</label><input id="qty" type="number" min="0" step="0.01" wire:model="qty">@error('qty') <span class="error">{{ $message }}</span> @enderror</div>
-                    @endif
-                    <div><label for="unit">Unit</label><input id="unit" wire:model="unit">@error('unit') <span class="error">{{ $message }}</span> @enderror</div>
-                    <div><label for="unitCost">Unit cost{{ $valuedPostingEnabled ? ' · from valued stock schedule' : '' }}</label><input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost" @readonly($valuedPostingEnabled)>@error('unitCost') <span class="error">{{ $message }}</span> @enderror</div>
-                    <div><label for="sellingPrice">Selling price (optional)</label><input id="sellingPrice" type="number" min="0" step="0.01" wire:model="sellingPrice">@error('sellingPrice') <span class="error">{{ $message }}</span> @enderror</div>
-                    <div><label for="reorderLevel">Reorder level</label><input id="reorderLevel" type="number" min="0" step="0.01" wire:model="reorderLevel">@error('reorderLevel') <span class="error">{{ $message }}</span> @enderror</div>
-                    <div><label for="description">Description (optional)</label><textarea id="description" wire:model="description"></textarea>@error('description') <span class="error">{{ $message }}</span> @enderror</div>
-                    @if ($editingId)
-                        <div><label for="status">Lifecycle status</label><select id="status" wire:model="status"><option value="active">Active</option><option value="inactive">Inactive</option></select>@error('status') <span class="error">{{ $message }}</span> @enderror</div>
-                    @endif
-                    <div><label for="image">Product image (optional)</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp" wire:model="image">@error('image') <span class="error">{{ $message }}</span> @enderror</div>
-                </div>
-                <div class="actions" style="margin-top:14px;">
-                    @if ($editingId)
-                        @can('inventory.update')
-                            <button class="primary" type="submit">Save changes</button>
-                            <button class="secondary" type="button" wire:click="resetForm">Cancel</button>
-                        @endcan
-                    @else
-                        @can('inventory.create')
-                            <button class="primary" type="submit">Add item</button>
-                        @endcan
-                    @endif
-                </div>
-            </form>
+        <div class="actions">
+            <span>{{ $items->count() }} matching item(s)</span>
+            @can('inventory.create')
+                <a class="primary" href="{{ route('inventory.management.create') }}">Add Inventory Item</a>
+            @endcan
         </div>
-    @endif
+    </div>
 
     @can('inventory.movements.record')
         <div class="panel">
@@ -98,20 +67,36 @@
         </div>
     @endcan
 
-    <div class="toolbar panel">
-        <div style="flex:1; min-width:220px;">
+    <div class="toolbar panel inventory-toolbar">
+        <div class="inventory-search">
             <label for="search">Search inventory</label>
             <input id="search" type="search" placeholder="Code, name or category" wire:model.live.debounce.300ms="search">
         </div>
-        <div style="min-width:190px;">
-            <label for="categoryFilter">Category</label>
-            <select id="categoryFilter" wire:model.live="categoryFilter">
-                <option value="">All categories</option>
-                @foreach ($categories as $category)
-                    <option value="{{ $category }}">{{ $category }}</option>
-                @endforeach
-            </select>
-        </div>
+        <button
+            class="secondary inventory-filter-toggle"
+            type="button"
+            wire:click="toggleAdvancedFilters"
+            aria-expanded="{{ $advancedFiltersOpen ? 'true' : 'false' }}"
+            aria-controls="inventory-advanced-filters"
+        >
+            Advanced filters
+            @if ($categoryFilter !== '')
+                <span class="inventory-filter-count">1 active</span>
+            @endif
+        </button>
+        @if ($advancedFiltersOpen)
+            <div class="inventory-advanced-filters" id="inventory-advanced-filters">
+                <div>
+                    <label for="categoryFilter">Category</label>
+                    <select id="categoryFilter" wire:model.live="categoryFilter">
+                        <option value="">All categories</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category }}">{{ $category }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="panel table-wrap">
@@ -164,7 +149,7 @@
                             <td>
                                 <div class="actions">
                                     @can('inventory.update')
-                                        <button class="secondary" type="button" wire:click="edit({{ $item->id }})">Edit</button>
+                                        <a class="secondary" href="{{ route('inventory.management.edit', $item->id) }}">Edit</a>
                                     @endcan
                                     @can('inventory.delete')
                                         @if ($item->status === 'active')

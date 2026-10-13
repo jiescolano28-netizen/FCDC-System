@@ -20,7 +20,9 @@ class InventoryManagement extends Component
 
     public string $search = '';
     public string $categoryFilter = '';
+    public bool $advancedFiltersOpen = false;
     public ?int $editingId = null;
+    public bool $formPage = false;
     public string $name = '';
     public string $category = '';
     public string $qty = '';
@@ -60,12 +62,17 @@ class InventoryManagement extends Component
     public string $consumedValueDelta = '0.00';
     public ?int $consumedExpenseAccountId = null;
     public $image;
-    public function mount(): void
+    public function mount(?int $id = null): void
     {
         $today = now('Asia/Manila')->toDateString();
         $this->stockEffectiveDate = $today;
         $this->issueEffectiveDate = $today;
         $this->adjustmentEffectiveDate = $today;
+        $this->formPage = request()->routeIs('inventory.management.create', 'inventory.management.edit') || $id !== null;
+
+        if ($id !== null) {
+            $this->edit($id);
+        }
     }
 
 
@@ -113,8 +120,11 @@ class InventoryManagement extends Component
         DB::transaction(fn () => $item->save());
         $this->resetForm();
         $this->dispatch('inventory-saved');
-    }
+        if ($this->formPage) {
+            $this->redirectRoute('inventory.management');
+        }
 
+    }
     public function edit(int $id): void
     {
         $this->authorizePermission('inventory.update');
@@ -130,6 +140,11 @@ class InventoryManagement extends Component
         $this->description = $item->description ?? '';
         $this->status = $item->status;
         $this->resetValidation();
+    }
+
+    public function toggleAdvancedFilters(): void
+    {
+        $this->advancedFiltersOpen = ! $this->advancedFiltersOpen;
     }
 
     public function deactivate(int $id): void
@@ -304,6 +319,12 @@ class InventoryManagement extends Component
 
     public function render()
     {
+        if ($this->formPage) {
+            return view('livewire.inventory.form-page', [
+                'valuedPostingEnabled' => $this->valuedPostingEnabled(),
+            ])->layout('layouts.app', ['title' => $this->editingId ? 'Edit inventory item' : 'Add inventory item']);
+        }
+
         $items = Inventory::query()
             ->with(['stockMovements.poster', 'stockMovements.reversal', 'stockMovements.accountingJournal'])
             ->when($this->search !== '', function ($query) {
