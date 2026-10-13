@@ -15,14 +15,15 @@
             </div>
             <div class="auth-field">
                 <label for="password">New password</label>
-                <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required @error('password') aria-invalid="true" aria-describedby="password-error" @enderror>
+                <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="255" required @error('password') aria-invalid="true" aria-describedby="password-error password-requirements" @enderror>
+                <p class="auth-field-help" id="password-requirements">At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.</p>
                 @error('password')
                     <p class="auth-field-error" id="password-error">{{ $message }}</p>
                 @enderror
             </div>
             <div class="auth-field">
                 <label for="password_confirmation">Confirm new password</label>
-                <input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="8" required>
+                <input id="password_confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="255" required>
             </div>
             <button class="auth-submit" type="submit">Update password</button>
         </form>

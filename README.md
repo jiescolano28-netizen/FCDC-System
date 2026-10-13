@@ -81,11 +81,13 @@ php artisan db:seed
 php artisan app:provision-administrator
 ```
 
-The provisioning command prompts for a unique username, email, and password
-(minimum 12 characters). It creates a dedicated employee with the protected
-`System Administrator` role and refuses to run if an active administrator
-already exists. It does not use the demo `testuser` account or store a password
-in seed data. Keep the command available only to trusted deployment operators.
+The provisioning command prompts for a unique username, email, and password:
+at least 12 characters, including uppercase and lowercase letters, a number,
+and a symbol. No additional mix is required. It creates a dedicated employee
+with the protected `System Administrator` role and refuses to run if an active
+administrator already exists. It does not use the demo `testuser` account or
+store a password in seed data. Keep the command available only to trusted
+deployment operators.
 
 The `employees` and `roles` pages require `employees.view` and `roles.view`.
 The fixed catalog grants per-action employee and role administration

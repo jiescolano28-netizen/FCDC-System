@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\View\View;
 
 class EmployeePasswordResetController extends Controller
@@ -30,7 +31,7 @@ class EmployeePasswordResetController extends Controller
         $credentials = $request->validate([
             'token' => ['required', 'string'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'max:255', PasswordRule::min(12)->mixedCase()->numbers()->symbols(), 'confirmed'],
         ]);
 
         $status = Password::broker('employees')->reset(

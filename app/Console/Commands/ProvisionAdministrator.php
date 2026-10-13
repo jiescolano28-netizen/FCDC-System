@@ -46,7 +46,7 @@ class ProvisionAdministrator extends Command
         ], [
             'username' => ['required', 'string', 'max:255', 'unique:employees,username'],
             'email' => ['required', 'email', 'max:255', 'unique:employees,email'],
-            'password' => ['required', 'confirmed', Password::min(12)],
+            'password' => ['required', 'confirmed', Password::min(12)->mixedCase()->numbers()->symbols()],
         ]);
 
         if ($validator->fails()) {

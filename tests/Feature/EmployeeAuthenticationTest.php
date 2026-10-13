@@ -171,13 +171,14 @@ test('a valid employee reset link can change the password once', function () {
     $this->get($link)->assertOk()
         ->assertSee('New password')
         ->assertSee('Confirm new password')
+        ->assertSee('At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.')
         ->assertSee('name="password_confirmation"', false);
 
     $credentials = [
         'token' => $token,
         'email' => $employee->email,
-        'password' => 'replacement-password',
-        'password_confirmation' => 'replacement-password',
+        'password' => 'Abcdef123!XY',
+        'password_confirmation' => 'Abcdef123!XY',
     ];
 
     $this->post(route('password.update'), $credentials)
@@ -187,14 +188,14 @@ test('a valid employee reset link can change the password once', function () {
     $this->get(route('login'))->assertSee('Your password has been reset. You can now sign in.');
 
     $employee->refresh();
-    expect(Hash::check('replacement-password', $employee->password))->toBeTrue()
+    expect(Hash::check('Abcdef123!XY', $employee->password))->toBeTrue()
         ->and($employee->getRememberToken())->not->toBe('remember-before-reset')
         ->and(DB::table('password_reset_tokens')->where('email', $employee->email)->exists())->toBeFalse();
 
     $this->from($link)->post(route('password.update'), $credentials)
         ->assertSessionHasErrors('email');
 
-    expect(Hash::check('replacement-password', $employee->fresh()->password))->toBeTrue();
+    expect(Hash::check('Abcdef123!XY', $employee->fresh()->password))->toBeTrue();
 });
 
 test('invalid and expired employee reset links cannot change passwords', function () {
@@ -209,8 +210,8 @@ test('invalid and expired employee reset links cannot change passwords', functio
     $invalidCredentials = [
         'token' => 'not-a-reset-token',
         'email' => $employee->email,
-        'password' => 'attempted-new-password',
-        'password_confirmation' => 'attempted-new-password',
+        'password' => 'Attempted-New-Password1!',
+        'password_confirmation' => 'Attempted-New-Password1!',
     ];
 
     $this->travel(31)->minutes();
@@ -227,23 +228,28 @@ test('invalid and expired employee reset links cannot change passwords', functio
     expect(Hash::check('correct-horse-battery', $employee->fresh()->password))->toBeTrue();
 });
 
-test('employee reset passwords must be at least eight characters and confirmed', function () {
+test('employee reset passwords must satisfy the policy and be confirmed', function () {
     $employee = createEmployeeForAuthentication();
     $token = Password::broker('employees')->createToken($employee);
     $credentials = [
         'token' => $token,
         'email' => $employee->email,
         'password' => 'short',
-        'password_confirmation' => 'different',
+        'password_confirmation' => 'short',
     ];
 
     $link = route('password.reset', ['token' => $token, 'email' => $employee->email]);
-    $this->from($link)->post(route('password.update'), $credentials)
-        ->assertSessionHasErrors('password');
+    foreach (['short', 'Abcde123!XY', 'alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbolsHere123'] as $weakPassword) {
+        $this->from($link)->post(route('password.update'), [
+            ...$credentials,
+            'password' => $weakPassword,
+            'password_confirmation' => $weakPassword,
+        ])->assertSessionHasErrors('password');
+    }
 
     $confirmedCredentials = [
         ...$credentials,
-        'password' => 'replacement-password',
+        'password' => 'Abcdef123!XY',
         'password_confirmation' => 'different-password',
     ];
 

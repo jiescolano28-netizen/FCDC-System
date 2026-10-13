@@ -6,6 +6,7 @@ use App\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Spatie\Activitylog\Models\Activity;
@@ -50,7 +51,7 @@ class ProfilePage extends Component
     {
         $validated = $this->validate([
             'currentPassword' => ['required', 'current_password'],
-            'newPassword' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+            'newPassword' => ['required', 'string', 'max:255', Password::min(12)->mixedCase()->numbers()->symbols(), 'confirmed'],
         ]);
 
         DB::transaction(function () use ($validated): void {

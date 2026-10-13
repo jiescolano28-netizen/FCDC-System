@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
@@ -64,7 +65,7 @@ class EmployeeManagement extends Component
         $validated = $this->validate([
             'username' => ['required', 'string', 'max:255', Rule::unique('employees', 'username')->ignore($employee->id)],
             'email' => ['required', 'email', 'max:255', Rule::unique('employees', 'email')->ignore($employee->id)],
-            'password' => [$employee->exists ? 'nullable' : 'required', 'string', 'min:8', 'max:255'],
+            'password' => [$employee->exists ? 'nullable' : 'required', 'string', 'max:255', Password::min(12)->mixedCase()->numbers()->symbols()],
             ...($canAssignRoles ? [
                 'selectedRoleIds' => ['array'],
                 'selectedRoleIds.*' => [

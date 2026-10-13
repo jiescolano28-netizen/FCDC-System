@@ -18,13 +18,13 @@ test('interactive command provisions a dedicated protected administrator only on
     $this->artisan('app:provision-administrator')
         ->expectsQuestion('Username', 'initial.admin')
         ->expectsQuestion('Email', 'initial.admin@example.com')
-        ->expectsQuestion('Password', 'correct-horse-battery')
-        ->expectsQuestion('Confirm password', 'correct-horse-battery')
+        ->expectsQuestion('Password', 'Correct-horse-battery1!')
+        ->expectsQuestion('Confirm password', 'Correct-horse-battery1!')
         ->expectsOutput('Administrator employee provisioned successfully.')
         ->assertExitCode(0);
 
     $administrator = Employee::where('email', 'initial.admin@example.com')->firstOrFail();
-    expect(Hash::check('correct-horse-battery', $administrator->password))->toBeTrue()
+    expect(Hash::check('Correct-horse-battery1!', $administrator->password))->toBeTrue()
         ->and($administrator->hasRole(RolePermissionCatalog::ADMIN_ROLE))->toBeTrue()
         ->and($existingEmployee->fresh()->hasRole(RolePermissionCatalog::ADMIN_ROLE))->toBeFalse();
 
@@ -47,4 +47,14 @@ test('provisioning rejects a weak or mismatched password without creating an adm
 
     expect(Employee::count())->toBe(0)
         ->and(Role::where('name', RolePermissionCatalog::ADMIN_ROLE)->exists())->toBeFalse();
+});
+test('provisioning requires uppercase lowercase numbers and symbols', function () {
+    $this->artisan('app:provision-administrator')
+        ->expectsQuestion('Username', 'initial.admin')
+        ->expectsQuestion('Email', 'initial.admin@example.com')
+        ->expectsQuestion('Password', 'alllowercase123!')
+        ->expectsQuestion('Confirm password', 'alllowercase123!')
+        ->assertExitCode(1);
+
+    expect(Employee::count())->toBe(0);
 });

@@ -35,7 +35,8 @@
                     </div>
                     <div>
                         <label for="employee-password">{{ $editingId ? 'New password (leave blank to keep current)' : 'Password' }}</label>
-                        <input id="employee-password" type="password" autocomplete="new-password" wire:model="password">
+                        <input id="employee-password" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="password">
+                        <p class="muted">New passwords must be at least 12 characters and include uppercase and lowercase letters, a number, and a symbol.</p>
                         @error('password') <span class="error">{{ $message }}</span> @enderror
                     </div>
                 </div>

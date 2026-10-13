@@ -39,11 +39,12 @@
                 @error('currentPassword') <span class="profile-error" id="profile-current-password-error">{{ $message }}</span> @enderror
 
                 <label for="profile-new-password">New password</label>
-                <input id="profile-new-password" type="password" minlength="8" autocomplete="new-password" wire:model="newPassword" required @error('newPassword') aria-invalid="true" aria-describedby="profile-new-password-error" @enderror>
+                <input id="profile-new-password" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword" required @error('newPassword') aria-invalid="true" aria-describedby="profile-new-password-error profile-password-requirements" @enderror>
+                <p class="profile-help" id="profile-password-requirements">At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.</p>
                 @error('newPassword') <span class="profile-error" id="profile-new-password-error">{{ $message }}</span> @enderror
 
                 <label for="profile-new-password-confirmation">Confirm new password</label>
-                <input id="profile-new-password-confirmation" type="password" minlength="8" autocomplete="new-password" wire:model="newPassword_confirmation" required>
+                <input id="profile-new-password-confirmation" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword_confirmation" required>
                 <button class="profile-button" type="submit" wire:loading.attr="disabled" wire:target="updatePassword">Update password</button>
             </form>
         </section>

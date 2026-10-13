@@ -43,14 +43,15 @@ test('employee manager creates, updates, soft deletes, and restores employee acc
     Livewire::test(EmployeeManagement::class)
         ->set('username', 'site.manager')
         ->set('email', 'site.manager@example.com')
-        ->set('password', 'initial-secret')
+        ->set('password', 'Abcdef123!XY')
         ->set('selectedRoleIds', [$role->id])
         ->call('save')
         ->assertHasNoErrors()
+        ->assertSee('New passwords must be at least 12 characters and include uppercase and lowercase letters, a number, and a symbol.')
         ->assertSee('site.manager');
 
     $employee = Employee::where('email', 'site.manager@example.com')->firstOrFail();
-    expect(Hash::check('initial-secret', $employee->password))->toBeTrue()
+    expect(Hash::check('Abcdef123!XY', $employee->password))->toBeTrue()
         ->and($employee->hasRole('site-manager'))->toBeTrue();
 
     Livewire::test(EmployeeManagement::class)
@@ -61,7 +62,7 @@ test('employee manager creates, updates, soft deletes, and restores employee acc
         ->assertHasNoErrors();
 
     expect($employee->fresh()->username)->toBe('site.lead')
-        ->and(Hash::check('initial-secret', $employee->fresh()->password))->toBeTrue();
+        ->and(Hash::check('Abcdef123!XY', $employee->fresh()->password))->toBeTrue();
 
     Livewire::test(EmployeeManagement::class)
         ->call('delete', $employee->id)
@@ -73,7 +74,7 @@ test('employee manager creates, updates, soft deletes, and restores employee acc
     $this->post(route('logout'));
     $this->post(route('login.submit'), [
         'email' => $employee->email,
-        'password' => 'initial-secret',
+        'password' => 'Abcdef123!XY',
     ])->assertSessionHasErrors('email');
     $this->assertGuest();
 
@@ -93,6 +94,21 @@ test('employee manager creates, updates, soft deletes, and restores employee acc
 
     expect(Employee::find($employee->id))->not->toBeNull()
         ->and(Employee::find($employee->id)->hasRole('site-manager'))->toBeTrue();
+});
+test('employee manager requires the password policy for newly created accounts', function () {
+    $administrator = employeeManagementAdmin();
+    $this->actingAs($administrator);
+
+    foreach (['short', 'Abcde123!XY', 'alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbolsHere123'] as $weakPassword) {
+        Livewire::test(EmployeeManagement::class)
+            ->set('username', 'policy.employee')
+            ->set('email', 'policy.employee@example.com')
+            ->set('password', $weakPassword)
+            ->call('save')
+            ->assertHasErrors('password');
+    }
+
+    expect(Employee::where('email', 'policy.employee@example.com')->exists())->toBeFalse();
 });
 
 test('employees without delete permission cannot reveal soft-deleted employee records', function () {

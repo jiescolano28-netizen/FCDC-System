@@ -28,6 +28,7 @@ test('profile is available to every authenticated employee and has no other empl
         ->get(route('profile'))
         ->assertOk()
         ->assertSee('My profile')
+        ->assertSee('At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.')
         ->assertSee('profile-owner')
         ->assertSee('View profile for profile-owner')
         ->assertDontSee('<span class="nav-label">My profile</span>', false)
@@ -78,8 +79,8 @@ test('password updates require the current password and log only a safe event', 
 
     Livewire::test(ProfilePage::class)
         ->set('currentPassword', 'current-password')
-        ->set('newPassword', 'a-new-private-password')
-        ->set('newPassword_confirmation', 'a-new-private-password')
+        ->set('newPassword', 'Abcdef123!XY')
+        ->set('newPassword_confirmation', 'Abcdef123!XY')
         ->call('updatePassword')
         ->assertHasNoErrors()
         ->assertSee('Password updated.');
@@ -88,11 +89,27 @@ test('password updates require the current password and log only a safe event', 
     $activity = Activity::query()->where('description', 'Password changed')->firstOrFail();
 
     $this->assertAuthenticatedAs($employee);
-    expect(Hash::check('a-new-private-password', $employee->password))->toBeTrue()
+    expect(Hash::check('Abcdef123!XY', $employee->password))->toBeTrue()
         ->and($activity->causer_id)->toBe($employee->id)
         ->and($activity->subject_id)->toBe($employee->id)
-        ->and(json_encode($activity->properties))->not->toContain('a-new-private-password')
+        ->and(json_encode($activity->properties))->not->toContain('Abcdef123!XY')
         ->and(json_encode($activity->properties))->not->toContain('current-password');
+});
+test('profile password updates reject passwords missing any required character type', function () {
+    $employee = profileTestEmployee('password-policy-owner');
+    $this->actingAs($employee);
+
+    foreach (['short', 'Abcde123!XY', 'alllowercase123!', 'ALLUPPERCASE123!', 'NoNumbersHere!!', 'NoSymbolsHere123'] as $weakPassword) {
+        Livewire::test(ProfilePage::class)
+            ->set('currentPassword', 'current-password')
+            ->set('newPassword', $weakPassword)
+            ->set('newPassword_confirmation', $weakPassword)
+            ->call('updatePassword')
+            ->assertHasErrors('newPassword');
+    }
+
+    expect(Hash::check('current-password', $employee->fresh()->password))->toBeTrue()
+        ->and(Activity::query()->where('description', 'Password changed')->exists())->toBeFalse();
 });
 
 test('personal activity lists only events performed by the signed-in employee', function () {
