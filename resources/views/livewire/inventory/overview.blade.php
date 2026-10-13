@@ -32,6 +32,7 @@
                 <tr>
                     <th>Material</th>
                     <th>Category</th>
+                    <th>Batch category</th>
                     <th>Quantity</th>
                     <th>Unit cost</th>
                     <th>Selling price</th>
@@ -45,6 +46,7 @@
                     <tr wire:key="overview-inventory-{{ $item->id }}">
                         <td>{{ $item->name }}</td>
                         <td>{{ $item->category }}</td>
+                        <td>{{ $item->batchCategory?->name ?? '—' }}</td>
                         <td>{{ number_format((float) $item->qty, 2) }} {{ $item->unit }}</td>
                         <td>{{ number_format((float) $item->unit_cost, 2) }}</td>
                         <td>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</td>
@@ -61,7 +63,7 @@
                         <td>{{ $item->updated_at->format('M j, Y') }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="muted">No inventory items match these filters.</td></tr>
+                    <tr><td colspan="9" class="muted">No inventory items match these filters.</td></tr>
                 @endforelse
             </tbody>
         </table>

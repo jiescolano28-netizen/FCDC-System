@@ -62,6 +62,9 @@
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.management') ? 'active' : '' }}" href="{{ route('inventory.management') }}" @if (request()->routeIs('inventory.management')) aria-current="page" @endif>
                                 <span class="nav-label">Manage inventory</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('inventory.batch-categories') ? 'active' : '' }}" href="{{ route('inventory.batch-categories') }}" @if (request()->routeIs('inventory.batch-categories')) aria-current="page" @endif>
+                                <span class="nav-label">Batch categories</span>
+                            </a>
                         </div>
                     </div>
                 @endcan
@@ -75,7 +78,7 @@
                 @can('tax.view')
                     <div class="nav-group">
                         <button class="nav-item nav-parent {{ $taxNavigationActive ? 'active' : '' }}" type="button" data-dropdown-toggle="tax-menu" aria-controls="tax-menu" aria-expanded="{{ $taxNavigationActive ? 'true' : 'false' }}">
-                            <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Tax Compliance</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
+                            <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">VAT Compliance</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
                         </button>
                         <div class="nav-dropdown {{ $taxNavigationActive ? 'open' : '' }}" id="tax-menu">
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-records') ? 'active' : '' }}" href="{{ route('tax.vat-records') }}" @if (request()->routeIs('tax.vat-records')) aria-current="page" @endif>

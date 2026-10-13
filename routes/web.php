@@ -23,6 +23,7 @@ use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
+use App\Livewire\Inventory\BatchCategoryManagement;
 use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Profile\ProfilePage;
 use App\Livewire\Roles\RoleManagement;
@@ -85,8 +86,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/manage/create', InventoryManagement::class)
         ->middleware('permission:inventory.create')->name('inventory.management.create');
     Route::get('/inventory/manage/edit/{id}', InventoryManagement::class)
-        ->middleware('permission:inventory.update')->name('inventory.management.edit');
+        ->middleware('permission:inventory.update|inventory.movements.record')->name('inventory.management.edit');
     Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
+    Route::get('/inventory/batch-categories', BatchCategoryManagement::class)
+        ->middleware('permission:inventory.view')->name('inventory.batch-categories');
     Route::get('/tax/vat-summary', VatSummary::class)->middleware('permission:tax.view')->name('tax.vat-summary');
     Route::get('/tax/report', TaxReport::class)->middleware('permission:tax.view')->name('tax.report');
     Route::get('/inventory/overview', InventoryOverview::class)->middleware('permission:inventory.view')->name('inventory.overview');

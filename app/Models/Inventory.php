@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use LogicException;
@@ -16,6 +17,7 @@ class Inventory extends Model
     protected $fillable = [
         'name',
         'category',
+        'inventory_batch_category_id',
         'qty',
         'unit',
         'unit_cost',
@@ -89,6 +91,10 @@ class Inventory extends Model
     public function stockMovements(): HasMany
     {
         return $this->hasMany(StockMovement::class)->orderByDesc('effective_date')->orderByDesc('posted_at');
+    }
+    public function batchCategory(): BelongsTo
+    {
+        return $this->belongsTo(InventoryBatchCategory::class, 'inventory_batch_category_id')->withTrashed();
     }
 
     public function scopeAvailableForSale($query)

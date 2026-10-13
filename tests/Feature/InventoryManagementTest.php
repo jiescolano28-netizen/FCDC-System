@@ -107,8 +107,9 @@ test('authenticated employees can create, search, edit, and delete priced invent
         ->call('edit', $item->id)
         ->set('sellingPrice', '12.00')
         ->call('save')
-        ->assertHasNoErrors()
-        ->set('stockItemId', $item->id)
+        ->assertHasNoErrors();
+
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '2.50')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockReference', 'GRN-100')
@@ -177,20 +178,31 @@ test('inventory create and edit routes render the shared form in the correct mod
         ->assertSee('Add inventory item')
         ->assertSee('Opening quantity')
         ->assertSee('Add item')
+        ->assertDontSee('Receive stock')
         ->assertDontSee('Save changes');
 
     $this->get(route('inventory.management.edit', $item->id))
         ->assertOk()
-        ->assertSee('Edit inventory item')
         ->assertSee('Reclaimed timber')
         ->assertSee('Save changes')
+        ->assertSee('Receive stock')
+        ->assertSee('Issue stock')
+        ->assertSee('Adjust to physical count')
+        ->assertSee($item->code)
+        ->assertDontSee('Select active item')
+        ->assertDontSee('stockItemId')
+        ->assertDontSee('issueItemId')
+        ->assertDontSee('adjustmentItemId')
         ->assertDontSee('Opening quantity')
         ->assertDontSee('Add item');
 
     $this->get(route('inventory.management'))
         ->assertOk()
         ->assertSee(route('inventory.management.create'), false)
-        ->assertSee(route('inventory.management.edit', $item->id), false);
+        ->assertSee(route('inventory.management.edit', $item->id), false)
+        ->assertDontSee('Receive stock')
+        ->assertDontSee('Issue stock')
+        ->assertDontSee('Adjust to physical count');
 });
 test('inventory form routes enforce create and update permissions separately', function () {
     $creator = grantEmployeeTestPermissions(Employee::create([
@@ -215,6 +227,18 @@ test('inventory form routes enforce create and update permissions separately', f
         ->get(route('inventory.management.edit', $item->id))
         ->assertOk();
     $this->get(route('inventory.management.create'))->assertForbidden();
+    $movementOnly = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'inventory.movement-only',
+        'email' => 'inventory.movement-only@example.com',
+        'password' => Hash::make('secret-password'),
+    ]), ['inventory.movements.record']);
+
+    $this->actingAs($movementOnly)
+        ->get(route('inventory.management.edit', $item->id))
+        ->assertOk()
+        ->assertSee('Inventory stock')
+        ->assertSee('Receive stock')
+        ->assertDontSee('Save changes');
 });
 
 
@@ -328,8 +352,9 @@ test('inventory overview reflects changes made in inventory management', functio
         ->call('edit', $item->id)
         ->set('sellingPrice', '12.25')
         ->call('save')
-        ->assertHasNoErrors()
-        ->set('stockItemId', $item->id)
+        ->assertHasNoErrors();
+
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '3')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockEffectiveDate', '2026-10-08')
@@ -406,8 +431,7 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->and($item->stockMovements()->count())->toBe(1)
         ->and($item->stockMovements()->first()->type)->toBe('opening_balance');
 
-    Livewire::test(InventoryManagement::class)
-        ->set('stockItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '2')
         ->set('stockReasonCategory', 'return')
         ->set('stockNotes', 'Customer return')
@@ -415,6 +439,9 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->set('stockEffectiveDate', '2026-10-01')
         ->call('recordStockIn')
         ->assertHasNoErrors()
+        ->assertSee('9.25 piece');
+
+    Livewire::test(InventoryManagement::class)
         ->call('showHistory', $item->id)
         ->assertSee('effective 2026-10-01')
         ->assertSee('posted ')
@@ -441,8 +468,7 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->and($reversal->reverses_movement_id)->toBe($movement->id)
         ->and($item->fresh()->unit_cost)->toBe('4.50');
 
-    Livewire::test(InventoryManagement::class)
-        ->set('stockItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '2.50')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockReference', 'RET-22-CORRECTED')
@@ -470,7 +496,6 @@ test('stock-in is separately permission-gated and inactive items are unavailable
 
     $this->actingAs($employee);
     Livewire::test(InventoryManagement::class)
-        ->set('stockItemId', $active->id)
         ->set('stockQuantity', '1')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockEffectiveDate', '2026-10-08')
@@ -509,9 +534,9 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     $employee = createInventoryManager();
     $this->actingAs($employee);
     $item = Inventory::create(inventoryAttributes(['qty' => 10]));
+    $otherItem = Inventory::create(inventoryAttributes(['name' => 'Other inventory', 'qty' => 4]));
 
-    Livewire::test(InventoryManagement::class)
-        ->set('issueItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('issueQuantity', '3')
         ->set('issueReasonCategory', 'project_use')
         ->set('issueNotes', 'Used on site')
@@ -521,17 +546,19 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
         ->assertSee('Post stock-out')
         ->assertSee('7.00 piece');
 
-    expect($item->fresh()->qty)->toBe('7.00');
+    expect($item->fresh()->qty)->toBe('7.00')
+        ->and($otherItem->fresh()->qty)->toBe('4.00');
 
-    Livewire::test(InventoryManagement::class)
-        ->set('adjustmentItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('countedQuantity', '5.50')
         ->set('adjustmentReasonCategory', 'count_correction')
         ->set('adjustmentEffectiveDate', now()->toDateString())
         ->set('adjustmentReference', 'COUNT-9')
         ->call('recordStockAdjustment')
         ->assertHasNoErrors()
-        ->assertSee('5.50 piece')
+        ->assertSee('5.50 piece');
+
+    Livewire::test(InventoryManagement::class)
         ->call('showHistory', $item->id)
         ->assertSee('Stock adjustment')
         ->assertSee('-1.50')
@@ -556,8 +583,7 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     expect($item->fresh()->qty)->toBe('7.00')
         ->and($adjustment->fresh()->reversal->reverses_movement_id)->toBe($adjustment->id);
 
-    Livewire::test(InventoryManagement::class)
-        ->set('adjustmentItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('countedQuantity', '6.50')
         ->set('adjustmentReasonCategory', 'count_correction')
         ->set('adjustmentEffectiveDate', now()->toDateString())
@@ -580,7 +606,6 @@ test('backdated stock-out and adjustment are rejected when a later balance would
 
     $this->actingAs($employee);
     Livewire::test(InventoryManagement::class)
-        ->set('issueItemId', $item->id)
         ->set('issueQuantity', '1')
         ->set('issueReasonCategory', 'sale')
         ->set('issueEffectiveDate', $today)
@@ -598,24 +623,21 @@ test('backdated stock-out and adjustment are rejected when a later balance would
         (int) auth()->id(),
     );
 
-    Livewire::test(InventoryManagement::class)
-        ->set('issueItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('issueQuantity', '4')
         ->set('issueReasonCategory', 'project_use')
         ->set('issueEffectiveDate', $today)
         ->call('recordStockOut')
         ->assertHasNoErrors();
 
-    Livewire::test(InventoryManagement::class)
-        ->set('issueItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('issueQuantity', '2')
         ->set('issueReasonCategory', 'sale')
         ->set('issueEffectiveDate', $yesterday)
         ->call('recordStockOut')
         ->assertHasErrors('issueQuantity');
 
-    Livewire::test(InventoryManagement::class)
-        ->set('adjustmentItemId', $item->id)
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('countedQuantity', '2')
         ->set('adjustmentReasonCategory', 'count_correction')
         ->set('adjustmentEffectiveDate', $yesterday)

@@ -19,7 +19,7 @@ class RolePermissionCatalog
                 'inventory.view' => 'View inventory',
                 'inventory.create' => 'Create inventory items',
                 'inventory.update' => 'Update inventory items',
-                'inventory.delete' => 'Deactivate inventory items',
+                'inventory.delete' => 'Deactivate inventory items and delete batch categories',
                 'inventory.movements.record' => 'Record inventory movements',
                 'inventory.valuation.approve' => 'Authorize inventory movement values',
             ],

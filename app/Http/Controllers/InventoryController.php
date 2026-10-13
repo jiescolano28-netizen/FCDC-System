@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Inventory;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
@@ -41,6 +42,11 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
+            'inventory_batch_category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('inventory_batch_categories', 'id')->whereNull('deleted_at'),
+            ],
             'qty' => 'required|numeric|min:0',
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
@@ -87,6 +93,11 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
+            'inventory_batch_category_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('inventory_batch_categories', 'id')->whereNull('deleted_at'),
+            ],
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
@@ -100,6 +111,9 @@ class InventoryController extends Controller
             'name' => $validated['name'],
             'category' => $validated['category'],
             'unit' => $validated['unit'],
+            'inventory_batch_category_id' => array_key_exists('inventory_batch_category_id', $validated)
+                ? $validated['inventory_batch_category_id']
+                : $inventory->inventory_batch_category_id,
             'unit_cost' => $validated['unit_cost'],
             'selling_price' => $validated['selling_price'] ?? null,
             'reorder_level' => $validated['reorder_level'] ?? 10,

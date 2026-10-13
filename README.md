@@ -102,9 +102,12 @@ assignments are retained. Assigned roles cannot be deleted, including roles
 held by soft-deleted employees. The last active administrator cannot be
 deleted or stripped of its administrator role through employee management.
 
-This permission catalog currently gates Employee and Role Management only.
-Inventory, POS, and Settings continue to use their existing authenticated access
-rules.
+The permission catalog gates Employee, Role, and Inventory management.
+Inventory batch categories are managed from Inventory → Batch categories and
+use the inventory view, create, update, and delete permissions. Inventory items
+can optionally select an active batch category when created or edited; leaving
+the field empty means the item has no batch category. POS and Settings continue
+to use their existing access rules.
 
 ## About Laravel
 

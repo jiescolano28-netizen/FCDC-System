@@ -43,6 +43,7 @@ test('application modules deny routes unless the employee has the module view pe
         ['reports', 'reports.view'],
         ['inventory.management', 'inventory.view'],
         ['inventory.overview', 'inventory.view'],
+        ['inventory.batch-categories', 'inventory.view'],
         ['pos', 'pos.view'],
         ['tax.vat-records', 'tax.view'],
         ['tax.vat-summary', 'tax.view'],
@@ -101,7 +102,6 @@ test('livewire business actions require their dedicated permissions', function (
         ->call('save')
         ->assertForbidden();
     Livewire::test(InventoryManagement::class)
-        ->set('stockItemId', 1)
         ->set('stockQuantity', '2')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockEffectiveDate', '2026-10-08')
@@ -128,6 +128,7 @@ test('module navigation only links to modules the employee can view', function (
         ->assertSee(route('dashboard'))
         ->assertDontSee(route('reports'))
         ->assertDontSee(route('inventory.management'))
+        ->assertDontSee(route('inventory.batch-categories'))
         ->assertDontSee(route('pos'));
 });
 

@@ -128,6 +128,41 @@ if (employeeModal) {
         document.addEventListener('livewire:init', registerEmployeeEvents, { once: true });
     }
 }
+const batchCategoryModal = document.querySelector('#batch-category-modal');
+
+if (batchCategoryModal) {
+    const closeBatchCategoryModal = () => {
+        if (batchCategoryModal.open) batchCategoryModal.close();
+        const componentId = batchCategoryModal.closest('[wire\\:id]')?.getAttribute('wire:id');
+        if (componentId) window.Livewire.find(componentId).call('resetForm');
+    };
+
+    batchCategoryModal.querySelectorAll('[data-close-batch-category-modal]').forEach((button) => {
+        button.addEventListener('click', closeBatchCategoryModal);
+    });
+
+    batchCategoryModal.addEventListener('click', (event) => {
+        if (event.target === batchCategoryModal) closeBatchCategoryModal();
+    });
+
+    batchCategoryModal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeBatchCategoryModal();
+    });
+
+    const registerBatchCategoryEvents = () => {
+        window.Livewire.on('batch-category-modal-open', () => {
+            if (!batchCategoryModal.open) batchCategoryModal.showModal();
+        });
+        window.Livewire.on('batch-category-saved', () => {
+            if (batchCategoryModal.open) batchCategoryModal.close();
+        });
+    };
+
+    if (window.Livewire) registerBatchCategoryEvents();
+    else document.addEventListener('livewire:init', registerBatchCategoryEvents, { once: true });
+}
+
 
 document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-delete-employee]');

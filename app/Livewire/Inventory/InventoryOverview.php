@@ -13,7 +13,7 @@ class InventoryOverview extends Component
 
     public function render()
     {
-        $items = Inventory::query()
+        $items = Inventory::query()->with('batchCategory')
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
                     $query->where('name', 'like', '%'.$this->search.'%')
