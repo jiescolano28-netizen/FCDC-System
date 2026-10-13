@@ -10,6 +10,7 @@ use Illuminate\Validation\Rules\Password;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Spatie\Activitylog\Models\Activity;
+use Throwable;
 
 class ProfilePage extends Component
 {
@@ -49,21 +50,43 @@ class ProfilePage extends Component
 
     public function updatePassword(): void
     {
-        $validated = $this->validate([
-            'currentPassword' => ['required', 'current_password'],
-            'newPassword' => ['required', 'string', 'max:255', Password::min(12)->mixedCase()->numbers()->symbols(), 'confirmed'],
-        ]);
+        $validated = $this->validate(
+            [
+                'currentPassword' => ['required', 'current_password'],
+                'newPassword' => ['required', 'string', 'max:255', Password::min(12)->mixedCase()->numbers()->symbols()],
+                'newPassword_confirmation' => ['required', 'same:newPassword'],
+            ],
+            [
+                'currentPassword.required' => 'Enter your current password.',
+                'currentPassword.current_password' => 'That current password doesn’t match. Check it and try again.',
+                'newPassword.required' => 'Enter a new password.',
+                'newPassword_confirmation.required' => 'Confirm your new password.',
+                'newPassword_confirmation.same' => 'The new passwords don’t match. Enter the same password in both fields.',
+            ],
+            [
+                'currentPassword' => 'current password',
+                'newPassword' => 'new password',
+                'newPassword_confirmation' => 'password confirmation',
+            ],
+        );
 
-        DB::transaction(function () use ($validated): void {
-            $employee = Employee::findOrFail(auth()->id());
-            $employee->password = Hash::make($validated['newPassword']);
-            $employee->save();
+        try {
+            DB::transaction(function () use ($validated): void {
+                $employee = Employee::findOrFail(auth()->id());
+                $employee->password = Hash::make($validated['newPassword']);
+                $employee->save();
 
-            activity()
-                ->causedBy($employee)
-                ->performedOn($employee)
-                ->log('Password changed');
-        });
+                activity()
+                    ->causedBy($employee)
+                    ->performedOn($employee)
+                    ->log('Password changed');
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+            session()->flash('profile-error', 'We couldn’t update your password. It hasn’t been changed. Try again. If the problem continues, contact support.');
+
+            return;
+        }
 
         $this->reset(['currentPassword', 'newPassword', 'newPassword_confirmation']);
         session()->flash('profile-status', 'Password updated.');
@@ -83,3 +106,4 @@ class ProfilePage extends Component
         ])->layout('layouts.app', ['title' => 'My profile']);
     }
 }
+

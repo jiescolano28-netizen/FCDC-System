@@ -3,6 +3,7 @@
 use App\Livewire\Profile\ProfilePage;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
@@ -28,7 +29,7 @@ test('profile is available to every authenticated employee and has no other empl
         ->get(route('profile'))
         ->assertOk()
         ->assertSee('My profile')
-        ->assertSee('At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.')
+        ->assertSee('Use at least 12 characters with uppercase and lowercase letters, a number, and a symbol.')
         ->assertSee('profile-owner')
         ->assertSee('View profile for profile-owner')
         ->assertDontSee('<span class="nav-label">My profile</span>', false)
@@ -72,7 +73,18 @@ test('password updates require the current password and log only a safe event', 
         ->set('newPassword', 'a-new-private-password')
         ->set('newPassword_confirmation', 'a-new-private-password')
         ->call('updatePassword')
-        ->assertHasErrors('currentPassword');
+        ->assertHasErrors('currentPassword')
+        ->assertSee('That current password doesn’t match. Check it and try again.');
+
+    expect(Hash::check('current-password', $employee->fresh()->password))->toBeTrue()
+        ->and(Activity::query()->where('description', 'Password changed')->exists())->toBeFalse();
+    Livewire::test(ProfilePage::class)
+        ->set('currentPassword', 'current-password')
+        ->set('newPassword', 'Abcdef123!XY')
+        ->set('newPassword_confirmation', 'Abcdef123!XZ')
+        ->call('updatePassword')
+        ->assertHasErrors('newPassword_confirmation')
+        ->assertSee('The new passwords don’t match. Enter the same password in both fields.');
 
     expect(Hash::check('current-password', $employee->fresh()->password))->toBeTrue()
         ->and(Activity::query()->where('description', 'Password changed')->exists())->toBeFalse();
@@ -94,6 +106,27 @@ test('password updates require the current password and log only a safe event', 
         ->and($activity->subject_id)->toBe($employee->id)
         ->and(json_encode($activity->properties))->not->toContain('Abcdef123!XY')
         ->and(json_encode($activity->properties))->not->toContain('current-password');
+});
+
+test('password save failures explain that the password was not changed', function () {
+    $employee = profileTestEmployee('password-save-failure-owner');
+    $this->actingAs($employee);
+
+    DB::shouldReceive('transaction')
+        ->once()
+        ->andThrow(new RuntimeException('Database unavailable.'));
+
+    Livewire::test(ProfilePage::class)
+        ->set('currentPassword', 'current-password')
+        ->set('newPassword', 'Abcdef123!XY')
+        ->set('newPassword_confirmation', 'Abcdef123!XY')
+        ->call('updatePassword')
+        ->assertHasNoErrors()
+        ->assertSee('We couldn’t update your password. It hasn’t been changed. Try again. If the problem continues, contact support.')
+        ->assertSee('role="alert"', false);
+
+    expect(Hash::check('current-password', $employee->fresh()->password))->toBeTrue()
+        ->and(Activity::query()->where('description', 'Password changed')->exists())->toBeFalse();
 });
 test('profile password updates reject passwords missing any required character type', function () {
     $employee = profileTestEmployee('password-policy-owner');

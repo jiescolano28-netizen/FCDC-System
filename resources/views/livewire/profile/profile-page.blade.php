@@ -33,18 +33,30 @@
                 <h2 id="profile-password-heading">Change password</h2>
                 <p>Confirm your current password before choosing a new one.</p>
             </header>
-            <form class="profile-form" wire:submit="updatePassword">
-                <label for="profile-current-password">Current password</label>
-                <input id="profile-current-password" type="password" autocomplete="current-password" wire:model="currentPassword" required @error('currentPassword') aria-invalid="true" aria-describedby="profile-current-password-error" @enderror>
-                @error('currentPassword') <span class="profile-error" id="profile-current-password-error">{{ $message }}</span> @enderror
+            <form class="profile-form" wire:submit="updatePassword" novalidate>
+                @if (session('profile-error'))
+                    <p class="profile-form-error" role="alert">{{ session('profile-error') }}</p>
+                @endif
 
-                <label for="profile-new-password">New password</label>
-                <input id="profile-new-password" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword" required @error('newPassword') aria-invalid="true" aria-describedby="profile-new-password-error profile-password-requirements" @enderror>
-                <p class="profile-help" id="profile-password-requirements">At least 12 characters, including uppercase and lowercase letters, a number, and a symbol.</p>
-                @error('newPassword') <span class="profile-error" id="profile-new-password-error">{{ $message }}</span> @enderror
+                <div class="profile-field">
+                    <label for="profile-current-password">Current password</label>
+                    <input id="profile-current-password" type="password" autocomplete="current-password" wire:model="currentPassword" required @error('currentPassword') aria-invalid="true" aria-describedby="profile-current-password-error" @enderror>
+                    @error('currentPassword') <span class="profile-error" id="profile-current-password-error">{{ $message }}</span> @enderror
+                </div>
 
-                <label for="profile-new-password-confirmation">Confirm new password</label>
-                <input id="profile-new-password-confirmation" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword_confirmation" required>
+                <div class="profile-field">
+                    <label for="profile-new-password">New password</label>
+                    <input id="profile-new-password" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword" required aria-describedby="profile-password-requirements @error('newPassword') profile-new-password-error @enderror" @error('newPassword') aria-invalid="true" @enderror>
+                    <p class="profile-help" id="profile-password-requirements">Use at least 12 characters with uppercase and lowercase letters, a number, and a symbol.</p>
+                    @error('newPassword') <span class="profile-error" id="profile-new-password-error">{{ $message }}</span> @enderror
+                </div>
+
+                <div class="profile-field">
+                    <label for="profile-new-password-confirmation">Confirm new password</label>
+                    <input id="profile-new-password-confirmation" type="password" minlength="12" maxlength="255" autocomplete="new-password" wire:model="newPassword_confirmation" required @error('newPassword_confirmation') aria-invalid="true" aria-describedby="profile-new-password-confirmation-error" @enderror>
+                    @error('newPassword_confirmation') <span class="profile-error" id="profile-new-password-confirmation-error">{{ $message }}</span> @enderror
+                </div>
+
                 <button class="profile-button" type="submit" wire:loading.attr="disabled" wire:target="updatePassword">Update password</button>
             </form>
         </section>
