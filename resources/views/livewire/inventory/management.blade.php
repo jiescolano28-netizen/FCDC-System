@@ -66,7 +66,7 @@
             <tbody>
                 @forelse ($items as $item)
                     <tr wire:key="inventory-{{ $item->id }}">
-                        <td><strong>{{ $item->code }}</strong><br>{{ $item->name }}</td>
+                        <td><a href="{{ route('inventory.management.show', $item->id) }}"><strong>{{ $item->code }}</strong></a><br>{{ $item->name }}</td>
                         <td>{{ $item->category }}</td>
                         <td>{{ $item->batchCategory?->name ?? '—' }}</td>
                         <td>{{ $item->qty }} {{ $item->unit }}</td>

@@ -4,6 +4,7 @@ use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Models\Employee;
 use App\Models\Inventory;
+use App\Models\StockMovement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
@@ -62,8 +63,9 @@ test('inventory category filtering is tucked behind an expandable advanced filte
         ->assertSeeHtml('id="categoryFilter"')
         ->assertSeeHtml('aria-expanded="true"')
         ->set('categoryFilter', 'Concrete')
-        ->assertSeeHtml('<td><strong>'.$concrete->code.'</strong><br>'.$concrete->name.'</td>')
-        ->assertDontSeeHtml('<td><strong>'.$timber->code.'</strong><br>'.$timber->name.'</td>')
+        ->assertSee(route('inventory.management.show', $concrete->id), false)
+        ->assertSee($concrete->name)
+        ->assertDontSee(route('inventory.management.show', $timber->id), false)
         ->call('toggleAdvancedFilters')
         ->assertDontSeeHtml('id="categoryFilter"')
         ->assertSee('1 active')
@@ -99,11 +101,11 @@ test('authenticated employees can create, search, edit, and delete priced invent
     Livewire::test(InventoryManagement::class)
         ->set('search', 'reclaimed')
         ->assertSee('Reclaimed timber')
-        ->assertDontSeeHtml('<td><strong>'.$otherItem->code.'</strong><br>Concrete block</td>')
+        ->assertDontSee(route('inventory.management.show', $otherItem->id), false)
         ->set('search', '')
         ->set('categoryFilter', 'Concrete')
-        ->assertSeeHtml('<td><strong>'.$otherItem->code.'</strong><br>Concrete block</td>')
-        ->assertDontSeeHtml('<td><strong>'.$item->code.'</strong><br>Reclaimed timber</td>')
+        ->assertSee(route('inventory.management.show', $otherItem->id), false)
+        ->assertDontSee(route('inventory.management.show', $item->id), false)
         ->call('edit', $item->id)
         ->set('sellingPrice', '12.00')
         ->call('save')
@@ -647,4 +649,69 @@ test('backdated stock-out and adjustment are rejected when a later balance would
     expect($item->fresh()->qty)->toBe('1.00')
         ->and($item->stockMovements()->where('type', 'stock_out')->count())->toBe(1)
         ->and($item->stockMovements()->where('type', 'adjustment')->exists())->toBeFalse();
+});
+test('inventory profile shows item details and its receipts', function () {
+    $manager = createInventoryManager();
+    $item = Inventory::create(inventoryAttributes([
+        'name' => 'Profile timber',
+        'description' => 'Kiln-dried reclaimed timber',
+    ]));
+    $otherItem = Inventory::create(inventoryAttributes(['name' => 'Other timber']));
+
+    StockMovement::create([
+        'inventory_id' => $item->id,
+        'posted_by' => $manager->id,
+        'type' => 'purchase_receipt',
+        'quantity' => '4.00',
+        'reason_category' => 'supplier_purchase',
+        'reference' => 'INV-RECEIPT-44',
+        'effective_date' => '2026-10-01',
+        'posted_at' => now('UTC'),
+    ]);
+    StockMovement::create([
+        'inventory_id' => $otherItem->id,
+        'posted_by' => $manager->id,
+        'type' => 'purchase_receipt',
+        'quantity' => '8.00',
+        'reason_category' => 'supplier_purchase',
+        'reference' => 'OTHER-RECEIPT',
+        'effective_date' => '2026-10-02',
+        'posted_at' => now('UTC'),
+    ]);
+
+    $this->actingAs($manager)
+        ->get(route('inventory.management.show', $item->id))
+        ->assertOk()
+        ->assertSeeHtml('class="app-main inventory-main"')
+        ->assertSee('Profile timber')
+        ->assertSee('Kiln-dried reclaimed timber')
+        ->assertSee('Unit cost (PHP)')
+        ->assertSee('Selling price (PHP)')
+        ->assertSee('Value (PHP)')
+        ->assertSee('INV-RECEIPT-44')
+        ->assertDontSee('OTHER-RECEIPT');
+});
+
+test('inventory profile links movement-only staff to stock actions without item editing', function () {
+    $movementClerk = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'inventory.profile.movement-only',
+        'email' => 'inventory.profile.movement-only@example.com',
+        'password' => Hash::make('secret-password'),
+    ]), ['inventory.view', 'inventory.movements.record']);
+    $item = Inventory::create(inventoryAttributes(['name' => 'Movement-only timber']));
+
+    expect($movementClerk->can('inventory.update'))->toBeFalse();
+
+    $this->actingAs($movementClerk)
+        ->get(route('inventory.management.show', $item->id))
+        ->assertOk()
+        ->assertSee('Record stock movement')
+        ->assertSee(route('inventory.management.edit', $item->id), false)
+        ->assertDontSee('Edit item');
+
+    $this->get(route('inventory.management.edit', $item->id))
+        ->assertOk()
+        ->assertSee('Inventory stock')
+        ->assertSee('Receive stock')
+        ->assertDontSee('Save changes');
 });

@@ -21,6 +21,7 @@ use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\DemolitionProjects\ProjectManagement;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
+use App\Livewire\Inventory\InventoryProfile;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Livewire\Inventory\BatchCategoryManagement;
@@ -87,6 +88,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:inventory.create')->name('inventory.management.create');
     Route::get('/inventory/manage/edit/{id}', InventoryManagement::class)
         ->middleware('permission:inventory.update|inventory.movements.record')->name('inventory.management.edit');
+    Route::get('/inventory/manage/{id}', InventoryProfile::class)
+        ->middleware('permission:inventory.view')->name('inventory.management.show');
     Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
     Route::get('/inventory/batch-categories', BatchCategoryManagement::class)
         ->middleware('permission:inventory.view')->name('inventory.batch-categories');

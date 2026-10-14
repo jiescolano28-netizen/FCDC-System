@@ -188,7 +188,7 @@
             </footer>
         </aside>
 
-        <main @class(['app-main', 'inventory-main' => request()->routeIs('inventory.management', 'inventory.overview')])>
+        <main @class(['app-main', 'inventory-main' => request()->routeIs('inventory.management', 'inventory.management.show', 'inventory.overview')])>
             {{ $slot }}
         </main>
     </div>
