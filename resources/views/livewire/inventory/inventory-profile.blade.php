@@ -65,4 +65,108 @@
             </table>
         </div>
     </section>
+
+    <section class="panel receipt-panel" aria-labelledby="inventory-receipt-files-heading">
+        <header class="receipt-heading">
+            <div>
+                <h2 id="inventory-receipt-files-heading">Receipt files</h2>
+                <p>Upload the actual receipt files for this item. Any number of files, up to 10&nbsp;MB each.</p>
+            </div>
+        </header>
+
+        @can('inventory.update')
+            <form class="inventory-form" wire:submit="uploadReceipts" style="margin-bottom:16px;">
+                <div class="inventory-form-field">
+                    <label for="receiptFiles">Add receipt files</label>
+                    <input id="receiptFiles" type="file" multiple wire:model="receiptFiles"
+                        wire:loading.attr="disabled" wire:target="receiptFiles">
+                    @error('receiptFiles') <span class="error">{{ $message }}</span> @enderror
+                    @error('receiptFiles.*') <span class="error">{{ $message }}</span> @enderror
+                </div>
+                <div class="actions inventory-form-actions">
+                    <button class="primary" type="submit" wire:loading.attr="disabled" wire:target="receiptFiles,uploadReceipts">
+                        <span wire:loading.remove wire:target="uploadReceipts">Upload receipts</span>
+                        <span wire:loading wire:target="uploadReceipts">Uploading…</span>
+                    </button>
+                </div>
+            </form>
+        @endcan
+
+        <div class="receipt-table-scroll" role="region" aria-label="Receipt files" tabindex="0">
+            <table class="receipt-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Preview</th>
+                        <th scope="col">File</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="numeric">Size</th>
+                        <th scope="col">Uploaded by</th>
+                        <th scope="col">Uploaded</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($receiptAttachments as $attachment)
+                    <tr wire:key="receipt-attachment-{{ $attachment->id }}">
+                        <td>
+                            <button type="button" class="receipt-thumb-button" wire:click="preview({{ $attachment->id }})"
+                                title="Preview {{ $attachment->original_name }}" aria-label="Preview {{ $attachment->original_name }}">
+                                @if ($attachment->isImage())
+                                    <img class="receipt-thumb" src="{{ route('inventory.receipts.preview', $attachment) }}"
+                                        alt="{{ $attachment->original_name }}" loading="lazy">
+                                @else
+                                    <span class="receipt-file-type" aria-hidden="true">{{ strtoupper(pathinfo($attachment->original_name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                                @endif
+                            </button>
+                        </td>
+                        <td>{{ $attachment->original_name }}</td>
+                        <td>{{ $attachment->mime_type ?: '—' }}</td>
+                        <td class="numeric">{{ $attachment->human_size }}</td>
+                        <td>{{ $attachment->uploader?->username ?? '—' }}</td>
+                        <td>{{ $attachment->created_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                        <td>
+                            <button type="button" class="secondary" wire:click="preview({{ $attachment->id }})">View</button>
+                            <a class="secondary" href="{{ route('inventory.receipts.download', $attachment) }}">Download</a>
+                            @can('inventory.update')
+                                <button type="button" class="secondary"
+                                    wire:click="deleteReceipt({{ $attachment->id }})"
+                                    wire:confirm="Delete this receipt file? This cannot be undone."
+                                    wire:loading.attr="disabled">Delete</button>
+                            @endcan
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="7" class="receipt-empty">No receipt files uploaded for this item.</td></tr>
+                @endforelse
+            </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if ($previewAttachment)
+        <div class="vat-modal-backdrop" role="presentation" wire:click.self="closePreview">
+            <section class="vat-detail-modal receipt-preview-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-preview-heading">
+                <header>
+                    <h2 id="receipt-preview-heading">{{ $previewAttachment->original_name }}</h2>
+                    <button class="vat-modal-close" type="button" wire:click="closePreview" aria-label="Close preview">&times;</button>
+                </header>
+                @if ($previewAttachment->isImage())
+                    <img class="receipt-preview-image"
+                        src="{{ route('inventory.receipts.preview', $previewAttachment) }}"
+                        alt="{{ $previewAttachment->original_name }}">
+                @else
+                    <p class="muted">Preview isn’t available for this file type. Use Download to open it.</p>
+                @endif
+                <dl>
+                    <div><dt>Type</dt><dd>{{ $previewAttachment->mime_type ?: '—' }}</dd></div>
+                    <div><dt>Size</dt><dd>{{ $previewAttachment->human_size }}</dd></div>
+                    <div><dt>Uploaded by</dt><dd>{{ $previewAttachment->uploader?->username ?? '—' }}</dd></div>
+                    <div><dt>Uploaded</dt><dd>{{ $previewAttachment->created_at?->format('Y-m-d H:i') ?? '—' }}</dd></div>
+                </dl>
+                <footer>
+                    <a class="secondary" href="{{ route('inventory.receipts.download', $previewAttachment) }}">Download</a>
+                </footer>
+            </section>
+        </div>
+    @endif
 </section>

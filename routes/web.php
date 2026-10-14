@@ -2,10 +2,11 @@
 
 use App\Http\Controllers\EmployeePasswordResetController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InventoryReceiptAttachmentController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\PasswordResetLinkController;
-use App\Livewire\Accounting\AccountingPeriods;
 use App\Livewire\Accounting\AccountingOverview;
+use App\Livewire\Accounting\AccountingPeriods;
 use App\Livewire\Accounting\AccountsPayable;
 use App\Livewire\Accounting\CashDisbursements;
 use App\Livewire\Accounting\ChartOfAccounts;
@@ -21,10 +22,10 @@ use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\DemolitionProjects\ProjectManagement;
 use App\Livewire\Employees\EmployeeManagement;
 use App\Livewire\HomePage;
-use App\Livewire\Inventory\InventoryProfile;
+use App\Livewire\Inventory\BatchCategoryManagement;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
-use App\Livewire\Inventory\BatchCategoryManagement;
+use App\Livewire\Inventory\InventoryProfile;
 use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Profile\ProfilePage;
 use App\Livewire\Roles\RoleManagement;
@@ -105,6 +106,18 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:inventory.update')->name('inventory.update');
     Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy'])
         ->middleware('permission:inventory.delete')->name('inventory.destroy');
+
+    // Inventory receipt attachments (dedicated controller/service surface)
+    Route::get('/inventory/{inventory}/receipts', [InventoryReceiptAttachmentController::class, 'index'])
+        ->middleware('permission:inventory.view')->name('inventory.receipts.index');
+    Route::post('/inventory/{inventory}/receipts', [InventoryReceiptAttachmentController::class, 'store'])
+        ->middleware('permission:inventory.update')->name('inventory.receipts.store');
+    Route::get('/inventory/receipts/{attachment}/download', [InventoryReceiptAttachmentController::class, 'download'])
+        ->middleware('permission:inventory.view')->name('inventory.receipts.download');
+    Route::get('/inventory/receipts/{attachment}/preview', [InventoryReceiptAttachmentController::class, 'preview'])
+        ->middleware('permission:inventory.view')->name('inventory.receipts.preview');
+    Route::delete('/inventory/receipts/{attachment}', [InventoryReceiptAttachmentController::class, 'destroy'])
+        ->middleware('permission:inventory.update')->name('inventory.receipts.destroy');
     Route::get('/employees', EmployeeManagement::class)
         ->middleware('permission:employees.view')
         ->name('employees.index');

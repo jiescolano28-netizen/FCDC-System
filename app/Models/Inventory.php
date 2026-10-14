@@ -97,6 +97,11 @@ class Inventory extends Model
         return $this->belongsTo(InventoryBatchCategory::class, 'inventory_batch_category_id')->withTrashed();
     }
 
+    public function receiptAttachments(): HasMany
+    {
+        return $this->hasMany(InventoryReceiptAttachment::class)->latest();
+    }
+
     public function scopeAvailableForSale($query)
     {
         return $query->where('status', 'active')

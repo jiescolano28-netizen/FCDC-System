@@ -112,6 +112,10 @@
 .inventory-page .receipt-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
 .inventory-page .receipt-table .receipt-date { color: var(--slate-600); font-variant-numeric: tabular-nums; }
 .inventory-page .receipt-table .receipt-empty { padding: 28px 16px; color: var(--slate-600); text-align: center; white-space: normal; }
+.inventory-page .receipt-thumb-button { padding: 0; border: 0; background: none; cursor: pointer; display: inline-flex; }
+.inventory-page .receipt-thumb { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8e2; display: block; }
+.inventory-page .receipt-file-type { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 6px; background: #eef2ee; color: var(--slate-600); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.inventory-page .receipt-preview-image { display: block; max-width: 100%; max-height: 60vh; margin: 14px auto 0; border-radius: 8px; }
 @media (max-width: 620px) {
     .inventory-page .receipt-heading { padding: 16px; }
     .inventory-page .receipt-table { min-width: 680px; }
