@@ -123,7 +123,7 @@ class DemoDatabaseIsolation
                 throw new RuntimeException('SQLite in-memory databases are accepted only for explicitly isolated tests.');
             }
 
-            DB::connection('demo')->getPdo();
+            DB::connection()->getPdo();
 
             return;
         }
@@ -149,7 +149,7 @@ class DemoDatabaseIsolation
             }
         }
 
-        $pdo = DB::connection('demo')->getPdo();
+        $pdo = DB::connection()->getPdo();
         $actualPath = $pdo->query('PRAGMA database_list')->fetchAll()[0]['file'] ?? null;
         if (! is_string($actualPath) || $this->normalizePath($actualPath) !== $configuredPath) {
             throw new RuntimeException('The connected SQLite database identity does not match its verified demo file.');
@@ -199,7 +199,7 @@ class DemoDatabaseIsolation
 
         }
 
-        $pdo = DB::connection('demo')->getPdo();
+        $pdo = DB::connection()->getPdo();
         $identity = match ($driver) {
             'mysql', 'mariadb' => $pdo->query('SELECT DATABASE() AS database_name, @@hostname AS server_id, @@port AS port_number')->fetch(),
             'pgsql' => $pdo->query('SELECT current_database() AS database_name, inet_server_addr()::text AS server_id, inet_server_port() AS port_number')->fetch(),
