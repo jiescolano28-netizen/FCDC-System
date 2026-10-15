@@ -109,6 +109,15 @@ can optionally select an active batch category when created or edited; leaving
 the field empty means the item has no batch category. POS and Settings continue
 to use their existing access rules.
 
+## Isolated demo chart of accounts
+
+The 54-account proposed chart is not included in ordinary `php artisan db:seed`.
+Seed only after provisioning a dedicated nonproduction target and configuring the
+demo connection and allowlist. Run `php artisan demo:verify-isolation` to verify
+the effective write target; then run `php artisan demo:seed-proposed-chart`.
+The seed command repeats the isolation check, inserts definitions transactionally,
+and refuses conflicting definitions without changing the batch.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
