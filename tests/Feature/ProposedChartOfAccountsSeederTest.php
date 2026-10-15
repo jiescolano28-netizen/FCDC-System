@@ -107,6 +107,24 @@ test('rerun reports exact definitions and preserves approved operational state a
         ->and($journalAfter)->toBe($journalBefore)
         ->and($lineAfter)->toBe($lineBefore);
 });
+test('a held account with unsafe operational state is reported as a conflict without reset', function () {
+    $seeder = app(ProposedChartOfAccountsSeeder::class);
+    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
+    $isolation->shouldReceive('verify')->twice();
+    $seeder->seed($isolation);
+
+    $account = AccountingAccount::query()->where('code', '6190')->firstOrFail();
+    $account->forceFill(['is_active' => true, 'approved_at' => now()])->saveQuietly();
+    $before = $account->fresh()->getAttributes();
+
+    $result = $seeder->seed($isolation);
+
+    expect($result['created'])->toBe([])
+        ->and($result['exact_matches'])->not->toContain('6190')
+        ->and($result['conflicts']['6190'])->toHaveKey('operational_state')
+        ->and(AccountingAccount::query()->count())->toBe(54)
+        ->and($account->fresh()->getAttributes())->toBe($before);
+});
 
 test('a conflicting definition leaves missing proposal accounts uncreated', function () {
     $seeder = app(ProposedChartOfAccountsSeeder::class);

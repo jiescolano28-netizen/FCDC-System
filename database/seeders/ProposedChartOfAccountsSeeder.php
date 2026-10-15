@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Support\DemoDatabaseIsolation;
+use Illuminate\Console\Command;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -65,6 +66,8 @@ class ProposedChartOfAccountsSeeder extends Seeder
         ['7090', 'Other Non-Operating Expenses', 'Expense', 'other_expense', 'debit', 'Other Income and Expenses — 7000', 'Ordinary proposed account'],
     ];
 
+    private const POLICY_HELD_CODES = ['1510', '2040', '3040', '3050', '5030', '6190'];
+
     /**
      * @return array{created: list<string>, exact_matches: list<string>, conflicts: array<string, array<string, array{expected: mixed, existing: mixed}>>, preserved_unrelated: list<array{code: string, name: string}>}
      */
@@ -106,6 +109,18 @@ class ProposedChartOfAccountsSeeder extends Seeder
                     if ($account->{$field} !== $expected) {
                         $differences[$field] = ['expected' => $expected, 'existing' => $account->{$field}];
                     }
+                }
+                if (in_array($code, self::POLICY_HELD_CODES, true)
+                    && ($account->is_active || $account->approved_at !== null || $account->approved_by !== null || $account->used_at !== null)) {
+                    $differences['operational_state'] = [
+                        'expected' => 'inactive and unused, without approver or approval timestamp',
+                        'existing' => [
+                            'is_active' => (bool) $account->is_active,
+                            'approved_at' => $account->approved_at,
+                            'approved_by' => $account->approved_by,
+                            'used_at' => $account->used_at,
+                        ],
+                    ];
                 }
 
                 if ($differences === []) {
@@ -155,26 +170,42 @@ class ProposedChartOfAccountsSeeder extends Seeder
     public function run(DemoDatabaseIsolation $isolation): void
     {
         $result = $this->seed($isolation);
+
         if ($this->command === null) {
+            if ($result['conflicts'] !== []) {
+                throw new \RuntimeException('Conflicting proposed account definitions were found; no proposed accounts were changed or inserted.');
+            }
+
             return;
         }
 
-        $this->command->info('Created: '.count($result['created']).' ['.implode(', ', $result['created']).']');
-        $this->command->info('Exact matches: '.count($result['exact_matches']).' ['.implode(', ', $result['exact_matches']).']');
-        $this->command->info('Preserved unrelated/supporting accounts: '.count($result['preserved_unrelated']));
+        if (! $this->reportResult($result, $this->command)) {
+            throw new \RuntimeException('Conflicting proposed account definitions were found; no proposed accounts were changed or inserted.');
+        }
+    }
+
+    public function reportResult(array $result, Command $command): bool
+    {
+        $command->info('Created: '.count($result['created']).' ['.implode(', ', $result['created']).']');
+        $command->info('Exact matches: '.count($result['exact_matches']).' ['.implode(', ', $result['exact_matches']).']');
+        $command->info('Preserved unrelated/supporting accounts: '.count($result['preserved_unrelated']));
         foreach ($result['preserved_unrelated'] as $account) {
-            $this->command->line($account['code'].' '.$account['name']);
+            $command->line($account['code'].' '.$account['name']);
         }
 
         foreach ($result['conflicts'] as $code => $fields) {
             foreach ($fields as $field => $values) {
-                $this->command->error($code.' '.$field.': expected '.json_encode($values['expected']).'; found '.json_encode($values['existing']));
+                $command->error($code.' '.$field.': expected '.json_encode($values['expected']).'; found '.json_encode($values['existing']));
             }
         }
 
         if ($result['conflicts'] !== []) {
-            throw new \RuntimeException('Conflicting proposed account definitions were found; no proposed accounts were changed or inserted.');
+            $command->error('Conflicts found; no proposed account was changed or inserted.');
+
+            return false;
         }
+
+        return true;
     }
 
     /** @return list<array{code: string, name: string}> */
