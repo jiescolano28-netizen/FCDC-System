@@ -176,7 +176,7 @@ test('demo isolation rejects server databases without provisioning evidence', fu
     $this->artisan('demo:verify-isolation')->assertExitCode(1);
 });
 
-test('demo isolation rejects a business database URL alias to the same server database', function () {
+test('demo isolation rejects a database-name alias through another server endpoint', function () {
     config([
         'app.env' => 'demo',
         'database.default' => 'demo',
@@ -193,7 +193,7 @@ test('demo isolation rejects a business database URL alias to the same server da
         ],
         'database.connections.mysql' => [
             'driver' => 'mysql',
-            'url' => 'mysql://business:secret@demo-db.internal:3307/demo_books',
+            'url' => 'mysql://business:secret@business-db.internal:3307/demo_books',
             'host' => 'business-db.internal',
             'port' => '3306',
             'database' => 'business_books',

@@ -193,9 +193,8 @@ class DemoDatabaseIsolation
                 throw new RuntimeException('A configured socket-based database alias cannot be independently verified.');
             }
 
-            if ($candidateTarget['host'] === $expectedHost
-                && $candidateTarget['database'] === $expectedDatabase) {
-                throw new RuntimeException('The demo server database is also configured through another connection alias.');
+            if ($candidateTarget['database'] === $expectedDatabase) {
+                throw new RuntimeException('A database alias with the demo database name makes server separation ambiguous.');
             }
 
         }
