@@ -44,6 +44,24 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        'demo' => [
+            'driver' => env('DEMO_DB_DRIVER', 'sqlite'),
+            'url' => null,
+            'database' => env('DEMO_DB_DATABASE'),
+            'host' => env('DEMO_DB_HOST'),
+            'port' => env('DEMO_DB_PORT'),
+            'username' => env('DEMO_DB_USERNAME'),
+            'password' => env('DEMO_DB_PASSWORD'),
+            'unix_socket' => null,
+            'charset' => env('DEMO_DB_CHARSET', in_array(env('DEMO_DB_DRIVER', 'sqlite'), ['mysql', 'mariadb'], true) ? 'utf8mb4' : 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'foreign_key_constraints' => true,
+            'strict' => true,
+            'engine' => null,
+            'options' => [],
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),
