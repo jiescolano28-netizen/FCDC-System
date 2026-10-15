@@ -103,29 +103,11 @@
                             <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Accounting</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
                         </button>
                         <div class="nav-dropdown {{ $accountingNavigationActive ? 'open' : '' }}" id="accounting-menu">
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.overview') ? 'active' : '' }}" href="{{ route('accounting.overview') }}" @if (request()->routeIs('accounting.overview')) aria-current="page" @endif>
-                                <span class="nav-label">Accounting Overview</span>
-                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.chart-of-accounts') ? 'active' : '' }}" href="{{ route('accounting.chart-of-accounts') }}" @if (request()->routeIs('accounting.chart-of-accounts')) aria-current="page" @endif>
                                 <span class="nav-label">Chart of Accounts</span>
                             </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.opening-books') ? 'active' : '' }}" href="{{ route('accounting.opening-books') }}" @if (request()->routeIs('accounting.opening-books')) aria-current="page" @endif>
-                                <span class="nav-label">Opening Books &amp; Cutover</span>
-                            </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.periods') ? 'active' : '' }}" href="{{ route('accounting.periods') }}" @if (request()->routeIs('accounting.periods')) aria-current="page" @endif>
-                                <span class="nav-label">Accounting Periods</span>
-                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.journal-entry') ? 'active' : '' }}" href="{{ route('accounting.journal-entry') }}" @if (request()->routeIs('accounting.journal-entry')) aria-current="page" @endif>
                                 <span class="nav-label">Journal Entry</span>
-                            </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.accounts-payable') ? 'active' : '' }}" href="{{ route('accounting.accounts-payable') }}" @if (request()->routeIs('accounting.accounts-payable')) aria-current="page" @endif>
-                                <span class="nav-label">Accounts Payable</span>
-                            </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.supplier-purchases') ? 'active' : '' }}" href="{{ route('accounting.supplier-purchases') }}" @if (request()->routeIs('accounting.supplier-purchases')) aria-current="page" @endif>
-                                <span class="nav-label">Supplier Purchases</span>
-                            </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.cash-disbursements') ? 'active' : '' }}" href="{{ route('accounting.cash-disbursements') }}" @if (request()->routeIs('accounting.cash-disbursements')) aria-current="page" @endif>
-                                <span class="nav-label">Cash Disbursements</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.general-ledger') ? 'active' : '' }}" href="{{ route('accounting.general-ledger') }}" @if (request()->routeIs('accounting.general-ledger')) aria-current="page" @endif>
                                 <span class="nav-label">General Ledger</span>
@@ -135,6 +117,9 @@
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.financial-statements') ? 'active' : '' }}" href="{{ route('accounting.financial-statements') }}" @if (request()->routeIs('accounting.financial-statements')) aria-current="page" @endif>
                                 <span class="nav-label">Financial Statements</span>
+                            </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.notes-to-financial-statements') ? 'active' : '' }}" href="{{ route('accounting.notes-to-financial-statements') }}" @if (request()->routeIs('accounting.notes-to-financial-statements')) aria-current="page" @endif>
+                                <span class="nav-label">Notes to Financial Statements / Disclosure</span>
                             </a>
                         </div>
                     </div>

@@ -104,6 +104,32 @@ test('financial statements is authenticated and accounting.view protects report 
         ->assertForbidden();
 });
 
+test('accounting sidebar shows only the six scoped submodules and preserves related module routes', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $response = $this->actingAs($viewer)->get(route('accounting.notes-to-financial-statements'));
+
+    $response->assertOk()
+        ->assertSee('Notes to Financial Statements / Disclosure')
+        ->assertSee('No financial statement disclosures are currently available.')
+        ->assertSeeInOrder([
+            'Chart of Accounts',
+            'Journal Entry',
+            'General Ledger',
+            'Trial Balance',
+            'Financial Statements',
+            'Notes to Financial Statements / Disclosure',
+        ])
+        ->assertDontSee('Accounting Overview')
+        ->assertDontSee('Opening Books &amp; Cutover')
+        ->assertDontSee('Accounting Periods')
+        ->assertDontSee('Accounts Payable')
+        ->assertDontSee('Supplier Purchases')
+        ->assertDontSee('Cash Disbursements');
+
+    expect(route('accounting.accounts-payable'))->toContain('/accounting/accounts-payable')
+        ->and(route('accounting.cash-disbursements'))->toContain('/accounting/cash-disbursements');
+});
+
 test('income statement classifies posted activity and excludes drafts, tax and fiscal closing entries', function () {
     $viewer = createFinancialStatementsEmployee();
     $period = statementPeriod(2026);

@@ -24,7 +24,6 @@ test('accounts payable exposes opening supplier schedules without presenting dra
         ->get(route('accounting.accounts-payable'))
         ->assertOk()
         ->assertSee('Accounts Payable')
-        ->assertSee('href="'.route('accounting.accounts-payable').'"', false)
         ->assertSee('Posted opening outstanding')
         ->assertSee('Posted opening overdue')
         ->assertSee('Supplier code')

@@ -13,6 +13,7 @@ use App\Livewire\Accounting\ChartOfAccounts;
 use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
+use App\Livewire\Accounting\NotesToFinancialStatements;
 use App\Livewire\Accounting\OpeningBooks;
 use App\Livewire\Accounting\SupplierPurchases;
 use App\Livewire\Accounting\TrialBalance;
@@ -76,6 +77,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/accounting/cash-disbursements', CashDisbursements::class)->middleware('permission:accounting.view')->name('accounting.cash-disbursements');
     Route::get('/accounting/journal-entry', JournalEntry::class)->middleware('permission:accounting.view')->name('accounting.journal-entry');
     Route::get('/accounting/financial-statements', FinancialStatements::class)->middleware('permission:accounting.view')->name('accounting.financial-statements');
+    Route::get('/accounting/notes-to-financial-statements', NotesToFinancialStatements::class)->middleware('permission:accounting.view')->name('accounting.notes-to-financial-statements');
     Route::get('/accounting/general-ledger', GeneralLedger::class)->middleware('permission:accounting.view')->name('accounting.general-ledger');
     Route::get('/accounting/trial-balance', TrialBalance::class)->middleware('permission:accounting.view')->name('accounting.trial-balance');
     Route::get('/settings', SettingsPage::class)->middleware('permission:settings.view')->name('settings');
