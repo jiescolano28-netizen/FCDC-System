@@ -193,7 +193,7 @@ test('demo isolation rejects a business database URL alias to the same server da
         ],
         'database.connections.mysql' => [
             'driver' => 'mysql',
-            'url' => 'mysql://business:secret@demo-db.internal:3306/demo_books',
+            'url' => 'mysql://business:secret@demo-db.internal:3307/demo_books',
             'host' => 'business-db.internal',
             'port' => '3306',
             'database' => 'business_books',
@@ -270,6 +270,30 @@ test('demo isolation rejects socket-based server aliases as ambiguous', function
             'driver' => 'mysql',
             'database' => 'business_books',
             'host' => 'localhost',
+            'port' => '3306',
+            'unix_socket' => '/var/run/mysqld/mysqld.sock',
+        ],
+        'demo.enabled' => true,
+        'demo.allowed_environments' => ['demo'],
+        'demo.database_isolation_attested' => true,
+        'demo.expected_host' => 'demo-db.internal',
+        'demo.expected_port' => '3306',
+        'demo.expected_database' => 'demo_books',
+        'demo.expected_server_id' => 'server-1',
+    ]);
+
+    $this->artisan('demo:verify-isolation')->assertExitCode(1);
+});
+
+test('demo isolation rejects socket-based server targets', function () {
+    config([
+        'app.env' => 'demo',
+        'database.default' => 'demo',
+        'activitylog.database_connection' => 'demo',
+        'database.connections.demo' => [
+            'driver' => 'mysql',
+            'database' => 'demo_books',
+            'host' => 'demo-db.internal',
             'port' => '3306',
             'unix_socket' => '/var/run/mysqld/mysqld.sock',
         ],

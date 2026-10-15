@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Illuminate\Database\ConfigurationUrlParser;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -161,13 +162,18 @@ class DemoDatabaseIsolation
             throw new RuntimeException('A provisioning attestation for dedicated server resources and restricted credentials is required.');
         }
 
+        $configuredHost = (string) ($connection['host'] ?? '');
+        if (! empty($connection['unix_socket']) || str_starts_with($configuredHost, '/') || strtolower($configuredHost) === 'localhost') {
+            throw new RuntimeException('Socket-based or implicit-localhost demo database endpoints are not accepted.');
+        }
+
         $expectedHost = config('demo.expected_host');
         $expectedPort = (string) config('demo.expected_port', '');
         $expectedDatabase = config('demo.expected_database');
         $expectedServerId = config('demo.expected_server_id');
         if (! is_string($expectedHost) || $expectedHost === '' || ! is_string($expectedDatabase) || $expectedDatabase === ''
             || ! is_string($expectedServerId) || $expectedServerId === ''
-            || (string) ($connection['host'] ?? '') !== $expectedHost
+            || $configuredHost !== $expectedHost
             || (string) ($connection['port'] ?? '') !== $expectedPort
             || (string) ($connection['database'] ?? '') !== $expectedDatabase) {
             throw new RuntimeException('The demo server endpoint does not match its separately provisioned identity.');
@@ -188,7 +194,6 @@ class DemoDatabaseIsolation
             }
 
             if ($candidateTarget['host'] === $expectedHost
-                && (string) $candidateTarget['port'] === $expectedPort
                 && $candidateTarget['database'] === $expectedDatabase) {
                 throw new RuntimeException('The demo server database is also configured through another connection alias.');
             }
@@ -214,40 +219,42 @@ class DemoDatabaseIsolation
     {
         $url = $connection['url'] ?? null;
         if (! is_string($url) || $url === '') {
-            $socket = $connection['unix_socket'] ?? null;
-
             return [
                 'host' => $connection['host'] ?? null,
                 'port' => $connection['port'] ?? null,
                 'database' => $connection['database'] ?? null,
-                'socket' => $socket,
+                'socket' => $connection['unix_socket'] ?? null,
             ];
         }
 
-        $parts = parse_url($url);
-        if (! is_array($parts)) {
-            throw new RuntimeException('A configured database URL alias cannot be independently verified.');
+        if (($connection['driver'] ?? null) === 'sqlite') {
+            $parts = parse_url($url);
+            if (! is_array($parts)) {
+                throw new RuntimeException('A configured database URL alias cannot be independently verified.');
+            }
+
+            return [
+                'host' => $parts['host'] ?? null,
+                'port' => $parts['port'] ?? null,
+                'database' => rawurldecode($parts['path'] ?? ''),
+                'socket' => null,
+            ];
         }
 
-        $query = [];
-        parse_str($parts['query'] ?? '', $query);
-        $urlHost = $parts['host'] ?? $query['host'] ?? null;
-        $socket = $query['unix_socket'] ?? $query['socket'] ?? $connection['unix_socket'] ?? null;
-        if ($socket === '') {
-            $socket = null;
-        }
-        if (is_string($query['host'] ?? null) && str_starts_with($query['host'], '/')) {
-            $socket = $query['host'];
+        $resolved = (new ConfigurationUrlParser)->parseConfiguration($connection);
+        $host = $resolved['host'] ?? null;
+        $socket = $resolved['unix_socket'] ?? null;
+        if (is_string($host) && str_starts_with($host, '/')) {
+            $socket = $host;
         }
 
         return [
-            'host' => $urlHost,
-            'port' => $parts['port'] ?? null,
-            'database' => rawurldecode(($parts['scheme'] ?? null) === 'sqlite'
-                ? ($parts['path'] ?? '')
-                : ltrim($parts['path'] ?? '', '/')),
+            'host' => $host,
+            'port' => $resolved['port'] ?? null,
+            'database' => $resolved['database'] ?? null,
             'socket' => $socket,
         ];
+
     }
 
     private function normalizePath(string $path): string
