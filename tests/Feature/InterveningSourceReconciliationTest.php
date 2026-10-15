@@ -171,7 +171,7 @@ test('a valued legacy stock movement receives an accounting link without changin
     $accounts = setupPosAccountingBooks([$item], [$item->id => '500.00']);
     $expense = AccountingAccount::create([
         'code' => '6999', 'name' => 'Stock adjustment expense', 'type' => 'Expense',
-        'classification' => 'operating_expenses', 'normal_balance' => 'debit', 'is_active' => true,
+        'classification' => 'operating_expense', 'normal_balance' => 'debit', 'is_active' => true,
         'approved_at' => now(), 'approved_by' => $employee->id,
     ]);
     AccountingPostingMapping::create([

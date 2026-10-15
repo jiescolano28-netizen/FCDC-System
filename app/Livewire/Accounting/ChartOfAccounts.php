@@ -9,32 +9,6 @@ use Livewire\Component;
 
 class ChartOfAccounts extends Component
 {
-    private const TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
-
-    private const CLASSIFICATIONS = [
-        'cash' => ['Cash', 'Asset'],
-        'bank' => ['Bank', 'Asset'],
-        'accounts_receivable' => ['Accounts receivable', 'Asset'],
-        'card_clearing' => ['Card settlement receivable / clearing', 'Asset'],
-        'inventory' => ['Inventory', 'Asset'],
-        'equipment' => ['Equipment', 'Asset'],
-        'other_current_asset' => ['Other current asset', 'Asset'],
-        'other_noncurrent_asset' => ['Other non-current asset', 'Asset'],
-        'accounts_payable' => ['Accounts payable', 'Liability'],
-        'output_vat' => ['Output VAT', 'Liability'],
-        'input_vat' => ['Input VAT', 'Asset'],
-        'other_current_liability' => ['Other current liability', 'Liability'],
-        'other_noncurrent_liability' => ['Other non-current liability', 'Liability'],
-        'capital' => ['Capital', 'Equity'],
-        'retained_earnings' => ['Retained / accumulated earnings', 'Equity'],
-        'other_equity' => ['Other equity', 'Equity'],
-        'sales' => ['Sales', 'Revenue'],
-        'other_income' => ['Other income', 'Revenue'],
-        'cost_of_goods_sold' => ['Cost of goods sold (Expense)', 'Expense'],
-        'operating_expense' => ['Operating expense', 'Expense'],
-        'other_expense' => ['Other expense', 'Expense'],
-    ];
-
     private const MAPPING_SOURCES = [
         'cash' => 'Cash',
         'bank' => 'Bank',
@@ -88,11 +62,11 @@ class ChartOfAccounts extends Component
 
     public function updatedType(string $type): void
     {
-        if ((self::CLASSIFICATIONS[$this->classification][1] ?? null) === $type) {
+        if ((AccountingAccount::classifications()[$this->classification][1] ?? null) === $type) {
             return;
         }
 
-        foreach (self::CLASSIFICATIONS as $classification => [, $classificationType]) {
+        foreach (AccountingAccount::classifications() as $classification => [, $classificationType]) {
             if ($classificationType === $type) {
                 $this->classification = $classification;
 
@@ -123,14 +97,23 @@ class ChartOfAccounts extends Component
             'accountCode' => ['required', 'string', 'max:30', Rule::unique('accounting_accounts', 'code')->ignore($this->editingId)],
             'accountName' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'type' => ['required', Rule::in(self::TYPES)],
-            'classification' => ['required', Rule::in(array_keys(self::CLASSIFICATIONS))],
+            'type' => ['required', Rule::in(AccountingAccount::types())],
+            'classification' => ['required', Rule::in(array_keys(AccountingAccount::classifications()))],
             'normalBalance' => ['required', Rule::in(['debit', 'credit'])],
             'isActive' => ['required', 'boolean'],
         ]);
 
-        if (self::CLASSIFICATIONS[$validated['classification']][1] !== $validated['type']) {
+        if (AccountingAccount::classifications()[$validated['classification']][1] !== $validated['type']) {
             $this->addError('classification', 'Choose a statement classification matching the account type.');
+
+            return;
+        }
+        if (! AccountingAccount::supportsNormalBalance(
+            $validated['accountCode'],
+            $validated['classification'],
+            $validated['normalBalance'],
+        )) {
+            $this->addError('normalBalance', 'Choose the normal balance for this account classification.');
 
             return;
         }
@@ -141,9 +124,10 @@ class ChartOfAccounts extends Component
                 'accountCode' => 'code',
                 'type' => 'type',
                 'classification' => 'classification',
+                'normalBalance' => 'normal_balance',
             ] as $field => $column) {
                 if ($validated[$field] !== $account->{$column}) {
-                    $this->addError($field, 'Used account codes, types, and classifications are historically immutable.');
+                    $this->addError($field, 'Used account identity and normal balance are historically immutable.');
                 }
             }
             if ($this->getErrorBag()->isNotEmpty()) {
@@ -257,8 +241,8 @@ class ChartOfAccounts extends Component
         return view('livewire.accounting.chart-of-accounts', [
             'accounts' => $accounts,
             'accountCount' => AccountingAccount::count(),
-            'accountTypes' => self::TYPES,
-            'classifications' => collect(self::CLASSIFICATIONS)->map(fn ($entry, $key) => ['value' => $key, 'label' => $entry[0], 'type' => $entry[1]]),
+            'accountTypes' => AccountingAccount::types(),
+            'classifications' => collect(AccountingAccount::classifications())->map(fn ($entry, $key) => ['value' => $key, 'label' => $entry[0], 'type' => $entry[1]]),
             'mappingSources' => self::MAPPING_SOURCES,
             'mappings' => AccountingPostingMapping::with('account')->get()->keyBy('source'),
             'eligibleAccounts' => AccountingAccount::where('is_active', true)->orderBy('code')->get(),

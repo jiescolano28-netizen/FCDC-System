@@ -114,7 +114,7 @@
             <table class="w-full min-w-[1050px] border-collapse text-left text-sm">
                 <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                     <tr>
-                        <th scope="col" class="px-4 py-3">Code</th><th scope="col" class="px-4 py-3">Name</th><th scope="col" class="px-4 py-3">Description</th><th scope="col" class="px-4 py-3">Type</th><th scope="col" class="px-4 py-3">Classification</th><th scope="col" class="px-4 py-3">Normal balance</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3">Approval</th><th scope="col" class="px-4 py-3">Actions</th>
+                        <th scope="col" class="px-4 py-3">Code</th><th scope="col" class="px-4 py-3">Name</th><th scope="col" class="px-4 py-3">Description</th><th scope="col" class="px-4 py-3">Type</th><th scope="col" class="px-4 py-3">Classification</th><th scope="col" class="px-4 py-3">Normal balance</th><th scope="col" class="px-4 py-3">Status</th><th scope="col" class="px-4 py-3">Approval</th><th scope="col" class="px-4 py-3">Posting eligibility</th><th scope="col" class="px-4 py-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -128,6 +128,7 @@
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ ucfirst($account->normal_balance) }}</td>
                             <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->is_active, 'bg-slate-100 text-slate-700' => ! $account->is_active])>{{ $account->is_active ? 'Active' : 'Inactive' }}</span></td>
                             <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->approved_at, 'bg-amber-50 text-amber-900' => ! $account->approved_at])>{{ $account->approved_at ? 'Approved' : 'Pending approval' }}</span></td>
+                            <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->isApprovedForPosting(), 'bg-amber-50 text-amber-900' => ! $account->isApprovedForPosting()])>{{ $account->isApprovedForPosting() ? 'Eligible' : 'Not eligible' }}</span></td>
                             <td class="px-4 py-3">
                                 <div class="flex flex-wrap items-center gap-2">
                                     @can('accounting.maintain-accounts')
@@ -142,7 +143,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="px-6 py-12 text-center">
+                        <tr><td colspan="10" class="px-6 py-12 text-center">
                             <p class="text-sm font-semibold text-slate-800">No accounts found</p>
                             <p class="mt-1 text-sm text-slate-600">Try changing the search or filters to see more accounts.</p>
                         </td></tr>

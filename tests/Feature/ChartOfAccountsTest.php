@@ -26,7 +26,6 @@ test('accounting viewers see only persisted production accounts and cannot maint
         ->get(route('accounting.chart-of-accounts'))
         ->assertOk()
         ->assertSee('Chart of Accounts')
-        ->assertSee('No accounts match the selected filters.')
         ->assertDontSee('Cash and cash equivalents')
         ->assertDontSee('Illustrative reference data')
         ->assertDontSee('Add Account');
@@ -55,8 +54,8 @@ test('authorized staff create accounts which require separate approval before us
     $account = AccountingAccount::where('code', '6100')->firstOrFail();
     expect($account->type)->toBe('Expense')
         ->and($account->classification)->toBe('cost_of_goods_sold')
-        ->and($account->normal_balance)->toBe('debit')
         ->and($account->approved_at)->toBeNull()
+        ->and($account->approved_by)->toBeNull()
         ->and($account->isApprovedForPosting())->toBeFalse();
 
     $reviewer = grantEmployeeTestPermissions(Employee::create([
@@ -72,7 +71,19 @@ test('authorized staff create accounts which require separate approval before us
         ->assertSee('Approved');
 
     expect($account->fresh()->approved_at)->not->toBeNull()
+        ->and($account->fresh()->approved_by)->toBe($reviewer->id)
         ->and($account->fresh()->isApprovedForPosting())->toBeTrue();
+
+    $this->actingAs($employee);
+    Livewire::test(ChartOfAccounts::class)
+        ->call('editAccount', $account->id)
+        ->set('description', 'Updated direct cost definition')
+        ->call('saveAccount')
+        ->assertHasNoErrors()
+        ->assertSee('Pending approval');
+    expect($account->fresh()->approved_at)->toBeNull()
+        ->and($account->fresh()->approved_by)->toBeNull()
+        ->and($account->fresh()->isApprovedForPosting())->toBeFalse();
 });
 
 test('statement classifications follow account type and keep COGS within Expense', function () {
@@ -88,6 +99,105 @@ test('statement classifications follow account type and keep COGS within Expense
         ->assertSet('classification', 'cost_of_goods_sold')
         ->assertSee('Cost of goods sold (Expense)')
         ->assertDontSee('Cash</option>');
+});
+
+test('account maintenance enforces unique codes and ordinary or contra normal balances', function () {
+    $maintainer = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'account.policy.maintainer',
+        'email' => 'account.policy@example.com',
+        'password' => Hash::make('account-password'),
+    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    $this->actingAs($maintainer);
+
+    AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Cash on Hand',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '1010')
+        ->set('accountName', 'Duplicate cash')
+        ->set('type', 'Asset')
+        ->set('classification', 'cash')
+        ->set('normalBalance', 'debit')
+        ->call('saveAccount')
+        ->assertHasErrors(['accountCode' => 'unique']);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '1020')
+        ->set('accountName', 'Bank')
+        ->set('type', 'Asset')
+        ->set('classification', 'bank')
+        ->set('normalBalance', 'credit')
+        ->call('saveAccount')
+        ->assertHasErrors(['normalBalance']);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '1510')
+        ->set('accountName', 'Accumulated Depreciation')
+        ->set('type', 'Asset')
+        ->set('classification', 'equipment')
+        ->set('normalBalance', 'credit')
+        ->call('saveAccount')
+        ->assertHasNoErrors();
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '3050')
+        ->set('accountName', 'Dividends Declared')
+        ->set('type', 'Equity')
+        ->set('classification', 'other_equity')
+        ->set('normalBalance', 'debit')
+        ->call('saveAccount')
+        ->assertHasNoErrors();
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '4090')
+        ->set('accountName', 'Sales Returns and Allowances')
+        ->set('type', 'Revenue')
+        ->set('classification', 'sales')
+        ->set('normalBalance', 'debit')
+        ->call('saveAccount')
+        ->assertHasNoErrors();
+
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '1500')
+        ->set('accountName', 'Property and Equipment')
+        ->set('type', 'Asset')
+        ->set('classification', 'equipment')
+        ->set('normalBalance', 'credit')
+        ->call('saveAccount')
+        ->assertHasErrors(['normalBalance']);
+
+    expect(fn () => AccountingAccount::create([
+        'code' => '1030',
+        'name' => 'Invalid credit cash',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'credit',
+        'is_active' => true,
+    ]))->toThrow(DomainException::class);
+
+    expect(fn () => AccountingAccount::create([
+        'code' => '4010',
+        'name' => 'Ordinary sales with contra balance',
+        'type' => 'Revenue',
+        'classification' => 'sales',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]))->toThrow(DomainException::class);
+
+    expect(fn () => AccountingAccount::create([
+        'code' => '1040',
+        'name' => 'Mismatched classification',
+        'type' => 'Liability',
+        'classification' => 'cash',
+        'normal_balance' => 'credit',
+        'is_active' => true,
+    ]))->toThrow(DomainException::class);
 });
 
 test('account search and type and status filters read persisted records', function () {
@@ -110,6 +220,39 @@ test('account search and type and status filters read persisted records', functi
         ->set('status', 'Inactive')
         ->assertSee('Site hauling')
         ->assertDontSee('Structural steel');
+});
+
+test('default account listing separates inactive status, approval, and posting eligibility', function () {
+    $this->actingAs(createChartOfAccountsEmployee());
+
+    $inactiveApproved = AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Inactive approved cash',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => false,
+        'approved_at' => now(),
+    ]);
+    AccountingAccount::create([
+        'code' => '1020',
+        'name' => 'Active pending bank',
+        'type' => 'Asset',
+        'classification' => 'bank',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertSee('Inactive approved cash')
+        ->assertSee('Active pending bank')
+        ->assertSee('Inactive')
+        ->assertSee('Approved')
+        ->assertSee('Pending approval')
+        ->assertSee('Not eligible')
+        ->assertDontSee('Eligible');
+
+    expect($inactiveApproved->isApprovedForPosting())->toBeFalse();
 });
 
 test('deactivation preserves a used account identity and reactivation requires renewed approval', function () {
@@ -191,7 +334,7 @@ test('changing a posting mapping clears its approval', function () {
         ->and($mapping->fresh()->approved_at)->toBeNull();
 });
 
-test('account code and statement classification are immutable after use and used accounts cannot be deleted', function () {
+test('used account identity and normal balance are immutable and used accounts cannot be deleted', function () {
     $employee = grantEmployeeTestPermissions(Employee::create([
         'username' => 'account.maintainer2',
         'email' => 'maintainer2@example.com',
@@ -215,6 +358,14 @@ test('account code and statement classification are immutable after use and used
         ->set('classification', 'cost_of_goods_sold')
         ->call('saveAccount')
         ->assertHasErrors(['type', 'classification']);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->call('editAccount', $account->id)
+        ->set('normalBalance', 'credit')
+        ->call('saveAccount')
+        ->assertHasErrors(['normalBalance']);
+    expect(fn () => $account->forceFill(['normal_balance' => 'credit'])->save())
+        ->toThrow(DomainException::class);
 
     Livewire::test(ChartOfAccounts::class)
         ->call('deleteAccount', $account->id)

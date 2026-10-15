@@ -37,7 +37,7 @@ function createLedgerAccount(string $code, string $normalBalance = 'debit', bool
         'code' => $code,
         'name' => "Account {$code}",
         'type' => $normalBalance === 'debit' ? 'Asset' : 'Liability',
-        'classification' => $normalBalance === 'debit' ? 'cash' : 'other_liability',
+        'classification' => $normalBalance === 'debit' ? 'cash' : 'other_current_liability',
         'normal_balance' => $normalBalance,
         'is_active' => $active,
         'approved_at' => now(),

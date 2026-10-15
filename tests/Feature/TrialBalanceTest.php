@@ -105,7 +105,7 @@ test('trial balance carries opening balances through an empty month and presents
     $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
     $payable = trialBalanceAccount('2000', 'accounts_payable', 'Liability', 'credit');
     $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
-    $inactiveWithBalance = trialBalanceAccount('1010', 'other_asset', 'Asset', 'debit', false);
+    $inactiveWithBalance = trialBalanceAccount('1010', 'other_current_asset', 'Asset', 'debit', false);
     postTrialBalanceJournal('OPENING-TB', '2026-01-01', [
         [$cash, 10000, 0], [$payable, 0, 2500], [$equity, 0, 8000], [$inactiveWithBalance, 500, 0],
     ], 'opening', 'FCDC');
@@ -128,7 +128,7 @@ test('trial balance includes both boundary days, cumulative closing and reports 
     $viewer = createTrialBalanceEmployee();
     $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
     $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
-    $inactive = trialBalanceAccount('1010', 'other_asset', 'Asset', 'debit', false);
+    $inactive = trialBalanceAccount('1010', 'other_current_asset', 'Asset', 'debit', false);
     postTrialBalanceJournal('OPENING-TB-2', '2026-01-01', [[$cash, 10000, 0], [$equity, 0, 10000]], 'opening', 'FCDC');
     postTrialBalanceJournal('FIRST-DAY-TB', '2026-02-01', [[$cash, 2500, 0], [$equity, 0, 2500]]);
     postTrialBalanceJournal('LAST-DAY-TB', '2026-02-28', [[$cash, 0, 1000], [$equity, 1000, 0]]);

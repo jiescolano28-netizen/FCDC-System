@@ -36,7 +36,10 @@ function approvedDisbursementAccount(string $code, string $name, string $type, s
         'name' => $name,
         'type' => $type,
         'classification' => $classification,
-        'normal_balance' => 'debit',
+        'normal_balance' => match ($type) {
+            'Asset', 'Expense' => 'debit',
+            'Liability', 'Equity', 'Revenue' => 'credit',
+        },
         'is_active' => true,
         'approved_at' => now(),
         'approved_by' => disbursementEmployee(['accounting.view'])->id,

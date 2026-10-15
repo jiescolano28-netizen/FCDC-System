@@ -9,12 +9,80 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountingAccount extends Model
 {
+    private const CLASSIFICATIONS = [
+        'cash' => ['Cash', 'Asset'],
+        'bank' => ['Bank', 'Asset'],
+        'accounts_receivable' => ['Accounts receivable', 'Asset'],
+        'card_clearing' => ['Card settlement receivable / clearing', 'Asset'],
+        'inventory' => ['Inventory', 'Asset'],
+        'equipment' => ['Equipment', 'Asset'],
+        'other_current_asset' => ['Other current asset', 'Asset'],
+        'other_noncurrent_asset' => ['Other non-current asset', 'Asset'],
+        'accounts_payable' => ['Accounts payable', 'Liability'],
+        'output_vat' => ['Output VAT', 'Liability'],
+        'input_vat' => ['Input VAT', 'Asset'],
+        'other_current_liability' => ['Other current liability', 'Liability'],
+        'other_noncurrent_liability' => ['Other non-current liability', 'Liability'],
+        'capital' => ['Capital', 'Equity'],
+        'retained_earnings' => ['Retained / accumulated earnings', 'Equity'],
+        'other_equity' => ['Other equity', 'Equity'],
+        'sales' => ['Sales', 'Revenue'],
+        'other_income' => ['Other income', 'Revenue'],
+        'cost_of_goods_sold' => ['Cost of goods sold (Expense)', 'Expense'],
+        'operating_expense' => ['Operating expense', 'Expense'],
+        'other_expense' => ['Other expense', 'Expense'],
+    ];
+
+    private const NORMAL_BALANCES_BY_TYPE = [
+        'Asset' => 'debit',
+        'Liability' => 'credit',
+        'Equity' => 'credit',
+        'Revenue' => 'credit',
+        'Expense' => 'debit',
+    ];
+
+    private const CONTRA_ACCOUNT_BALANCES = [
+        '1510' => ['equipment', 'credit'],
+        '3050' => ['other_equity', 'debit'],
+        '4090' => ['sales', 'debit'],
+    ];
+
+    public static function classifications(): array
+    {
+        return self::CLASSIFICATIONS;
+    }
+
+    public static function types(): array
+    {
+        return array_values(array_unique(array_column(self::CLASSIFICATIONS, 1)));
+    }
+
+    public static function supportsNormalBalance(string $code, string $classification, string $normalBalance): bool
+    {
+        $type = self::CLASSIFICATIONS[$classification][1] ?? null;
+        if ($type === null || ! in_array($normalBalance, ['debit', 'credit'], true)) {
+            return false;
+        }
+
+        if (self::NORMAL_BALANCES_BY_TYPE[$type] === $normalBalance) {
+            return true;
+        }
+
+        return (self::CONTRA_ACCOUNT_BALANCES[$code] ?? null) === [$classification, $normalBalance];
+    }
+
     protected static function booted(): void
     {
         static::saving(function (AccountingAccount $account): void {
+            if (! isset(self::CLASSIFICATIONS[$account->classification])
+                || self::CLASSIFICATIONS[$account->classification][1] !== $account->type
+                || ! self::supportsNormalBalance($account->code, $account->classification, $account->normal_balance)) {
+                throw new DomainException('Account type, classification, or normal balance is unsupported.');
+            }
+
             if ($account->exists && $account->getOriginal('used_at') !== null
-                && $account->isDirty(['code', 'type', 'classification'])) {
-                throw new DomainException('Used account identity is historically immutable.');
+                && $account->isDirty(['code', 'type', 'classification', 'normal_balance'])) {
+                throw new DomainException('Used account identity and normal balance are historically immutable.');
             }
 
             if ($account->exists && (
@@ -60,6 +128,9 @@ class AccountingAccount extends Model
 
     public function isApprovedForPosting(): bool
     {
-        return $this->is_active && $this->approved_at !== null;
+        return $this->is_active
+            && $this->approved_at !== null
+            && (self::CLASSIFICATIONS[$this->classification][1] ?? null) === $this->type
+            && self::supportsNormalBalance($this->code, $this->classification, $this->normal_balance);
     }
 }
