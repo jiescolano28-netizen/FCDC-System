@@ -39,6 +39,10 @@ class DemoDatabaseIsolation
             throw new RuntimeException('Database URL overrides are not accepted for the demo connection.');
         }
 
+        if (array_key_exists('read', $connection) || array_key_exists('write', $connection)) {
+            throw new RuntimeException('Separate read/write database endpoints are not accepted for demo setup.');
+        }
+
         $this->verifyDatabaseBackedWrites();
         $driver = $connection['driver'];
         if ($driver === 'sqlite') {
@@ -68,16 +72,41 @@ class DemoDatabaseIsolation
             $this->requireDemoOrDefaultConnection('cache.stores.database.lock_connection', $cacheStore['lock_connection'] ?? null);
         }
 
-        $queue = config('queue.connections.'.config('queue.default'));
-        if (($queue['driver'] ?? null) === 'database') {
-            $this->requireDemoOrDefaultConnection('queue.connections.database.connection', $queue['connection'] ?? null);
+        $queueName = (string) config('queue.default');
+        $this->verifyQueueConnection($queueName, []);
+
+        $failedQueue = config('queue.failed', []);
+        if (in_array($failedQueue['driver'] ?? null, ['database', 'database-uuids'], true)) {
+            $this->requireDemoOrDefaultConnection('queue.failed.database', $failedQueue['database'] ?? null);
         }
+
+        $batching = config('queue.batching', []);
+        $this->requireDemoOrDefaultConnection('queue.batching.database', $batching['database'] ?? null);
     }
 
     private function requireDemoOrDefaultConnection(string $setting, mixed $connection): void
     {
         if ($connection !== null && $connection !== '' && $connection !== 'demo') {
             throw new RuntimeException("Database-backed {$setting} must use the demo connection or Laravel's demo default.");
+        }
+    }
+
+    private function verifyQueueConnection(string $name, array $visited): void
+    {
+        if (in_array($name, $visited, true)) {
+            return;
+        }
+
+        $visited[] = $name;
+        $queue = config("queue.connections.{$name}", []);
+        if (($queue['driver'] ?? null) === 'database') {
+            $this->requireDemoOrDefaultConnection("queue.connections.{$name}.connection", $queue['connection'] ?? null);
+        }
+
+        if (($queue['driver'] ?? null) === 'failover') {
+            foreach ($queue['connections'] ?? [] as $connection) {
+                $this->verifyQueueConnection((string) $connection, $visited);
+            }
         }
     }
 
@@ -153,11 +182,17 @@ class DemoDatabaseIsolation
             }
 
             $candidateTarget = $this->connectionTarget($candidate);
+            if ($candidateTarget['socket'] !== null && $candidateTarget['socket'] !== ''
+                || is_string($candidateTarget['host']) && str_starts_with($candidateTarget['host'], '/')) {
+                throw new RuntimeException('A configured socket-based database alias cannot be independently verified.');
+            }
+
             if ($candidateTarget['host'] === $expectedHost
                 && (string) $candidateTarget['port'] === $expectedPort
                 && $candidateTarget['database'] === $expectedDatabase) {
                 throw new RuntimeException('The demo server database is also configured through another connection alias.');
             }
+
         }
 
         $pdo = DB::connection('demo')->getPdo();
@@ -179,10 +214,13 @@ class DemoDatabaseIsolation
     {
         $url = $connection['url'] ?? null;
         if (! is_string($url) || $url === '') {
+            $socket = $connection['unix_socket'] ?? null;
+
             return [
                 'host' => $connection['host'] ?? null,
                 'port' => $connection['port'] ?? null,
                 'database' => $connection['database'] ?? null,
+                'socket' => $socket,
             ];
         }
 
@@ -191,12 +229,24 @@ class DemoDatabaseIsolation
             throw new RuntimeException('A configured database URL alias cannot be independently verified.');
         }
 
+        $query = [];
+        parse_str($parts['query'] ?? '', $query);
+        $urlHost = $parts['host'] ?? $query['host'] ?? null;
+        $socket = $query['unix_socket'] ?? $query['socket'] ?? $connection['unix_socket'] ?? null;
+        if ($socket === '') {
+            $socket = null;
+        }
+        if (is_string($query['host'] ?? null) && str_starts_with($query['host'], '/')) {
+            $socket = $query['host'];
+        }
+
         return [
-            'host' => $parts['host'] ?? null,
+            'host' => $urlHost,
             'port' => $parts['port'] ?? null,
             'database' => rawurldecode(($parts['scheme'] ?? null) === 'sqlite'
                 ? ($parts['path'] ?? '')
                 : ltrim($parts['path'] ?? '', '/')),
+            'socket' => $socket,
         ];
     }
 

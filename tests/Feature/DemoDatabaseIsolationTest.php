@@ -19,6 +19,10 @@ beforeEach(function () {
         'demo.allowed_environments' => [],
         'demo.allow_in_memory_test' => false,
     ]);
+    config([
+        'queue.failed.database' => 'demo',
+        'queue.batching.database' => 'demo',
+    ]);
 });
 
 test('demo isolation rejects production even when explicitly enabled and allowlisted', function () {
@@ -193,6 +197,81 @@ test('demo isolation rejects a business database URL alias to the same server da
             'host' => 'business-db.internal',
             'port' => '3306',
             'database' => 'business_books',
+        ],
+        'demo.enabled' => true,
+        'demo.allowed_environments' => ['demo'],
+        'demo.database_isolation_attested' => true,
+        'demo.expected_host' => 'demo-db.internal',
+        'demo.expected_port' => '3306',
+        'demo.expected_database' => 'demo_books',
+        'demo.expected_server_id' => 'server-1',
+    ]);
+
+    $this->artisan('demo:verify-isolation')->assertExitCode(1);
+});
+
+test('demo isolation rejects configured split read and write endpoints', function () {
+    config([
+        'app.env' => 'testing',
+        'database.default' => 'demo',
+        'activitylog.database_connection' => 'demo',
+        'database.connections.demo.read' => ['database' => ':memory:'],
+        'demo.enabled' => true,
+        'demo.allowed_environments' => ['testing'],
+        'demo.allow_in_memory_test' => true,
+    ]);
+
+    $this->artisan('demo:verify-isolation')->assertExitCode(1);
+});
+
+test('demo isolation rejects failed-job storage on a business connection', function () {
+    config([
+        'app.env' => 'testing',
+        'database.default' => 'demo',
+        'activitylog.database_connection' => 'demo',
+        'queue.failed.driver' => 'database-uuids',
+        'queue.failed.database' => 'sqlite',
+        'demo.enabled' => true,
+        'demo.allowed_environments' => ['testing'],
+        'demo.allow_in_memory_test' => true,
+    ]);
+
+    $this->artisan('demo:verify-isolation')->assertExitCode(1);
+});
+
+test('demo isolation rejects batch metadata storage on a business connection', function () {
+    config([
+        'app.env' => 'testing',
+        'database.default' => 'demo',
+        'activitylog.database_connection' => 'demo',
+        'queue.batching.database' => 'sqlite',
+        'demo.enabled' => true,
+        'demo.allowed_environments' => ['testing'],
+        'demo.allow_in_memory_test' => true,
+    ]);
+
+    $this->artisan('demo:verify-isolation')->assertExitCode(1);
+});
+
+test('demo isolation rejects socket-based server aliases as ambiguous', function () {
+    config([
+        'app.env' => 'demo',
+        'database.default' => 'demo',
+        'activitylog.database_connection' => 'demo',
+        'database.connections.demo' => [
+            'driver' => 'mysql',
+            'database' => 'demo_books',
+            'host' => 'demo-db.internal',
+            'port' => '3306',
+            'url' => null,
+            'unix_socket' => null,
+        ],
+        'database.connections.mysql' => [
+            'driver' => 'mysql',
+            'database' => 'business_books',
+            'host' => 'localhost',
+            'port' => '3306',
+            'unix_socket' => '/var/run/mysqld/mysqld.sock',
         ],
         'demo.enabled' => true,
         'demo.allowed_environments' => ['demo'],
