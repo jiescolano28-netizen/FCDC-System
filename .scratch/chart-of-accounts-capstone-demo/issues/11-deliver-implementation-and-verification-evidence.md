@@ -26,7 +26,7 @@ Source and test files carrying the capstone implementation behavior (not a claim
 - `database/seeders/ProposedChartOfAccountsSeeder.php`, `app/Console/Commands/SeedProposedChartOfAccounts.php`: explicit, transactional chart setup and result reporting.
 - `app/Models/AccountingAccount.php`, `app/Livewire/Accounting/ChartOfAccounts.php`, `resources/views/livewire/accounting/chart-of-accounts.blade.php`: account validation, eligibility, maintenance behavior, and listing status.
 - `app/Services/Accounting/PosSalePostingService.php`, `app/Services/Inventory/RecordValuedStockMovement.php`: shared posting restrictions at the relevant integration boundaries.
-- `tests/Feature/DemoDatabaseIsolationTest.php`, `tests/Feature/ProposedChartOfAccountsSeederTest.php`, `tests/Feature/ChartOfAccountsTest.php`, `tests/Feature/CashDisbursementsTest.php`, `tests/Feature/InventoryManagementTest.php`, `tests/Feature/JournalEntryTest.php`, `tests/Feature/SupplierPurchaseInvoicesTest.php`, `tests/Feature/ValuedStockMovementTest.php`: executable behavioral coverage.
+- `tests/Feature/DemoDatabaseIsolationTest.php`, `tests/Feature/ProposedChartOfAccountsSeederTest.php`, `tests/Feature/ChartOfAccountsTest.php`, `tests/Feature/CashDisbursementsTest.php`, `tests/Feature/InventoryManagementTest.php`, `tests/Feature/JournalEntryTest.php`, `tests/Feature/SupplierPaymentAllocationsTest.php`, `tests/Feature/SupplierPurchaseInvoicesTest.php`, `tests/Feature/ValuedStockMovementTest.php`: executable behavioral coverage.
 - `README.md`: explicit demo setup instructions.
 - This report and phase issue records under `.scratch/chart-of-accounts-capstone-demo/issues/`: evidence and remaining decisions.
 
