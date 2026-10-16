@@ -179,6 +179,21 @@ test('received mixed credit purchase posts equipment and AP while adding a weigh
         ],
     ], $actor->id);
 
+    $miscellaneous = AccountingAccount::create([
+        'code' => '6190', 'name' => 'Miscellaneous Expense', 'type' => 'Expense',
+        'classification' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $invoice->lines()->whereNotNull('accounting_account_id')->update(['accounting_account_id' => $miscellaneous->id]);
+    expect(fn () => app(SupplierPurchaseService::class)->post($invoice->id, $actor->id))
+        ->toThrow(ValidationException::class);
+    expect($invoice->fresh()->status)->toBe('draft')
+        ->and($inventory->fresh()->qty)->toBe('10.00')
+        ->and($miscellaneous->fresh()->used_at)->toBeNull()
+        ->and(DB::table('accounting_journals')->where('source_type', 'supplier_purchase')->count())->toBe(0)
+        ->and(DB::table('stock_movements')->where('source_reference', 'supplier_purchase:'.$invoice->id)->count())->toBe(0);
+    $invoice->lines()->where('accounting_account_id', $miscellaneous->id)->update(['accounting_account_id' => $equipment->id]);
+
     $payableAccount = AccountingAccount::query()->where('classification', 'accounts_payable')->firstOrFail();
     AccountingPostingMapping::query()->where('source', 'accounts_payable')->delete();
     expect(fn () => app(SupplierPurchaseService::class)->post($invoice->id, $actor->id))
@@ -442,6 +457,30 @@ test('purchase correction allocates reviewed cost between remaining and consumed
 
     expect($item->fresh()->qty)->toBe('8.00')
         ->and($item->fresh()->carrying_value_cents)->toBe(4_000_000);
+    $miscellaneous = AccountingAccount::create([
+        'code' => '6190', 'name' => 'Miscellaneous Expense', 'type' => 'Expense',
+        'classification' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => $actor->id,
+    ]);
+    $journalCount = AccountingJournal::query()->count();
+    $activityCount = DB::table('activity_log')->count();
+    expect(fn () => app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
+        'reason' => 'Attempt restricted Miscellaneous Expense correction',
+        'allocations' => [[
+            'line_id' => $invoice->lines->first()->id, 'corrected_amount_cents' => 4_000_000,
+            'remaining_inventory_cents' => 800_000, 'consumed_cost_cents' => 200_000,
+            'consumed_accounting_account_id' => $miscellaneous->id,
+        ]],
+    ], $actor->id))->toThrow(ValidationException::class);
+    expect($invoice->fresh()->status)->toBe('posted')
+        ->and($invoice->fresh()->outstandingAmountCents())->toBe(5_000_000)
+        ->and($item->fresh()->qty)->toBe('8.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(4_000_000)
+        ->and(DB::table('supplier_purchase_corrections')->count())->toBe(0)
+        ->and(AccountingJournal::query()->count())->toBe($journalCount)
+        ->and(DB::table('cash_disbursements')->count())->toBe(0)
+        ->and(DB::table('activity_log')->count())->toBe($activityCount);
+
     $correction = app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
         'reason' => 'Supplier credited the purchase price',
         'allocations' => [[

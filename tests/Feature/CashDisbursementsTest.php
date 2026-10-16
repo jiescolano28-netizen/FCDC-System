@@ -110,6 +110,30 @@ test('a PHP 2,000 direct utility disbursement remains effect-free as a draft and
         ->assertSee('CD-'.$disbursement->id);
 
 });
+test('direct disbursement rejects an ordinarily approved Miscellaneous Expense without partial posting', function () {
+    [$cash, $bank] = prepareDisbursementBooks();
+    $miscellaneous = AccountingAccount::create([
+        'code' => '6190', 'name' => 'Miscellaneous Expense', 'type' => 'Expense',
+        'classification' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true,
+        'approved_at' => now(), 'approved_by' => disbursementEmployee(['accounting.view'])->id,
+    ]);
+    $actor = disbursementEmployee();
+    $service = app(CashDisbursementService::class);
+    $draft = $service->saveDraft(disbursementInput($bank, $miscellaneous), $actor->id);
+    $activityCount = \Illuminate\Support\Facades\DB::table('activity_log')->count();
+
+    expect(fn () => $service->post($draft->id, $actor->id))->toThrow(\Illuminate\Validation\ValidationException::class);
+
+    expect($draft->fresh()->status)->toBe('draft')
+        ->and($draft->fresh()->amount_cents)->toBe(200_000)
+        ->and($draft->fresh()->payee)->toBe('City Water Services')
+        ->and($draft->fresh()->supplier_id)->toBeNull()
+        ->and(AccountingJournal::where('source_type', 'cash_disbursement')->count())->toBe(0)
+        ->and($miscellaneous->fresh()->used_at)->toBeNull()
+        ->and($cash->fresh()->used_at)->toBeNull()
+        ->and(\Illuminate\Support\Facades\DB::table('cash_disbursement_lines')->where('cash_disbursement_id', $draft->id)->count())->toBe(1)
+        ->and(\Illuminate\Support\Facades\DB::table('activity_log')->count())->toBe($activityCount);
+});
 
 test('direct payment drafts can be edited and deleted without creating a journal', function () {
     [, $bank, $utilities] = prepareDisbursementBooks();
