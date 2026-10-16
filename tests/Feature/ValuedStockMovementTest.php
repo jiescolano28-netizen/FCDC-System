@@ -146,6 +146,13 @@ test('unapproved staff cannot post a valued inventory decrease or loss', functio
         'password' => Hash::make('secret-password'),
     ]), ['inventory.movements.record']);
     $this->actingAs($unapproved);
+    expect(fn () => app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'adjustment', '11.00', 'count_correction', 'COUNT-UNAPPROVED',
+        now('Asia/Manila')->toDateString(), $unapproved->id, '100.00',
+    ))->toThrow(HttpException::class);
+    expect($item->fresh()->qty)->toBe('10.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(100000);
+
     $ordinaryIssue = app(RecordValuedStockMovement::class)->handle(
         $item->id, 'stock_out', '1.00', 'project_use', 'JOB-UNAPPROVED',
         now('Asia/Manila')->toDateString(), $unapproved->id,

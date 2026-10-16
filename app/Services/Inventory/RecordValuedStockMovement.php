@@ -115,7 +115,8 @@ class RecordValuedStockMovement
             if ($delta === 0 || $nextQuantity < 0) {
                 throw ValidationException::withMessages(['quantity' => 'The valued movement must change quantity and cannot leave a negative balance.']);
             }
-            if ($delta < 0 && $reason === 'damage_loss' && ! $actor->can('inventory.valuation.approve')) {
+            if (($delta > 0 || ($delta < 0 && $reason === 'damage_loss'))
+                && ! $actor->can('inventory.valuation.approve')) {
                 abort(403);
             }
 
