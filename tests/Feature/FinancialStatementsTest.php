@@ -5,8 +5,8 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\AccountingYtdSummary;
-use App\Services\Accounting\OpeningBooksService;
 use App\Models\Employee;
+use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -446,4 +446,37 @@ test('balance sheet preserves unclosed earnings from a used income account after
         ->set('toDate', '2026-02-01')
         ->assertSee('Balance Sheet unavailable.')
         ->assertSee('active accounts await approval');
+});
+test('contra accounts reduce assets equity and net revenue by their posted debit and credit directions', function () {
+    $viewer = createFinancialStatementsEmployee();
+    $period = statementPeriod(2026);
+    $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
+    $equipment = statementAccount('1500', 'equipment', 'Asset', 'debit');
+    $accumulatedDepreciation = statementAccount('1510', 'equipment', 'Asset', 'credit');
+    $capital = statementAccount('3010', 'capital', 'Equity', 'credit');
+    $dividends = statementAccount('3050', 'other_equity', 'Equity', 'debit');
+    $sales = statementAccount('4010', 'sales', 'Revenue', 'credit');
+    $returns = statementAccount('4090', 'sales', 'Revenue', 'debit');
+
+    statementJournal($period, $viewer, '2026-01-01', 'opening', [
+        [$cash, 100000, 0], [$equipment, 50000, 0], [$accumulatedDepreciation, 0, 10000],
+        [$capital, 0, 145000], [$dividends, 5000, 0],
+    ], 'CONTRA-OPEN');
+    statementJournal($period, $viewer, '2026-02-01', 'sales-and-returns', [
+        [$cash, 8000, 0], [$sales, 0, 10000], [$returns, 2000, 0],
+    ], 'CONTRA-SALES');
+
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'income-statement')
+        ->set('fromDate', '2026-02-01')
+        ->set('toDate', '2026-02-28')
+        ->assertSee('PHP 80.00');
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', '2026-12-30')
+        ->assertSee('−PHP 100.00')
+        ->assertSee('−PHP 50.00')
+        ->assertSee('PHP 80.00')
+        ->assertSee('PHP 1,480.00')
+        ->assertSee('Accounting equation balances');
 });

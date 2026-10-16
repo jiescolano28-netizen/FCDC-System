@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountingAccount extends Model
 {
+    private const POSTING_POLICY_HELD_CODES = ['1510', '2040', '3040', '3050', '5030'];
+
     private const CLASSIFICATIONS = [
         'cash' => ['Cash', 'Asset'],
         'bank' => ['Bank', 'Asset'],
@@ -126,9 +128,15 @@ class AccountingAccount extends Model
         $this->forceFill(['used_at' => $this->used_at ?? now()])->save();
     }
 
+    public function hasPendingPostingPolicy(): bool
+    {
+        return in_array($this->code, self::POSTING_POLICY_HELD_CODES, true);
+    }
+
     public function isApprovedForPosting(): bool
     {
-        return $this->is_active
+        return ! $this->hasPendingPostingPolicy()
+            && $this->is_active
             && $this->approved_at !== null
             && (self::CLASSIFICATIONS[$this->classification][1] ?? null) === $this->type
             && self::supportsNormalBalance($this->code, $this->classification, $this->normal_balance);

@@ -33,6 +33,10 @@ class AccountingJournal extends Model
                 ])) {
                 throw new DomainException('Posted accounting journals are immutable.');
             }
+            if ($journal->status === 'posted' && $journal->isDirty('status')
+                && $journal->lines()->whereHas('account', fn ($query) => $query->where('code', '3040'))->exists()) {
+                throw new DomainException('Current-year earnings are derived in reporting and cannot be posted to account 3040.');
+            }
         });
         static::deleting(function (AccountingJournal $journal): void {
             $persistedStatus = $journal->exists

@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Pos\PointOfSale;
+use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
 use App\Models\Employee;
@@ -32,6 +33,11 @@ test('a completed sale posts recorded cash, sales and VAT plus frozen moving-ave
         'unit_cost' => '999.00', 'selling_price' => '180.00', 'reorder_level' => '0',
     ]);
     $accounts = setupPosAccountingBooks([$item], [$item->id => '500.00']);
+    $vatPayable = AccountingAccount::create([
+        'code' => '2040', 'name' => 'VAT Payable', 'type' => 'Liability',
+        'classification' => 'other_current_liability', 'normal_balance' => 'credit',
+        'is_active' => true, 'approved_at' => now(),
+    ]);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $item->id)
@@ -49,6 +55,8 @@ test('a completed sale posts recorded cash, sales and VAT plus frozen moving-ave
         ->and($sale->vat_amount)->toBe('21.60')
         ->and($sale->total)->toBe('201.60')
         ->and($journal->status)->toBe('posted')
+        ->and($journal->lines)->toHaveCount(5)
+        ->and($journal->lines->pluck('accounting_account_id'))->not->toContain($vatPayable->id)
         ->and($lines[$accounts['cash']->id]->debit_cents)->toBe(20160)
         ->and($lines[$accounts['sales']->id]->credit_cents)->toBe(18000)
         ->and($lines[$accounts['output_vat']->id]->credit_cents)->toBe(2160)

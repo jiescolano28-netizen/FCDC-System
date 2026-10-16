@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Inventory\InventoryProfile;
+use App\Models\AccountingJournal;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\InventoryReceiptAttachment;
@@ -33,11 +34,14 @@ function receiptInventory(): Inventory
     ]);
 }
 
-test('a user can upload multiple receipt files of any type', function () {
+test('a user can upload multiple receipt files without changing stock value or creating journals', function () {
     Storage::fake('local');
     $manager = receiptManager();
     $this->actingAs($manager);
     $inventory = receiptInventory();
+    $quantity = $inventory->qty;
+    $carryingValue = $inventory->carrying_value_cents;
+    $journalCount = AccountingJournal::query()->count();
 
     $response = $this->post(route('inventory.receipts.store', $inventory), [
         'receiptFiles' => [
@@ -48,7 +52,10 @@ test('a user can upload multiple receipt files of any type', function () {
     ]);
 
     $response->assertCreated();
-    expect(InventoryReceiptAttachment::where('inventory_id', $inventory->id)->count())->toBe(3);
+    expect(InventoryReceiptAttachment::where('inventory_id', $inventory->id)->count())->toBe(3)
+        ->and($inventory->fresh()->qty)->toBe($quantity)
+        ->and($inventory->fresh()->carrying_value_cents)->toBe($carryingValue)
+        ->and(AccountingJournal::query()->count())->toBe($journalCount);
 
     foreach (InventoryReceiptAttachment::all() as $attachment) {
         Storage::disk('local')->assertExists($attachment->path);

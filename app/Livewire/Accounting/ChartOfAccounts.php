@@ -170,6 +170,7 @@ class ChartOfAccounts extends Component
         $this->authorizePermission('accounting.approve-accounts');
         $account = AccountingAccount::findOrFail($id);
         abort_unless($account->is_active, 422, 'Inactive accounts cannot be approved for posting.');
+        abort_unless(! $account->hasPendingPostingPolicy(), 422, 'Pending accounting policy prevents approval for posting.');
         $account->forceFill(['approved_at' => now(), 'approved_by' => auth()->id()])->save();
     }
 

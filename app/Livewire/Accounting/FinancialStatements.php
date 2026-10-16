@@ -231,6 +231,7 @@ class FinancialStatements extends Component
         }
 
         $approvedAccounts = $accounts->filter(fn (AccountingAccount $account) => $account->approved_at !== null
+            && $account->code !== '3040'
             && in_array($account->classification, self::BALANCE_CLASSIFICATIONS, true))->keyBy('id');
         if ($approvedAccounts->isEmpty()) {
             return ['available' => false, 'error' => 'Approved Asset, Liability and Equity classifications are unavailable.'];

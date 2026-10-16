@@ -461,3 +461,37 @@ test('approved mappings cannot post through an account with a mismatched classif
 
     expect($mapping->fresh()->isApprovedForPosting())->toBeFalse();
 });
+test('pending policy accounts cannot be approved or made postable through ordinary account approval', function () {
+    $reviewer = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'policy.reviewer.'.fake()->unique()->numerify('####'),
+        'email' => fake()->unique()->safeEmail(),
+        'password' => Hash::make('account-password'),
+    ]), ['accounting.view', 'accounting.approve-accounts']);
+    $this->actingAs($reviewer);
+
+    foreach ([
+        ['1510', 'Asset', 'equipment', 'credit'],
+        ['2040', 'Liability', 'other_current_liability', 'credit'],
+        ['3040', 'Equity', 'other_equity', 'credit'],
+        ['3050', 'Equity', 'other_equity', 'debit'],
+        ['5030', 'Expense', 'cost_of_goods_sold', 'debit'],
+    ] as [$code, $type, $classification, $normalBalance]) {
+        $account = AccountingAccount::create([
+            'code' => $code,
+            'name' => 'Policy-held '.$code,
+            'type' => $type,
+            'classification' => $classification,
+            'normal_balance' => $normalBalance,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(ChartOfAccounts::class)
+            ->call('approveAccount', $account->id)
+            ->assertStatus(422);
+
+        expect($account->fresh()->approved_at)->toBeNull();
+
+        $account->forceFill(['approved_at' => now(), 'approved_by' => $reviewer->id])->save();
+        expect($account->fresh()->isApprovedForPosting())->toBeFalse();
+    }
+});

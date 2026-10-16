@@ -5,10 +5,12 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
+use App\Services\Accounting\ManualJournalService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class)->beforeEach(function () {
@@ -355,4 +357,28 @@ test('miscellaneous expense remains ineligible for posting despite ordinary acco
     expect($draft->fresh()->status)->toBe('draft')
         ->and($miscellaneous->fresh()->used_at)->toBeNull()
         ->and(AccountingAccount::query()->where('code', '6190')->firstOrFail()->isApprovedForPosting())->toBeFalse();
+});
+test('direct manual posting rejects current-year earnings as a ledger account after ordinary approval', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $earnings = approvedJournalAccount('3040', 'Equity', 'other_equity', 'credit');
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    $draft = app(ManualJournalService::class)->saveDraft([
+        'accountingDate' => now('Asia/Manila')->toDateString(),
+        'reference' => 'POLICY-3040',
+        'description' => 'Attempt to post derived earnings',
+        'lines' => [
+            ['accountId' => $cash->id, 'debit' => '100.00', 'credit' => ''],
+            ['accountId' => $earnings->id, 'debit' => '', 'credit' => '100.00'],
+        ],
+    ], $poster->id);
+
+    expect(fn () => app(ManualJournalService::class)->postDraft($draft->id, $poster->id))
+        ->toThrow(ValidationException::class);
+    expect($draft->fresh()->status)->toBe('draft')
+        ->and($draft->fresh()->lines->pluck('accounting_account_id')->contains($earnings->id))->toBeTrue();
+    expect(fn () => $draft->fresh()->forceFill([
+        'status' => 'posted', 'posted_by' => $poster->id, 'posted_at' => now(),
+    ])->save())->toThrow(DomainException::class);
+    expect($draft->fresh()->status)->toBe('draft');
 });
