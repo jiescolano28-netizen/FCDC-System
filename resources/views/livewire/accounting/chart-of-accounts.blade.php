@@ -2,9 +2,15 @@
     <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 id="chart-of-accounts-heading" class="text-2xl font-semibold tracking-tight text-slate-900">Chart of Accounts</h1>
-            <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Maintain approved production accounts and source-account mappings.</p>
+            <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{{ $isVerifiedDemo ? 'Maintain illustrative proposals and source-account mappings; demo data is not an approved production chart.' : 'Maintain approved production accounts and source-account mappings.' }}</p>
         </div>
     </header>
+
+    @if ($isVerifiedDemo)
+        <aside class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950" role="note">
+            Illustrative / Sample Data — Not Actual FCDC Financial Records
+        </aside>
+    @endif
 
     @if (session()->has('account-message'))
         <p class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900" role="status">{{ session('account-message') }}</p>
@@ -105,8 +111,8 @@
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="accounts-heading">
         <header class="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h2 id="accounts-heading" class="text-base font-semibold text-slate-900">Production accounts</h2>
-                <p class="mt-1 text-sm text-slate-600">Only approved active accounts are eligible for posting.</p>
+                <h2 id="accounts-heading" class="text-base font-semibold text-slate-900">{{ $isVerifiedDemo ? 'Proposed accounts' : 'Production accounts' }}</h2>
+                <p class="mt-1 text-sm text-slate-600">{{ $isVerifiedDemo ? 'Illustrative proposals are not approved production records. Posting eligibility and treatment notes are shown separately.' : 'Only approved active accounts are eligible for posting.' }}</p>
             </div>
             <span class="text-sm tabular-nums text-slate-600" aria-live="polite">Showing {{ $accounts->count() }} of {{ $accountCount }} accounts</span>
         </header>
@@ -122,7 +128,7 @@
                         <tr wire:key="account-{{ $account->id }}" class="transition-colors hover:bg-slate-50/70">
                             <td class="whitespace-nowrap px-4 py-3 font-semibold tabular-nums text-slate-900">{{ $account->code }}</td>
                             <td class="px-4 py-3 font-medium text-slate-800">{{ $account->name }}</td>
-                            <td class="max-w-xs truncate px-4 py-3 text-slate-600" title="{{ $account->description }}">{{ $account->description ?: '—' }}</td>
+                            <td class="max-w-xs whitespace-normal px-4 py-3 text-slate-600" title="{{ $account->description }}">{{ $account->description ?: '—' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $account->type }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $classifications->firstWhere('value', $account->classification)['label'] }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ ucfirst($account->normal_balance) }}</td>

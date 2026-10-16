@@ -4,6 +4,7 @@ namespace App\Livewire\Accounting;
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingPostingMapping;
+use App\Support\DemoDatabaseIsolation;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -239,6 +240,13 @@ class ChartOfAccounts extends Component
             ->orderBy('code')
             ->get();
 
+        try {
+            app(DemoDatabaseIsolation::class)->verify();
+            $isVerifiedDemo = true;
+        } catch (\Throwable) {
+            $isVerifiedDemo = false;
+        }
+
         return view('livewire.accounting.chart-of-accounts', [
             'accounts' => $accounts,
             'accountCount' => AccountingAccount::count(),
@@ -247,6 +255,7 @@ class ChartOfAccounts extends Component
             'mappingSources' => self::MAPPING_SOURCES,
             'mappings' => AccountingPostingMapping::with('account')->get()->keyBy('source'),
             'eligibleAccounts' => AccountingAccount::where('is_active', true)->orderBy('code')->get(),
+            'isVerifiedDemo' => $isVerifiedDemo,
         ])->layout('layouts.app', ['title' => 'Chart of Accounts']);
     }
 

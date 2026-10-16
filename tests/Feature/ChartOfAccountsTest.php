@@ -5,6 +5,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingPostingMapping;
 use App\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 
@@ -497,5 +498,66 @@ test('pending policy accounts cannot be approved or made postable through ordina
 
         $account->forceFill(['approved_at' => now(), 'approved_by' => $reviewer->id])->save();
         expect($account->fresh()->isApprovedForPosting())->toBeFalse();
+    }
+});
+test('demo notice requires a verified isolated database and shows proposal treatment details', function () {
+    $employee = createChartOfAccountsEmployee();
+    $this->actingAs($employee);
+
+    $original = [
+        'app.env' => config('app.env'),
+        'database.default' => config('database.default'),
+        'database.connections.demo' => config('database.connections.demo'),
+        'activitylog.database_connection' => config('activitylog.database_connection'),
+        'queue.failed.database' => config('queue.failed.database'),
+        'queue.batching.database' => config('queue.batching.database'),
+        'demo.enabled' => config('demo.enabled'),
+        'demo.allowed_environments' => config('demo.allowed_environments'),
+        'demo.allow_in_memory_test' => config('demo.allow_in_memory_test'),
+    ];
+
+    try {
+        config([
+            'app.env' => 'testing',
+            'database.default' => 'sqlite',
+            'demo.enabled' => true,
+            'demo.allowed_environments' => ['testing'],
+            'demo.allow_in_memory_test' => true,
+        ]);
+
+        Livewire::test(ChartOfAccounts::class)
+            ->assertDontSee('Illustrative / Sample Data — Not Actual FCDC Financial Records')
+            ->assertSee('Production accounts')
+            ->assertSee('Maintain approved production accounts and source-account mappings.');
+
+        config([
+            'database.connections.demo' => config('database.connections.sqlite'),
+            'database.default' => 'demo',
+            'activitylog.database_connection' => 'demo',
+            'queue.failed.database' => 'demo',
+            'queue.batching.database' => 'demo',
+        ]);
+        DB::purge('demo');
+        $this->artisan('migrate:fresh', ['--database' => 'demo', '--force' => true])->assertExitCode(0);
+        $employee = createChartOfAccountsEmployee();
+        $this->actingAs($employee);
+        AccountingAccount::create([
+            'code' => '1510',
+            'name' => 'Accumulated Depreciation',
+            'description' => 'Provisional existing-class representation of contra-asset; presentation pending',
+            'type' => 'Asset',
+            'classification' => 'equipment',
+            'normal_balance' => 'credit',
+            'is_active' => true,
+        ]);
+
+        Livewire::test(ChartOfAccounts::class)
+            ->assertSee('Illustrative / Sample Data — Not Actual FCDC Financial Records')
+            ->assertSee('Proposed accounts')
+            ->assertSee('Provisional existing-class representation of contra-asset; presentation pending')
+            ->assertSee('Not eligible');
+    } finally {
+        DB::purge('demo');
+        config($original);
     }
 });
