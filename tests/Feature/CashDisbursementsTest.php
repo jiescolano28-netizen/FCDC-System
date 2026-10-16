@@ -80,7 +80,8 @@ function disbursementInput(AccountingAccount $account, AccountingAccount $debit,
 
 test('a PHP 2,000 direct utility disbursement remains effect-free as a draft and posts to the selected bank account', function () {
     [$cash, $bank, $utilities] = prepareDisbursementBooks();
-    $this->actingAs(disbursementEmployee());
+    $actor = disbursementEmployee();
+    $this->actingAs($actor);
 
     $component = Livewire::test(CashDisbursements::class);
     foreach (disbursementInput($bank, $utilities) as $field => $value) {
@@ -93,13 +94,19 @@ test('a PHP 2,000 direct utility disbursement remains effect-free as a draft and
         ->and(AccountingJournal::where('source_type', 'cash_disbursement')->count())->toBe(0)
         ->and($disbursement->amount_cents)->toBe(200000);
 
+    $poster = disbursementEmployee();
+    $this->actingAs($poster);
     Livewire::test(CashDisbursements::class)->call('postDisbursement', $disbursement->id)->assertHasNoErrors();
     $disbursement->refresh();
     $journal = AccountingJournal::where('source_type', 'cash_disbursement')->firstOrFail();
     expect($disbursement->status)->toBe('posted')
         ->and($journal->lines()->where('accounting_account_id', $utilities->id)->value('debit_cents'))->toBe(200000)
         ->and($journal->lines()->where('accounting_account_id', $bank->id)->value('credit_cents'))->toBe(200000)
-        ->and($journal->lines()->where('accounting_account_id', $cash->id)->exists())->toBeFalse();
+        ->and($journal->lines()->where('accounting_account_id', $cash->id)->exists())->toBeFalse()
+        ->and($journal->source_type)->toBe('cash_disbursement')
+        ->and($journal->source_id)->toBe((string) $disbursement->id)
+        ->and($journal->prepared_by)->toBe($actor->id)
+        ->and($journal->posted_by)->toBe($poster->id);
     Livewire::test(CashDisbursements::class)
         ->set('search', 'WT-2026-0042')
         ->set('status', 'Posted')

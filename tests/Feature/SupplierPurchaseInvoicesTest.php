@@ -185,13 +185,21 @@ test('received mixed credit purchase posts equipment and AP while adding a weigh
         'approved_at' => now(), 'approved_by' => $actor->id,
     ]);
     $invoice->lines()->whereNotNull('accounting_account_id')->update(['accounting_account_id' => $miscellaneous->id]);
+    expect($miscellaneous->isApprovedForPosting())->toBeFalse()
+        ->and((int) DB::table('supplier_purchase_lines')->where('supplier_purchase_invoice_id', $invoice->id)
+            ->whereNotNull('accounting_account_id')->value('accounting_account_id'))->toBe($miscellaneous->id);
+    $supplierBefore = $supplier->only(['code', 'name', 'created_by']);
+    $activityCount = DB::table('activity_log')->count();
     expect(fn () => app(SupplierPurchaseService::class)->post($invoice->id, $actor->id))
         ->toThrow(ValidationException::class);
     expect($invoice->fresh()->status)->toBe('draft')
         ->and($inventory->fresh()->qty)->toBe('10.00')
         ->and($miscellaneous->fresh()->used_at)->toBeNull()
         ->and(DB::table('accounting_journals')->where('source_type', 'supplier_purchase')->count())->toBe(0)
-        ->and(DB::table('stock_movements')->where('source_reference', 'supplier_purchase:'.$invoice->id)->count())->toBe(0);
+        ->and(DB::table('stock_movements')->where('source_reference', 'supplier_purchase:'.$invoice->id)->count())->toBe(0)
+        ->and($supplier->fresh()->only(['code', 'name', 'created_by']))->toBe($supplierBefore)
+        ->and(DB::table('cash_disbursements')->count())->toBe(0)
+        ->and(DB::table('activity_log')->count())->toBe($activityCount);
     $invoice->lines()->where('accounting_account_id', $miscellaneous->id)->update(['accounting_account_id' => $equipment->id]);
 
     $payableAccount = AccountingAccount::query()->where('classification', 'accounts_payable')->firstOrFail();
@@ -462,6 +470,7 @@ test('purchase correction allocates reviewed cost between remaining and consumed
         'classification' => 'other_expense', 'normal_balance' => 'debit', 'is_active' => true,
         'approved_at' => now(), 'approved_by' => $actor->id,
     ]);
+    $supplierBefore = $supplier->only(['code', 'name', 'created_by']);
     $journalCount = AccountingJournal::query()->count();
     $activityCount = DB::table('activity_log')->count();
     expect(fn () => app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [
@@ -479,6 +488,7 @@ test('purchase correction allocates reviewed cost between remaining and consumed
         ->and(DB::table('supplier_purchase_corrections')->count())->toBe(0)
         ->and(AccountingJournal::query()->count())->toBe($journalCount)
         ->and(DB::table('cash_disbursements')->count())->toBe(0)
+        ->and($supplier->fresh()->only(['code', 'name', 'created_by']))->toBe($supplierBefore)
         ->and(DB::table('activity_log')->count())->toBe($activityCount);
 
     $correction = app(SupplierPurchaseCorrectionService::class)->correct($invoice->id, [

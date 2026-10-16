@@ -96,13 +96,19 @@ test('a PHP 35,000 supplier settlement allocates across invoices, posts AP again
         ->and($first->fresh()->outstandingAmountCents())->toBe(3_000_000)
         ->and(AccountingJournal::where('source_type', 'cash_disbursement')->count())->toBe(0);
 
-    $posted = $service->post($draft->id, $actor->id);
+    $poster = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'settlement-poster.'.fake()->unique()->numerify('####'),
+        'email' => fake()->unique()->safeEmail(),
+        'password' => Hash::make('settlement-poster-password'),
+    ]), ['accounting.post-disbursements']);
+    $posted = $service->post($draft->id, $poster->id);
     expect($posted->journal->lines->where('accounting_account_id', $ap->id)->sum('debit_cents'))->toBe(3_500_000)
         ->and($posted->journal->lines->where('accounting_account_id', $cash->id)->sum('credit_cents'))->toBe(3_500_000)
+        ->and($posted->journal->lines->whereNotIn('accounting_account_id', [$ap->id, $cash->id]))->toBeEmpty()
         ->and($posted->journal->source_type)->toBe('cash_disbursement')
         ->and($posted->journal->source_id)->toBe((string) $posted->id)
         ->and($posted->journal->prepared_by)->toBe($actor->id)
-        ->and($posted->journal->posted_by)->toBe($actor->id)
+        ->and($posted->journal->posted_by)->toBe($poster->id)
         ->and($first->fresh()->outstandingAmountCents())->toBe(0)
         ->and($first->fresh()->payableStatus())->toBe('Paid')
         ->and($second->fresh()->outstandingAmountCents())->toBe(1_500_000)
