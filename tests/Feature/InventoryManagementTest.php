@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AccountingJournal;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Models\Employee;
@@ -536,6 +537,7 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     $employee = createInventoryManager();
     $this->actingAs($employee);
     $item = Inventory::create(inventoryAttributes(['qty' => 10]));
+    $item->forceFill(['carrying_value_cents' => 72500])->saveQuietly();
     $otherItem = Inventory::create(inventoryAttributes(['name' => 'Other inventory', 'qty' => 4]));
 
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
@@ -570,6 +572,8 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     $stockOut = $item->stockMovements()->where('type', 'stock_out')->firstOrFail();
     $adjustment = $item->stockMovements()->where('type', 'adjustment')->firstOrFail();
     expect($item->fresh()->qty)->toBe('5.50')
+        ->and($item->fresh()->carrying_value_cents)->toBe(72500)
+        ->and(AccountingJournal::query()->count())->toBe(0)
         ->and($stockOut->quantity)->toBe('-3.00')
         ->and($stockOut->reason_category)->toBe('project_use')
         ->and($adjustment->quantity)->toBe('-1.50')

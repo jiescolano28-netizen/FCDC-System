@@ -80,8 +80,7 @@ test('valued receipts and issues use moving-average carrying value and full depl
         'password' => Hash::make('secret-password'),
     ]), ['inventory.movements.record']);
     $this->actingAs($valueUnapproved);
-    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class)
-        ->set('stockItemId', $item->id)
+    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '10.00')
         ->set('stockUnitValue', '200.00')
         ->set('stockReasonCategory', 'purchase_receipt')
@@ -97,8 +96,7 @@ test('valued receipts and issues use moving-average carrying value and full depl
     $service = app(RecordValuedStockMovement::class);
 
     $today = now('Asia/Manila')->toDateString();
-    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class)
-        ->set('stockItemId', $item->id)
+    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class, ['id' => $item->id])
         ->set('stockQuantity', '10.00')
         ->set('stockUnitValue', '200.00')
         ->set('stockReasonCategory', 'purchase_receipt')
@@ -114,8 +112,7 @@ test('valued receipts and issues use moving-average carrying value and full depl
         ->and($receipt->accountingJournal->lines->sum('debit_cents'))->toBe(200000)
         ->and($receipt->accountingJournal->lines->sum('credit_cents'))->toBe(200000);
 
-    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class)
-        ->set('issueItemId', $item->id)
+    \Livewire\Livewire::test(\App\Livewire\Inventory\InventoryManagement::class, ['id' => $item->id])
         ->set('issueQuantity', '2.00')
         ->set('issueReasonCategory', 'project_use')
         ->set('issueReference', 'JOB-42')
@@ -133,6 +130,65 @@ test('valued receipts and issues use moving-average carrying value and full depl
         ->and($depletion->carrying_value_after_cents)->toBe(0)
         ->and($item->fresh()->qty)->toBe('0.00');
 });
+test('unapproved staff cannot post a valued inventory decrease or loss', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Protected timber', 'category' => 'Lumber', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+
+    $unapproved = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'valued.unapproved.'.uniqid(),
+        'email' => uniqid().'@example.com',
+        'password' => Hash::make('secret-password'),
+    ]), ['inventory.movements.record']);
+    $this->actingAs($unapproved);
+    $movementCount = StockMovement::query()->count();
+    $journalCount = DB::table('accounting_journals')->count();
+
+    expect(fn () => app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '1.00', 'damage_loss', 'LOSS-UNAPPROVED',
+        now('Asia/Manila')->toDateString(), $unapproved->id,
+    ))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+
+    expect($item->fresh()->qty)->toBe('10.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(100000)
+        ->and(StockMovement::query()->count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount);
+});
+test('valued inventory losses cannot use Miscellaneous Expense even through an approved mapping', function () {
+    $employee = valuedMovementEmployee();
+    $this->actingAs($employee);
+    $item = Inventory::create([
+        'name' => 'Protected block', 'category' => 'Masonry', 'qty' => '10.00',
+        'unit' => 'piece', 'unit_cost' => '100.00', 'reorder_level' => '0',
+    ]);
+    setupValuedMovementBooks($employee, $item);
+
+    $miscellaneous = valuedMovementAccount('6190', 'other_expense', 'Expense', 'debit');
+    AccountingPostingMapping::query()->where('source', 'adjustment')->firstOrFail()
+        ->forceFill([
+            'accounting_account_id' => $miscellaneous->id,
+            'approved_at' => now(),
+            'approved_by' => $employee->id,
+        ])->saveQuietly();
+    $movementCount = StockMovement::query()->count();
+    $journalCount = DB::table('accounting_journals')->count();
+
+    expect(fn () => app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '1.00', 'damage_loss', 'LOSS-MISC',
+        now('Asia/Manila')->toDateString(), $employee->id,
+    ))->toThrow(ValidationException::class);
+
+    expect($item->fresh()->qty)->toBe('10.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(100000)
+        ->and(StockMovement::query()->count())->toBe($movementCount)
+        ->and(DB::table('accounting_journals')->count())->toBe($journalCount);
+});
+
+
 
 test('valued movements reject backdating and roll back quantity, movement, and journal when posting mapping is unapproved', function () {
     $employee = valuedMovementEmployee();
