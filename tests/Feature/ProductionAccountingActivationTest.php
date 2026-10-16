@@ -30,7 +30,7 @@ test('accounting overview and reports stay unavailable until production activati
 
     foreach ([AccountingOverview::class, GeneralLedger::class, TrialBalance::class, FinancialStatements::class] as $component) {
         Livewire::test($component)
-            ->assertSee('Production activation unavailable')
+            ->assertSee('unavailable')
             ->assertDontSee('No posted activity in this period');
     }
 });

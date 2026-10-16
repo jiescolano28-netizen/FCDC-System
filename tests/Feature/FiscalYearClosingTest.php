@@ -91,6 +91,13 @@ test('authorized fiscal close transfers annual income once without changing the 
         ->set('statementType', 'balance-sheet')->set('toDate', "$year-12-31")
         ->assertSee('Retained / accumulated earnings')->assertSee('PHP 30.00')
         ->assertSee('Unclosed earnings')->assertSee('PHP 0.00');
+    $readiness = Mockery::mock(\App\Services\Accounting\OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn([
+        'production_activated' => true,
+        'production' => 'Production activated',
+    ]);
+    app()->instance(\App\Services\Accounting\OpeningBooksService::class, $readiness);
+
     $this->actingAs($actor)->get(route('accounting.general-ledger', [
         'accountId' => $retained->id,
         'fromDate' => "$year-12-31",

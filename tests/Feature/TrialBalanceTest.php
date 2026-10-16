@@ -159,6 +159,20 @@ test('trial balance includes both boundary days, cumulative closing and reports 
         ->set('toDate', '2026-02-28')
         ->assertSee('Choose a valid inclusive date range.');
 });
+test('trial balance excludes posted activity before the approved cutover', function () {
+    $viewer = createTrialBalanceEmployee();
+    $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
+    $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
+    postTrialBalanceJournal('PRE-CUTOVER-TB', '2025-12-31', [[$cash, 99900, 0], [$equity, 0, 99900]]);
+    postTrialBalanceJournal('CUTOVER-TB', '2026-01-01', [[$cash, 10000, 0], [$equity, 0, 10000]], 'opening', 'FCDC');
+
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
+        ->set('fromDate', '2026-01-01')
+        ->set('toDate', '2026-01-31')
+        ->assertSee('100.00')
+        ->assertDontSee('999.00')
+        ->assertSee('Books balance');
+});
 
 test('direct cash disbursements do not reduce the supplier accounts payable schedule', function () {
     $viewer = createTrialBalanceEmployee();

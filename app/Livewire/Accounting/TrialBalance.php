@@ -57,6 +57,7 @@ class TrialBalance extends Component
                 ->join('accounting_journals', 'accounting_journals.id', '=', 'accounting_journal_lines.accounting_journal_id')
                 ->where('accounting_journals.book_key', 'FCDC')
                 ->where('accounting_journals.status', 'posted')
+                ->whereDate('accounting_journals.accounting_date', '>=', $cutoverDate)
                 ->whereDate('accounting_journals.accounting_date', '<=', $this->toDate)
                 ->select('accounting_journal_lines.*', 'accounting_journals.accounting_date as posted_date')
                 ->get();
