@@ -321,7 +321,9 @@ test('changing a posting mapping clears its approval', function () {
     Livewire::test(ChartOfAccounts::class)
         ->call('approveMapping', 'cash')
         ->assertHasNoErrors();
-    expect($mapping->fresh()->isApprovedForPosting())->toBeTrue();
+    expect($mapping->fresh()->source)->toBe('cash')
+        ->and($mapping->fresh()->approved_by)->toBe($reviewer->id)
+        ->and($mapping->fresh()->isApprovedForPosting())->toBeTrue();
 
     $this->actingAs($maintainer);
     Livewire::test(ChartOfAccounts::class)
@@ -330,8 +332,10 @@ test('changing a posting mapping clears its approval', function () {
         ->assertHasNoErrors()
         ->assertSee('Pending approval');
 
-    expect($mapping->fresh()->accounting_account_id)->toBe($second->id)
-        ->and($mapping->fresh()->approved_at)->toBeNull();
+    expect($mapping->fresh()->source)->toBe('cash')
+        ->and($mapping->fresh()->accounting_account_id)->toBe($second->id)
+        ->and($mapping->fresh()->approved_at)->toBeNull()
+        ->and($mapping->fresh()->approved_by)->toBeNull();
 });
 
 test('used account identity and normal balance are immutable and used accounts cannot be deleted', function () {
