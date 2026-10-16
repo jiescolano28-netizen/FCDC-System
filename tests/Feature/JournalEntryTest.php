@@ -338,3 +338,21 @@ test('posted journals cannot be edited or deleted and listing filters posted his
     expect(fn () => $entry->update(['description' => 'Rewritten']))->toThrow(DomainException::class);
     expect(fn () => $entry->fresh()->delete())->toThrow(DomainException::class);
 });
+test('miscellaneous expense remains ineligible for posting despite ordinary account approval', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $miscellaneous = approvedJournalAccount('6190', 'Expense', 'other_expense', 'debit');
+    $this->actingAs(journalEmployee());
+
+    $journal = journalInput($cash, $revenue, ['reference' => 'MISCELLANEOUS-BLOCKED-001', 'lines' => [
+        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $miscellaneous->id, 'debit' => '', 'credit' => '125.00'],
+    ]]);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $draft = AccountingJournal::where('reference', 'MISCELLANEOUS-BLOCKED-001')->firstOrFail();
+
+    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+
+    expect($draft->fresh()->status)->toBe('draft')
+        ->and($miscellaneous->fresh()->used_at)->toBeNull()
+        ->and(AccountingAccount::query()->where('code', '6190')->firstOrFail()->isApprovedForPosting())->toBeFalse();
+});
