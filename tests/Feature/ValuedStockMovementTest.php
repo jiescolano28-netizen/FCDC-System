@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 uses(RefreshDatabase::class);
 
@@ -145,16 +146,23 @@ test('unapproved staff cannot post a valued inventory decrease or loss', functio
         'password' => Hash::make('secret-password'),
     ]), ['inventory.movements.record']);
     $this->actingAs($unapproved);
+    $ordinaryIssue = app(RecordValuedStockMovement::class)->handle(
+        $item->id, 'stock_out', '1.00', 'project_use', 'JOB-UNAPPROVED',
+        now('Asia/Manila')->toDateString(), $unapproved->id,
+    );
+    expect($ordinaryIssue->value_cents)->toBe(-10000)
+        ->and($item->fresh()->qty)->toBe('9.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(90000);
     $movementCount = StockMovement::query()->count();
     $journalCount = DB::table('accounting_journals')->count();
 
     expect(fn () => app(RecordValuedStockMovement::class)->handle(
         $item->id, 'stock_out', '1.00', 'damage_loss', 'LOSS-UNAPPROVED',
         now('Asia/Manila')->toDateString(), $unapproved->id,
-    ))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    ))->toThrow(HttpException::class);
 
-    expect($item->fresh()->qty)->toBe('10.00')
-        ->and($item->fresh()->carrying_value_cents)->toBe(100000)
+    expect($item->fresh()->qty)->toBe('9.00')
+        ->and($item->fresh()->carrying_value_cents)->toBe(90000)
         ->and(StockMovement::query()->count())->toBe($movementCount)
         ->and(DB::table('accounting_journals')->count())->toBe($journalCount);
 });
@@ -187,8 +195,6 @@ test('valued inventory losses cannot use Miscellaneous Expense even through an a
         ->and(StockMovement::query()->count())->toBe($movementCount)
         ->and(DB::table('accounting_journals')->count())->toBe($journalCount);
 });
-
-
 
 test('valued movements reject backdating and roll back quantity, movement, and journal when posting mapping is unapproved', function () {
     $employee = valuedMovementEmployee();

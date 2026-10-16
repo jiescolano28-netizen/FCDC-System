@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\AccountingJournal;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
+use App\Models\AccountingJournal;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\StockMovement;
