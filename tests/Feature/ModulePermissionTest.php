@@ -147,6 +147,35 @@ test('permission seeding grants the full catalog to administrators but not other
         ->toEqualCanonicalizing(RolePermissionCatalog::names())
         ->and($ordinaryRole->fresh()->permissions)->toBeEmpty();
 });
+test('permission seeding creates the administrator role when it is missing', function () {
+    expect(Role::where('name', RolePermissionCatalog::ADMIN_ROLE)->where('guard_name', 'web')->exists())
+        ->toBeFalse();
+
+    app(RolePermissionSeeder::class)->run();
+
+    $administrator = Role::where('name', RolePermissionCatalog::ADMIN_ROLE)->where('guard_name', 'web')->first();
+
+    expect($administrator)->not->toBeNull()
+        ->and($administrator->permissions->pluck('name')->all())
+        ->toEqualCanonicalizing(RolePermissionCatalog::names());
+});
+test('permission seeding is idempotent over an existing permission set', function () {
+    $existing = Permission::findOrCreate('inventory.view', 'web');
+    $administrator = Role::create([
+        'name' => RolePermissionCatalog::ADMIN_ROLE,
+        'guard_name' => 'web',
+    ]);
+    $administrator->givePermissionTo($existing);
+    $catalogCount = count(RolePermissionCatalog::names());
+
+    app(RolePermissionSeeder::class)->run();
+    app(RolePermissionSeeder::class)->run();
+
+    expect(Permission::where('name', 'inventory.view')->where('guard_name', 'web')->count())->toBe(1)
+        ->and(Permission::count())->toBe($catalogCount)
+        ->and($administrator->fresh()->permissions->pluck('name')->all())
+        ->toEqualCanonicalizing(RolePermissionCatalog::names());
+});
 test('view-only roles see module content without operation controls', function () {
     Inventory::create([
         'name' => 'Cement',

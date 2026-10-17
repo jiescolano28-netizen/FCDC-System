@@ -18,13 +18,8 @@ class RolePermissionSeeder extends Seeder
             Permission::findOrCreate($name, 'web');
         }
 
-        $administratorRole = Role::where('name', RolePermissionCatalog::ADMIN_ROLE)
-            ->where('guard_name', 'web')
-            ->first();
-
-        if ($administratorRole) {
-            $administratorRole->syncPermissions(RolePermissionCatalog::names());
-        }
+        Role::findOrCreate(RolePermissionCatalog::ADMIN_ROLE, 'web')
+            ->syncPermissions(RolePermissionCatalog::names());
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
