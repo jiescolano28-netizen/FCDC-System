@@ -587,7 +587,7 @@
 .trial-balance-page { max-width: 1440px; margin: 0 auto; }
 .trial-balance-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .trial-balance-heading { align-items: center; margin-bottom: 16px; }
-.trial-balance-period-controls { display: grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.trial-balance-period-controls { display: grid; grid-template-columns: repeat(2, minmax(180px, 260px)); gap: 12px; margin-bottom: 16px; }
 .trial-balance-period-controls label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }
 .trial-balance-period-controls input { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--slate-200); border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
 .trial-balance-report { padding: 24px; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
