@@ -200,9 +200,27 @@ if (roleSetup) {
         clearTimeout(element.toastTimer);
         element.toastTimer = setTimeout(() => element.classList.remove('visible'), 2800);
     };
+
+    const roleEditor = roleSetup.querySelector('[data-role-editor]');
+    const markDirty = () => roleEditor?.classList.add('has-changes');
+    const clearDirty = () => roleEditor?.classList.remove('has-changes');
+
+    roleEditor?.addEventListener('input', (event) => {
+        if (event.target.matches('input[type="checkbox"], input[type="text"]')) markDirty();
+    });
+    roleEditor?.addEventListener('change', (event) => {
+        if (event.target.matches('input[type="checkbox"]')) markDirty();
+    });
+    roleSetup.addEventListener('click', (event) => {
+        if (event.target.closest('[wire\\:click]')) clearDirty();
+    });
+
     const registerRoleEvents = () => {
         if (!window.Livewire) return;
-        window.Livewire.on('role-saved', (event) => toast(event.message));
+        window.Livewire.on('role-saved', (event) => {
+            clearDirty();
+            toast(event.message);
+        });
         window.Livewire.on('role-assignment-saved', (event) => toast(event.message));
         window.Livewire.on('role-error', (event) => toast(event.message || 'The change could not be saved.', 'error'));
     };
@@ -216,7 +234,8 @@ if (roleSetup) {
         const rows = roleSetup.querySelectorAll('[data-module-row]');
         let visible = 0;
         rows.forEach((row) => {
-            row.hidden = !row.dataset.moduleRow.toLowerCase().includes(query);
+            const haystack = (row.dataset.moduleKeywords || row.dataset.moduleRow || '').toLowerCase();
+            row.hidden = query !== '' && !haystack.includes(query);
             if (!row.hidden) visible++;
         });
         const empty = roleSetup.querySelector('[data-empty-filter]');

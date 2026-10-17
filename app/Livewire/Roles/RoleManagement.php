@@ -25,6 +25,8 @@ class RoleManagement extends Component
 
     public string $userSearch = '';
 
+    public string $roleSearch = '';
+
     public array $selectedPermissionNames = [];
 
     public array $employeeRoleSelections = [];
@@ -365,7 +367,7 @@ class RoleManagement extends Component
             'edit' => 'Edit',
             'delete' => 'Delete',
             'export' => 'Export',
-            'other' => 'Other permissions',
+            'other' => 'Other',
         ];
         $presentColumns = $permissionMatrix->flatMap(fn (array $module) => $module['permissions']->pluck('column'))->unique();
         $permissionColumns = collect($columnOrder)
@@ -376,6 +378,11 @@ class RoleManagement extends Component
             ->where('guard_name', 'web')
             ->orderBy('name')
             ->get();
+        $roleOptions = $this->roleSearch === ''
+            ? $roles
+            : $roles
+                ->filter(fn (Role $role) => mb_stripos($role->name, $this->roleSearch) !== false)
+                ->values();
         $employees = collect();
 
         if (auth()->user()->can('employees.assign-roles')) {
@@ -400,10 +407,12 @@ class RoleManagement extends Component
 
         return view('livewire.roles.role-management', [
             'roles' => $roles,
+            'roleOptions' => $roleOptions,
             'selectedRole' => $roles->firstWhere('id', $this->selectedRoleId),
             'permissionGroups' => $groups,
             'permissionMatrix' => $permissionMatrix,
             'permissionColumns' => $permissionColumns,
+            'permissionCount' => count(RolePermissionCatalog::names()),
             'employees' => $employees,
             'assignableRoles' => $assignableRoles,
         ])->layout('layouts.app', ['title' => 'Role management']);
