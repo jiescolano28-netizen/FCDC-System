@@ -582,6 +582,7 @@
 .general-ledger-account-no-activity { margin: 0; padding: 12px 15px; color: var(--slate-500); font-size: 12px; }
 @media (max-width: 700px) {
     .general-ledger-filters { grid-template-columns: minmax(0, 1fr); }
+    .general-ledger-account-group-heading { align-items: flex-start; flex-direction: column; }
 }
 
 .trial-balance-page { max-width: 1440px; margin: 0 auto; }
