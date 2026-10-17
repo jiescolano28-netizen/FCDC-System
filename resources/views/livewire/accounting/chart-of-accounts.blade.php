@@ -29,7 +29,7 @@
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <div>
                         <label for="account-code" class="mb-1.5 block text-sm font-medium text-slate-700">Account code <span class="text-red-700">*</span></label>
-                        <input id="account-code" wire:model="accountCode" maxlength="30" required aria-invalid="@error('accountCode') true @else false @enderror" class="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" autocomplete="off">
+                        <input id="account-code" wire:model.live.debounce.250ms="accountCode" maxlength="30" required aria-invalid="@error('accountCode') true @else false @enderror" class="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20" autocomplete="off">
                         @error('accountCode') <p class="mt-1 text-sm text-red-700" role="alert">{{ $message }}</p> @enderror
                     </div>
                     <div>
@@ -63,6 +63,7 @@
                         <select id="normal-balance" wire:model="normalBalance" class="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20">
                             <option value="debit">Debit</option>
                             <option value="credit">Credit</option>
+                            @if ($accountCode === '3040')<option value="variable">Credit when profit; Debit when loss</option>@endif
                         </select>
                     </div>
                     <label for="account-active" class="flex min-h-10 items-center gap-3 self-end rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
@@ -131,7 +132,7 @@
                             <td class="max-w-xs whitespace-normal px-4 py-3 text-slate-600" title="{{ $account->description }}">{{ $account->description ?: '—' }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $account->type }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $classifications->firstWhere('value', $account->classification)['label'] }}</td>
-                            <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ ucfirst($account->normal_balance) }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-slate-700">{{ $account->normal_balance === 'variable' ? 'Credit when profit; Debit when loss' : ucfirst($account->normal_balance) }}</td>
                             <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->is_active, 'bg-slate-100 text-slate-700' => ! $account->is_active])>{{ $account->is_active ? 'Active' : 'Inactive' }}</span></td>
                             <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->approved_at, 'bg-amber-50 text-amber-900' => ! $account->approved_at])>{{ $account->approved_at ? 'Approved' : 'Pending approval' }}</span></td>
                             <td class="whitespace-nowrap px-4 py-3"><span @class(['inline-flex rounded-full px-2.5 py-1 text-xs font-medium', 'bg-emerald-50 text-emerald-800' => $account->isApprovedForPosting(), 'bg-amber-50 text-amber-900' => ! $account->isApprovedForPosting()])>{{ $account->isApprovedForPosting() ? 'Eligible' : 'Not eligible' }}</span></td>
@@ -162,8 +163,24 @@
     <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-labelledby="mappings-heading">
         <header class="border-b border-slate-200 px-5 py-4">
             <h2 id="mappings-heading" class="text-base font-semibold text-slate-900">Source-account mappings</h2>
-            <p class="mt-1 text-sm text-slate-600">Each changed mapping returns to pending approval before it can be used.</p>
+            <p class="mt-1 text-sm text-slate-600">Each changed mapping returns to pending approval before it can be used. The Point of Sale posts through Cash, Bank, Card clearing, Sales, Output VAT, COGS and Inventory, so all seven must be approved before a sale can complete.</p>
         </header>
+        @php($posBlockers = $posReadiness->reject(fn (array $entry) => $entry['ready']))
+        @if ($posBlockers->isEmpty())
+            <div class="border-b border-emerald-200 bg-emerald-50 px-5 py-4" role="status">
+                <p class="text-sm font-semibold text-emerald-900">Point of Sale readiness: all required source-account mappings are approved.</p>
+            </div>
+        @else
+            <div class="border-b border-amber-300 bg-amber-50 px-5 py-4" role="alert">
+                <p class="text-sm font-semibold text-amber-950">Point of Sale readiness: {{ $posBlockers->count() }} of {{ $posReadiness->count() }} required mappings are not ready.</p>
+                <p class="mt-1 text-sm text-amber-900">Complete a sale only after every item below shows an approved mapping. Each mapping needs an active, approved account whose classification matches the source.</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+                    @foreach ($posBlockers as $entry)
+                        <li><span class="font-medium">{{ $entry['label'] }}</span> — {{ $entry['reason'] }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
         <div class="overflow-x-auto">
             <table class="w-full min-w-[760px] border-collapse text-left text-sm">
                 <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">

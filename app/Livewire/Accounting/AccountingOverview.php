@@ -16,13 +16,13 @@ class AccountingOverview extends Component
 
     public string $toDate = '';
 
-    private const INCOME_CLASSIFICATIONS = ['sales', 'other_income'];
+    private const INCOME_CLASSIFICATIONS = ['sales', 'contra_revenue', 'other_income'];
 
     private const EXPENSE_CLASSIFICATIONS = ['cost_of_goods_sold', 'operating_expense', 'other_expense'];
 
     private const POSITION_CLASSIFICATIONS = [
         'accounts_payable', 'accounts_receivable', 'cash', 'bank', 'inventory', 'equipment',
-        'card_clearing', 'other_current_asset', 'other_noncurrent_asset', 'output_vat',
+        'card_clearing', 'contra_asset', 'other_current_asset', 'other_noncurrent_asset', 'output_vat',
         'other_current_liability', 'other_noncurrent_liability', 'input_vat',
     ];
 
@@ -64,7 +64,6 @@ class AccountingOverview extends Component
         if ($this->fromDate < $cutoverDate) {
             return $this->unavailable('Selected period begins before approved accounting cutover coverage.');
         }
-
 
         $incomeClassifications = [...self::INCOME_CLASSIFICATIONS, ...self::EXPENSE_CLASSIFICATIONS];
         $incomeAccounts = AccountingAccount::query()->whereIn('type', ['Revenue', 'Expense'])

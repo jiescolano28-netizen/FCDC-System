@@ -18,14 +18,14 @@ use Illuminate\Validation\ValidationException;
 class AccountingPeriodService
 {
     private const BALANCE_CLASSIFICATIONS = [
-        'cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment',
+        'cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment', 'contra_asset',
         'other_current_asset', 'other_noncurrent_asset', 'accounts_payable', 'output_vat',
         'other_current_liability', 'other_noncurrent_liability', 'input_vat', 'capital',
-        'retained_earnings', 'other_equity',
+        'retained_earnings', 'other_equity', 'contra_equity',
     ];
 
     private const INCOME_CLASSIFICATIONS = [
-        'sales', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
+        'sales', 'contra_revenue', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
     ];
 
     public function readiness(AccountingPostingPeriod $period): array

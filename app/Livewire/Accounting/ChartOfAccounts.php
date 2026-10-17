@@ -24,6 +24,16 @@ class ChartOfAccounts extends Component
         'adjustment' => 'Adjustment counterpart',
     ];
 
+    private const POS_MAPPING_SOURCES = [
+        'cash' => 'Cash',
+        'bank' => 'Bank',
+        'card_clearing' => 'Card clearing',
+        'sales' => 'Sales',
+        'output_vat' => 'Output VAT',
+        'cogs' => 'COGS',
+        'inventory' => 'Inventory',
+    ];
+
     public function mount(): void
     {
         $this->mappingAccounts = AccountingPostingMapping::pluck('accounting_account_id', 'source')
@@ -100,7 +110,9 @@ class ChartOfAccounts extends Component
             'description' => ['nullable', 'string', 'max:2000'],
             'type' => ['required', Rule::in(AccountingAccount::types())],
             'classification' => ['required', Rule::in(array_keys(AccountingAccount::classifications()))],
-            'normalBalance' => ['required', Rule::in(['debit', 'credit'])],
+            'normalBalance' => ['required', Rule::in($this->accountCode === '3040'
+                ? ['debit', 'credit', 'variable']
+                : ['debit', 'credit'])],
             'isActive' => ['required', 'boolean'],
         ]);
 
@@ -247,13 +259,41 @@ class ChartOfAccounts extends Component
             $isVerifiedDemo = false;
         }
 
+        $mappings = AccountingPostingMapping::with('account')->get()->keyBy('source');
+        $posReadiness = collect(self::POS_MAPPING_SOURCES)->map(function (string $label, string $source) use ($mappings): array {
+            $mapping = $mappings->get($source);
+            $account = $mapping?->account;
+            $ready = $mapping?->isApprovedForPosting() === true;
+
+            if ($ready) {
+                $reason = null;
+            } elseif ($mapping === null) {
+                $reason = 'No mapping saved yet.';
+            } elseif ($mapping->approved_at === null) {
+                $reason = 'Mapping saved but not approved.';
+            } elseif ($account === null) {
+                $reason = 'Mapped account is missing.';
+            } elseif (! $account->is_active) {
+                $reason = 'Mapped account is inactive.';
+            } elseif ($account->approved_at === null) {
+                $reason = 'Mapped account is not approved.';
+            } elseif (! $account->isApprovedForPosting()) {
+                $reason = 'Mapped account is not available for posting under current policy.';
+            } else {
+                $reason = 'Mapped account classification does not match this source.';
+            }
+
+            return ['source' => $source, 'label' => $label, 'ready' => $ready, 'reason' => $reason];
+        })->values();
+
         return view('livewire.accounting.chart-of-accounts', [
             'accounts' => $accounts,
             'accountCount' => AccountingAccount::count(),
             'accountTypes' => AccountingAccount::types(),
             'classifications' => collect(AccountingAccount::classifications())->map(fn ($entry, $key) => ['value' => $key, 'label' => $entry[0], 'type' => $entry[1]]),
             'mappingSources' => self::MAPPING_SOURCES,
-            'mappings' => AccountingPostingMapping::with('account')->get()->keyBy('source'),
+            'mappings' => $mappings,
+            'posReadiness' => $posReadiness,
             'eligibleAccounts' => AccountingAccount::where('is_active', true)->orderBy('code')->get(),
             'isVerifiedDemo' => $isVerifiedDemo,
         ])->layout('layouts.app', ['title' => 'Chart of Accounts']);

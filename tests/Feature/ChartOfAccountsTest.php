@@ -141,7 +141,7 @@ test('account maintenance enforces unique codes and ordinary or contra normal ba
         ->set('accountCode', '1510')
         ->set('accountName', 'Accumulated Depreciation')
         ->set('type', 'Asset')
-        ->set('classification', 'equipment')
+        ->set('classification', 'contra_asset')
         ->set('normalBalance', 'credit')
         ->call('saveAccount')
         ->assertHasNoErrors();
@@ -150,7 +150,7 @@ test('account maintenance enforces unique codes and ordinary or contra normal ba
         ->set('accountCode', '3050')
         ->set('accountName', 'Dividends Declared')
         ->set('type', 'Equity')
-        ->set('classification', 'other_equity')
+        ->set('classification', 'contra_equity')
         ->set('normalBalance', 'debit')
         ->call('saveAccount')
         ->assertHasNoErrors();
@@ -159,7 +159,7 @@ test('account maintenance enforces unique codes and ordinary or contra normal ba
         ->set('accountCode', '4090')
         ->set('accountName', 'Sales Returns and Allowances')
         ->set('type', 'Revenue')
-        ->set('classification', 'sales')
+        ->set('classification', 'contra_revenue')
         ->set('normalBalance', 'debit')
         ->call('saveAccount')
         ->assertHasNoErrors();
@@ -475,10 +475,10 @@ test('pending policy accounts cannot be approved or made postable through ordina
     $this->actingAs($reviewer);
 
     foreach ([
-        ['1510', 'Asset', 'equipment', 'credit'],
+        ['1510', 'Asset', 'contra_asset', 'credit'],
         ['2040', 'Liability', 'other_current_liability', 'credit'],
         ['3040', 'Equity', 'other_equity', 'credit'],
-        ['3050', 'Equity', 'other_equity', 'debit'],
+        ['3050', 'Equity', 'contra_equity', 'debit'],
         ['5030', 'Expense', 'cost_of_goods_sold', 'debit'],
     ] as [$code, $type, $classification, $normalBalance]) {
         $account = AccountingAccount::create([
@@ -544,9 +544,9 @@ test('demo notice requires a verified isolated database and shows proposal treat
         AccountingAccount::create([
             'code' => '1510',
             'name' => 'Accumulated Depreciation',
-            'description' => 'Provisional existing-class representation of contra-asset; presentation pending',
+            'description' => 'Contra-asset; credit balance reduces total assets',
             'type' => 'Asset',
-            'classification' => 'equipment',
+            'classification' => 'contra_asset',
             'normal_balance' => 'credit',
             'is_active' => true,
         ]);
@@ -554,10 +554,46 @@ test('demo notice requires a verified isolated database and shows proposal treat
         Livewire::test(ChartOfAccounts::class)
             ->assertSee('Illustrative / Sample Data — Not Actual FCDC Financial Records')
             ->assertSee('Proposed accounts')
-            ->assertSee('Provisional existing-class representation of contra-asset; presentation pending')
+            ->assertSee('Contra-asset; credit balance reduces total assets')
             ->assertSee('Not eligible');
     } finally {
         DB::purge('demo');
         config($original);
     }
+});
+
+test('chart of accounts reports point of sale source-mapping readiness', function () {
+    $this->actingAs(createChartOfAccountsEmployee());
+
+    $sources = [
+        'cash' => ['1010', 'Asset', 'cash', 'debit'],
+        'bank' => ['1020', 'Asset', 'bank', 'debit'],
+        'card_clearing' => ['1090', 'Asset', 'card_clearing', 'debit'],
+        'inventory' => ['1050', 'Asset', 'inventory', 'debit'],
+        'output_vat' => ['2030', 'Liability', 'output_vat', 'credit'],
+        'sales' => ['4010', 'Revenue', 'sales', 'credit'],
+        'cogs' => ['5010', 'Expense', 'cost_of_goods_sold', 'debit'],
+    ];
+
+    foreach ($sources as $source => [$code, $type, $classification, $normalBalance]) {
+        $account = AccountingAccount::create([
+            'code' => $code, 'name' => 'Account '.$code, 'type' => $type,
+            'classification' => $classification, 'normal_balance' => $normalBalance,
+            'is_active' => true,
+        ]);
+        $account->forceFill(['approved_at' => now()])->save();
+
+        AccountingPostingMapping::create([
+            'source' => $source, 'accounting_account_id' => $account->id, 'approved_at' => now(),
+        ]);
+    }
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertSee('all required source-account mappings are approved');
+
+    AccountingPostingMapping::query()->where('source', 'sales')->update(['approved_at' => null]);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertSee('Point of Sale readiness: 1 of 7 required mappings are not ready.')
+        ->assertSee('Mapping saved but not approved.');
 });

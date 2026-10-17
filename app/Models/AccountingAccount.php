@@ -18,6 +18,7 @@ class AccountingAccount extends Model
         'card_clearing' => ['Card settlement receivable / clearing', 'Asset'],
         'inventory' => ['Inventory', 'Asset'],
         'equipment' => ['Equipment', 'Asset'],
+        'contra_asset' => ['Contra-asset', 'Asset'],
         'other_current_asset' => ['Other current asset', 'Asset'],
         'other_noncurrent_asset' => ['Other non-current asset', 'Asset'],
         'accounts_payable' => ['Accounts payable', 'Liability'],
@@ -28,7 +29,9 @@ class AccountingAccount extends Model
         'capital' => ['Capital', 'Equity'],
         'retained_earnings' => ['Retained / accumulated earnings', 'Equity'],
         'other_equity' => ['Other equity', 'Equity'],
+        'contra_equity' => ['Contra-equity', 'Equity'],
         'sales' => ['Sales', 'Revenue'],
+        'contra_revenue' => ['Contra-revenue', 'Revenue'],
         'other_income' => ['Other income', 'Revenue'],
         'cost_of_goods_sold' => ['Cost of goods sold (Expense)', 'Expense'],
         'operating_expense' => ['Operating expense', 'Expense'],
@@ -44,9 +47,9 @@ class AccountingAccount extends Model
     ];
 
     private const CONTRA_ACCOUNT_BALANCES = [
-        '1510' => ['equipment', 'credit'],
-        '3050' => ['other_equity', 'debit'],
-        '4090' => ['sales', 'debit'],
+        '1510' => ['contra_asset', 'credit'],
+        '3050' => ['contra_equity', 'debit'],
+        '4090' => ['contra_revenue', 'debit'],
     ];
 
     public static function classifications(): array
@@ -62,6 +65,10 @@ class AccountingAccount extends Model
     public static function supportsNormalBalance(string $code, string $classification, string $normalBalance): bool
     {
         $type = self::CLASSIFICATIONS[$classification][1] ?? null;
+        if ($normalBalance === 'variable') {
+            return $code === '3040' && $classification === 'other_equity';
+        }
+
         if ($type === null || ! in_array($normalBalance, ['debit', 'credit'], true)) {
             return false;
         }
@@ -135,7 +142,8 @@ class AccountingAccount extends Model
 
     public function isApprovedForPosting(): bool
     {
-        return ! $this->hasPendingPostingPolicy()
+        return $this->code !== '6190'
+            && ! $this->hasPendingPostingPolicy()
             && $this->is_active
             && $this->approved_at !== null
             && (self::CLASSIFICATIONS[$this->classification][1] ?? null) === $this->type

@@ -15,14 +15,14 @@ class FinancialStatements extends Component
     private const FISCAL_YEAR_CLOSING_SOURCE_TYPE = 'fiscal_year_closing';
 
     private const INCOME_CLASSIFICATIONS = [
-        'sales', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
+        'sales', 'contra_revenue', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
     ];
 
     private const BALANCE_CLASSIFICATIONS = [
-        'cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment',
+        'cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment', 'contra_asset',
         'other_current_asset', 'other_noncurrent_asset', 'accounts_payable', 'output_vat',
         'other_current_liability', 'other_noncurrent_liability', 'input_vat', 'capital',
-        'retained_earnings', 'other_equity',
+        'retained_earnings', 'other_equity', 'contra_equity',
     ];
 
     private const BALANCE_CLASSIFICATION_LABELS = [
@@ -32,6 +32,7 @@ class FinancialStatements extends Component
         'card_clearing' => 'Card settlement receivable / clearing',
         'inventory' => 'Inventory',
         'equipment' => 'Equipment',
+        'contra_asset' => 'Contra-asset',
         'other_current_asset' => 'Other current asset',
         'other_noncurrent_asset' => 'Other non-current asset',
         'accounts_payable' => 'Accounts payable',
@@ -42,12 +43,13 @@ class FinancialStatements extends Component
         'capital' => 'Capital',
         'retained_earnings' => 'Retained / accumulated earnings',
         'other_equity' => 'Other equity',
+        'contra_equity' => 'Contra-equity',
     ];
 
     private const BALANCE_TYPES = [
-        'Asset' => ['cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment', 'other_current_asset', 'other_noncurrent_asset', 'input_vat'],
+        'Asset' => ['cash', 'bank', 'accounts_receivable', 'card_clearing', 'inventory', 'equipment', 'contra_asset', 'other_current_asset', 'other_noncurrent_asset', 'input_vat'],
         'Liability' => ['accounts_payable', 'output_vat', 'other_current_liability', 'other_noncurrent_liability'],
-        'Equity' => ['capital', 'retained_earnings', 'other_equity'],
+        'Equity' => ['capital', 'retained_earnings', 'other_equity', 'contra_equity'],
     ];
 
     public string $statementType = 'income-statement';
@@ -171,7 +173,7 @@ class FinancialStatements extends Component
                 }
             }
             $bucket = match ($account->classification) {
-                'sales' => 'sales',
+                'sales', 'contra_revenue' => 'sales',
                 'cost_of_goods_sold' => 'cogs',
                 'operating_expense' => 'operating',
                 'other_income' => 'other_income',

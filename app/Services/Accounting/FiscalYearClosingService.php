@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 class FiscalYearClosingService
 {
     private const INCOME_CLASSIFICATIONS = [
-        'sales', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
+        'sales', 'contra_revenue', 'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense',
     ];
 
     public function close(int $year, int $retainedEarningsAccountId, string $reason, Employee $actor): AccountingJournal
