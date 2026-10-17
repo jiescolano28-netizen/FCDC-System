@@ -696,6 +696,7 @@
 @media (max-width: 600px) {
     .disclosure-period-controls, .disclosure-editor-fields { grid-template-columns: minmax(0, 1fr); }
     .disclosure-note-meta { text-align: left; }
+    .disclosure-workflow-actions { align-items: stretch; flex-direction: column; }
 }
 @media print {
     body.disclosure-body * { visibility: hidden !important; }

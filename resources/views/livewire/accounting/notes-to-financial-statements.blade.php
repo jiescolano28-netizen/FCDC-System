@@ -25,6 +25,13 @@
         <label><span>Reporting period to</span><input type="date" wire:model.live="toDate">@error('toDate') <small class="settings-error">{{ $message }}</small> @enderror</label>
     </div>
 
+    @if ($canManage)
+        <div class="disclosure-workflow-actions">
+            <div><strong>Prepare disclosures</strong><span>Generated notes capture an approved ledger figure; manual notes add explanatory context.</span></div>
+            <button type="button" wire:click="openEditor">New manual note</button>
+        </div>
+    @endif
+
     <section class="disclosure-generated" aria-labelledby="disclosure-generated-heading">
         <header>
             <h2 id="disclosure-generated-heading">Generated figures</h2>
@@ -52,9 +59,15 @@
         @endif
     </section>
 
-    @if ($canManage)
-        <form class="disclosure-editor" wire:submit="saveNote" aria-labelledby="disclosure-editor-heading">
-            <h2 id="disclosure-editor-heading">{{ $editingNoteId ? 'Edit disclosure draft' : 'New manual disclosure note' }}</h2>
+    @if ($canManage && $showEditor)
+        <div class="fixed inset-0 z-[1000] grid place-items-center bg-slate-900/55 p-6 max-sm:items-end max-sm:p-0" role="presentation" wire:click.self="closeEditor" wire:keydown.escape.window="closeEditor">
+        <section class="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl max-sm:max-h-[94vh] max-sm:rounded-b-none max-sm:p-4" role="dialog" aria-modal="true" aria-labelledby="disclosure-editor-heading">
+        <form class="disclosure-editor !m-0 !border-0 !p-0 !shadow-none" wire:submit="saveNote" aria-labelledby="disclosure-editor-heading">
+            <header class="mb-4 flex items-start justify-between gap-4">
+                <div><h2 id="disclosure-editor-heading">{{ $editingNoteId ? 'Edit disclosure draft' : 'New manual disclosure note' }}</h2>
+                    <p class="m-0 text-xs text-slate-500">Save as a draft first; submit it for an independent review when ready.</p></div>
+                <button class="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-md border border-slate-200 bg-white text-2xl leading-none text-slate-700 hover:bg-slate-50" type="button" wire:click="closeEditor" aria-label="Close disclosure editor">&times;</button>
+            </header>
             <p class="disclosure-editor-type">
                 Type: <strong>{{ $editingNoteId ? ucfirst($disclosureType) : 'Manual' }}</strong>
                 @if ($editingNoteId && $disclosureType === 'generated')
@@ -73,6 +86,8 @@
                 @endif
             </div>
         </form>
+        </section>
+        </div>
     @endif
 
     <section class="disclosure-list" aria-labelledby="disclosure-list-heading">

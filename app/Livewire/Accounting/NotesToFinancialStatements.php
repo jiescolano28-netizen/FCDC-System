@@ -34,6 +34,8 @@ class NotesToFinancialStatements extends Component
 
     public ?int $editingNoteId = null;
 
+    public bool $showEditor = false;
+
     public function mount(): void
     {
         $today = CarbonImmutable::now('Asia/Manila');
@@ -90,7 +92,20 @@ class NotesToFinancialStatements extends Component
         }
 
         $this->resetEditor();
+        $this->showEditor = false;
         session()->flash('disclosure-message', 'Disclosure note saved as a draft for review.');
+    }
+
+    public function openEditor(): void
+    {
+        $this->authorizePermission('accounting.manage-disclosures');
+        $this->resetEditor();
+        $this->showEditor = true;
+    }
+
+    public function closeEditor(): void
+    {
+        $this->showEditor = false;
     }
 
     public function addGeneratedNote(string $metric): void
@@ -137,11 +152,13 @@ class NotesToFinancialStatements extends Component
         $this->title = $note->title;
         $this->body = $note->body ?? '';
         $this->disclosureType = $note->disclosure_type;
+        $this->showEditor = true;
     }
 
     public function cancelEdit(): void
     {
         $this->resetEditor();
+        $this->showEditor = false;
     }
 
     public function deleteNote(int $noteId): void
