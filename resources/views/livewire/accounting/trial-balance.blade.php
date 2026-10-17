@@ -7,7 +7,7 @@
         <button class="vat-detail-button" type="button" onclick="window.print()">Print report</button>
     </header>
 
-    <div class="trial-balance-period-controls" role="group" aria-label="Trial balance period">
+            <div class="trial-balance-period-controls" role="group" aria-label="Trial balance period">
         <label>
             <span>From date</span>
             <input type="date" wire:model.live="fromDate">
@@ -36,14 +36,10 @@
             </div>
         @else
             <div class="trial-balance-totals" aria-label="Trial balance totals">
-                <div><span>Unadjusted debits</span><strong>{{ number_format($unadjustedDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Unadjusted credits</span><strong>{{ number_format($unadjustedCreditsCents / 100, 2) }}</strong></div>
-                <div><span>Adjustment debits</span><strong>{{ number_format($adjustmentDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Adjustment credits</span><strong>{{ number_format($adjustmentCreditsCents / 100, 2) }}</strong></div>
-                <div><span>Adjusted debits</span><strong>{{ number_format($totalDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Adjusted credits</span><strong>{{ number_format($totalCreditsCents / 100, 2) }}</strong></div>
-                <div><span>Period debits (standard)</span><strong>{{ number_format($periodDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Period credits (standard)</span><strong>{{ number_format($periodCreditsCents / 100, 2) }}</strong></div>
+                <div class="trial-balance-total-group"><h3>Unadjusted</h3><span>Unadjusted debits</span><strong>₱{{ number_format($unadjustedDebitsCents / 100, 2) }}</strong><span>Unadjusted credits</span><strong>₱{{ number_format($unadjustedCreditsCents / 100, 2) }}</strong></div>
+                <div class="trial-balance-total-group"><h3>Adjustments</h3><span>Adjustments debit</span><strong>₱{{ number_format($adjustmentDebitsCents / 100, 2) }}</strong><span>Adjustments credit</span><strong>₱{{ number_format($adjustmentCreditsCents / 100, 2) }}</strong></div>
+                <div class="trial-balance-total-group trial-balance-total-final"><h3>Adjusted</h3><span>Adjusted debits</span><strong>₱{{ number_format($totalDebitsCents / 100, 2) }}</strong><span>Adjusted credits</span><strong>₱{{ number_format($totalCreditsCents / 100, 2) }}</strong></div>
+                <div class="trial-balance-total-group"><h3>Period activity <small>(standard)</small></h3><span>Period debits</span><strong>₱{{ number_format($periodDebitsCents / 100, 2) }}</strong><span>Period credits</span><strong>₱{{ number_format($periodCreditsCents / 100, 2) }}</strong></div>
             </div>
 
             <div class="trial-balance-status {{ $isAdjustedBalanced ? 'is-balanced' : 'has-accounting-error' }}" role="status">
@@ -77,18 +73,14 @@
                     <table class="trial-balance-table">
                         <thead>
                             <tr>
-                                <th scope="col">Account</th>
-                                <th scope="col">Opening debit</th>
-                                <th scope="col">Opening credit</th>
-                                <th scope="col">Period debit</th>
-                                <th scope="col">Period credit</th>
-                                <th scope="col">Unadjusted debit</th>
-                                <th scope="col">Unadjusted credit</th>
-                                <th scope="col">Adjustments debit</th>
-                                <th scope="col">Adjustments credit</th>
-                                <th scope="col">Adjusted debit</th>
-                                <th scope="col">Adjusted credit</th>
+                                <th scope="col" rowspan="2">Account</th>
+                                <th scope="colgroup" colspan="2">Opening balance</th>
+                                <th scope="colgroup" colspan="2">Period activity*</th>
+                                <th scope="colgroup" colspan="2">Unadjusted balance</th>
+                                <th scope="colgroup" colspan="2">Adjustments</th>
+                                <th scope="colgroup" colspan="2">Adjusted balance</th>
                             </tr>
+                            <tr><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th></tr>
                         </thead>
                         <tbody>
                             @foreach ($accounts as $row)
@@ -109,6 +101,7 @@
                         </tbody>
                     </table>
                 </div>
+                <p class="trial-balance-table-note">* Standard journal activity only. Adjusting entries are shown separately.</p>
             @endif
 
             <section class="trial-balance-reconciliation" aria-labelledby="trial-balance-reconciliation-heading">
