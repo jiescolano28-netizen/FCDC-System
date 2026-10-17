@@ -30,7 +30,6 @@ class GeneralLedger extends Component
     public function mount(): void
     {
         $today = CarbonImmutable::now('Asia/Manila');
-        $this->fromDate = $this->fromDate !== '' ? $this->fromDate : $today->startOfMonth()->toDateString();
         $this->toDate = $this->toDate !== '' ? $this->toDate : $today->toDateString();
     }
 
@@ -57,16 +56,19 @@ class GeneralLedger extends Component
             ? $this->dateRangeError($cutoverDate)
             : $readiness['production'];
         $lines = collect();
+        $allAccountRows = collect();
         $openingBalanceCents = 0;
         $closingBalanceCents = 0;
 
-        if ($account && $cutoverDate && $dateError === null) {
+        if ($cutoverDate && $dateError === null) {
+            $effectiveFromDate = $this->fromDate !== '' ? $this->fromDate : $cutoverDate;
             $history = AccountingJournalLine::query()
                 ->with(['journal.correctionOf', 'account'])
-                ->where('accounting_account_id', $account->id)
+                ->when($account, fn ($query) => $query->where('accounting_account_id', $account->id))
                 ->whereHas('journal', fn (Builder $query) => $query
                     ->where('book_key', 'FCDC')
                     ->where('status', 'posted')
+                    ->whereDate('accounting_date', '>=', $cutoverDate)
                     ->whereDate('accounting_date', '<=', $this->toDate))
                 ->join('accounting_journals', 'accounting_journal_lines.accounting_journal_id', '=', 'accounting_journals.id')
                 ->orderBy('accounting_journals.accounting_date')
@@ -75,22 +77,28 @@ class GeneralLedger extends Component
                 ->select('accounting_journal_lines.*')
                 ->get();
 
-            $openingLines = $history->filter(fn (AccountingJournalLine $line) => $line->journal->accounting_date->toDateString() < $this->fromDate);
-            $openingBalanceCents = $this->signedBalance($openingLines);
-            $balanceCents = $openingBalanceCents;
-            $lines = $history->filter(fn (AccountingJournalLine $line) => $line->journal->accounting_date->toDateString() >= $this->fromDate)
-                ->map(function (AccountingJournalLine $line) use (&$balanceCents): array {
-                    $balanceCents += (int) $line->debit_cents - (int) $line->credit_cents;
+            $allAccountRows = $history->groupBy('accounting_account_id')->map(function ($accountLines) use ($effectiveFromDate): array {
+                $openingBalance = $this->signedBalance($accountLines->filter(fn (AccountingJournalLine $line) => $line->journal->accounting_date->toDateString() < $effectiveFromDate));
+                $runningBalance = $openingBalance;
+                $periodLines = $accountLines->filter(fn (AccountingJournalLine $line) => $line->journal->accounting_date->toDateString() >= $effectiveFromDate)
+                    ->map(function (AccountingJournalLine $line) use (&$runningBalance): array {
+                        $runningBalance += (int) $line->debit_cents - (int) $line->credit_cents;
 
-                    return [
-                        'journal' => $line->journal,
-                        'description' => $line->description,
-                        'debit_cents' => (int) $line->debit_cents,
-                        'credit_cents' => (int) $line->credit_cents,
-                        'balance_cents' => $balanceCents,
-                    ];
-                })->values();
-            $closingBalanceCents = $balanceCents;
+                        return ['journal' => $line->journal, 'account' => $line->account, 'description' => $line->description,
+                            'debit_cents' => (int) $line->debit_cents, 'credit_cents' => (int) $line->credit_cents, 'balance_cents' => $runningBalance];
+                    })->values();
+
+                return ['account' => $accountLines->first()->account, 'opening' => $openingBalance, 'closing' => $runningBalance, 'lines' => $periodLines];
+            })->sortBy(fn (array $row) => $row['account']->code, SORT_NATURAL)->values();
+
+            if ($account) {
+                $accountRow = $allAccountRows->first(fn (array $row) => $row['account']->id === $account->id);
+                if ($accountRow) {
+                    $openingBalanceCents = $accountRow['opening'];
+                    $closingBalanceCents = $accountRow['closing'];
+                    $lines = $accountRow['lines'];
+                }
+            }
         }
 
         $accounts = AccountingAccount::query()
@@ -110,6 +118,7 @@ class GeneralLedger extends Component
             'openingBalanceCents' => $openingBalanceCents,
             'closingBalanceCents' => $closingBalanceCents,
             'lines' => $lines,
+            'allAccountRows' => $allAccountRows,
         ])->layout('layouts.app', ['title' => 'General Ledger']);
     }
 
@@ -119,16 +128,17 @@ class GeneralLedger extends Component
             return 'Posted General Ledger coverage is unavailable until approved opening balances are posted.';
         }
 
-        if (! CarbonImmutable::hasFormat($this->fromDate, 'Y-m-d') || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
+        if (($this->fromDate !== '' && ! CarbonImmutable::hasFormat($this->fromDate, 'Y-m-d')) || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
             return 'Choose a valid start and end date.';
         }
 
-        $from = CarbonImmutable::createFromFormat('!Y-m-d', $this->fromDate, 'Asia/Manila');
+        $fromDate = $this->fromDate !== '' ? $this->fromDate : $cutoverDate;
+        $from = CarbonImmutable::createFromFormat('!Y-m-d', $fromDate, 'Asia/Manila');
         $to = CarbonImmutable::createFromFormat('!Y-m-d', $this->toDate, 'Asia/Manila');
-        if (! $from || ! $to || $from->format('Y-m-d') !== $this->fromDate || $to->format('Y-m-d') !== $this->toDate || $from->gt($to)) {
+        if (! $from || ! $to || $from->format('Y-m-d') !== $fromDate || $to->format('Y-m-d') !== $this->toDate || $from->gt($to)) {
             return 'Choose a valid inclusive date range.';
         }
-        if ($this->fromDate < $cutoverDate) {
+        if ($fromDate < $cutoverDate) {
             return 'The selected range begins before approved accounting cutover coverage.';
         }
 

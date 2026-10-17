@@ -103,7 +103,7 @@ test('general ledger shows supported posted account activity with opening and de
     postLedgerJournal('INACTIVE-001', 'manual', '2026-02-15', 'Inactive account activity', [[$inactive, 5000, 0], [$equity, 0, 5000]]);
 
     $this->actingAs($viewer)->get(route('accounting.general-ledger'))
-        ->assertOk()->assertSee('Select an approved account')->assertDontSee('General Ledger reporting is not available yet.');
+        ->assertOk()->assertSee('All accounts')->assertSee('MANUAL-001')->assertSee('INACTIVE-001')->assertDontSee('General Ledger reporting is not available yet.');
 
     Livewire::actingAs($viewer)->test(GeneralLedger::class)
         ->set('accountId', (string) $cash->id)
@@ -116,7 +116,7 @@ test('general ledger shows supported posted account activity with opening and de
         ->assertSee(route('accounting.journal-entry').'?journal='.$first->id, false)
         ->assertSee(route('accounting.journal-entry').'?journal='.$second->id, false);
     $this->actingAs($viewer)->get(route('accounting.journal-entry', ['journal' => $first->id]))
-        ->assertOk()->assertSee('Journal detail: MANUAL-001');
+        ->assertOk()->assertSee('MANUAL-001')->assertSee('Account lines');
 
     Livewire::actingAs($viewer)->test(GeneralLedger::class)
         ->set('accountId', (string) $cash->id)->set('fromDate', '2026-01-15')->set('toDate', '2026-01-31')
