@@ -1,6 +1,8 @@
 <?php
 
 use App\Livewire\Accounting\AccountingOverview;
+use App\Livewire\Accounting\FinancialStatements;
+use App\Livewire\Accounting\TrialBalance;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
@@ -11,6 +13,7 @@ use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierOpeningInvoice;
 use App\Services\Accounting\OpeningBooksService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -27,14 +30,13 @@ function createAccountingOverviewEmployee(): Employee
 }
 function activateOverviewBooksForTest(): void
 {
-    $readiness = \Mockery::mock(OpeningBooksService::class);
+    $readiness = Mockery::mock(OpeningBooksService::class);
     $readiness->shouldReceive('readiness')->andReturn([
         'production_activated' => true,
         'production' => 'Production activated',
     ]);
     app()->instance(OpeningBooksService::class, $readiness);
 }
-
 
 function overviewAccount(string $code, string $classification, string $type, string $balance): AccountingAccount
 {
@@ -75,6 +77,14 @@ function overviewPostJournal(Employee $actor, string $reference, string $date, a
         ]);
     }
     if ($status === 'posted') {
+        if ($source === 'manual') {
+            $journal->forceFill(['status' => 'pending_review'])->save();
+            $journal->forceFill([
+                'status' => 'approved',
+                'approved_by' => $actor->id,
+                'approved_at' => now(),
+            ])->save();
+        }
         $journal->forceFill(['status' => 'posted', 'posted_by' => $actor->id, 'posted_at' => now()])->save();
     }
 
@@ -82,7 +92,7 @@ function overviewPostJournal(Employee $actor, string $reference, string $date, a
 }
 
 test('accounting overview shows period flows separately from carried closing positions', function () {
-    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-10 12:00:00', 'Asia/Manila'));
+    $this->travelTo(CarbonImmutable::parse('2026-10-10 12:00:00', 'Asia/Manila'));
 
     $viewer = createAccountingOverviewEmployee();
     $cash = overviewAccount('1000', 'cash', 'Asset', 'debit');
@@ -167,14 +177,14 @@ test('accounting overview shows period flows separately from carried closing pos
         ->set('toDate', '2026-10-31')
         ->assertSee('before approved accounting cutover coverage')
         ->assertDontSee('PHP 0.00');
-    Livewire::actingAs($viewer)->test(\App\Livewire\Accounting\FinancialStatements::class)
+    Livewire::actingAs($viewer)->test(FinancialStatements::class)
         ->set('fromDate', '2026-10-01')
         ->set('toDate', '2026-10-31')
         ->assertSee('PHP 100.00')
         ->assertSee('PHP 30.00')
         ->assertSee('PHP 20.00')
         ->assertSee('PHP 50.00');
-    Livewire::actingAs($viewer)->test(\App\Livewire\Accounting\TrialBalance::class)
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
         ->set('fromDate', '2026-10-01')
         ->set('toDate', '2026-10-31')
         ->assertSee('Overview 1000')
@@ -239,4 +249,3 @@ test('accounting overview requires view permission and offers working report des
     ]), []);
     $this->actingAs($restricted)->get(route('accounting.overview'))->assertForbidden();
 });
-

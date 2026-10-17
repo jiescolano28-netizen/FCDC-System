@@ -44,6 +44,10 @@ class TrialBalance extends Component
         $totalCreditsCents = 0;
         $periodDebitsCents = 0;
         $periodCreditsCents = 0;
+        $unadjustedDebitsCents = 0;
+        $unadjustedCreditsCents = 0;
+        $adjustmentDebitsCents = 0;
+        $adjustmentCreditsCents = 0;
         $apScheduleCents = null;
         $inventoryScheduleCents = null;
         $apBookCents = 0;
@@ -59,37 +63,70 @@ class TrialBalance extends Component
                 ->where('accounting_journals.status', 'posted')
                 ->whereDate('accounting_journals.accounting_date', '>=', $cutoverDate)
                 ->whereDate('accounting_journals.accounting_date', '<=', $this->toDate)
-                ->select('accounting_journal_lines.*', 'accounting_journals.accounting_date as posted_date')
+                ->select(
+                    'accounting_journal_lines.*',
+                    'accounting_journals.accounting_date as posted_date',
+                    'accounting_journals.entry_type as journal_entry_type',
+                )
                 ->get();
-            $accountTotals = $ledgerLines->groupBy('accounting_account_id')->map(fn ($lines) => [
-                'debit' => (int) $lines->sum('debit_cents'),
-                'credit' => (int) $lines->sum('credit_cents'),
-                'period_debit' => (int) $lines->filter(fn ($line) => $line->posted_date >= $this->fromDate)->sum('debit_cents'),
-                'period_credit' => (int) $lines->filter(fn ($line) => $line->posted_date >= $this->fromDate)->sum('credit_cents'),
-            ]);
+            $accountTotals = $ledgerLines->groupBy('accounting_account_id')->map(function ($lines) {
+                $isAdjusting = fn ($line) => ($line->journal_entry_type ?? AccountingJournal::ENTRY_TYPE_STANDARD) === AccountingJournal::ENTRY_TYPE_ADJUSTING;
+                $periodLines = $lines->filter(fn ($line) => $line->posted_date >= $this->fromDate);
+                $periodAdjusting = $periodLines->filter($isAdjusting);
+                $periodStandard = $periodLines->reject($isAdjusting);
+                $cumulativeNet = (int) $lines->sum('debit_cents') - (int) $lines->sum('credit_cents');
+                $adjustmentDebit = (int) $periodAdjusting->sum('debit_cents');
+                $adjustmentCredit = (int) $periodAdjusting->sum('credit_cents');
+                $standardPeriodDebit = (int) $periodStandard->sum('debit_cents');
+                $standardPeriodCredit = (int) $periodStandard->sum('credit_cents');
+                $unadjustedNet = $cumulativeNet - ($adjustmentDebit - $adjustmentCredit);
+                $openingNet = $unadjustedNet - ($standardPeriodDebit - $standardPeriodCredit);
+
+                return [
+                    'opening_debit' => max(0, $openingNet),
+                    'opening_credit' => max(0, -$openingNet),
+                    'period_debit' => $standardPeriodDebit,
+                    'period_credit' => $standardPeriodCredit,
+                    'unadjusted_debit' => max(0, $unadjustedNet),
+                    'unadjusted_credit' => max(0, -$unadjustedNet),
+                    'adjustment_debit' => $adjustmentDebit,
+                    'adjustment_credit' => $adjustmentCredit,
+                    'adjusted_debit' => max(0, $cumulativeNet),
+                    'adjusted_credit' => max(0, -$cumulativeNet),
+                ];
+            });
             $accounts = AccountingAccount::query()
                 ->where(fn (Builder $query) => $query
                     ->where(fn (Builder $approvedAccounts) => $approvedAccounts->whereNotNull('approved_at')->where('is_active', true))
                     ->orWhereIn('id', $accountTotals->keys()))
                 ->orderBy('code')->get()
-                ->map(function (AccountingAccount $account) use ($accountTotals, &$totalDebitsCents, &$totalCreditsCents, &$periodDebitsCents, &$periodCreditsCents) {
-                    $totals = $accountTotals->get($account->id, ['debit' => 0, 'credit' => 0, 'period_debit' => 0, 'period_credit' => 0]);
-                    $closing = $totals['debit'] - $totals['credit'];
-                    $debit = max(0, $closing);
-                    $credit = max(0, -$closing);
-                    $totalDebitsCents += $debit;
-                    $totalCreditsCents += $credit;
+                ->map(function (AccountingAccount $account) use ($accountTotals, &$totalDebitsCents, &$totalCreditsCents, &$periodDebitsCents, &$periodCreditsCents, &$unadjustedDebitsCents, &$unadjustedCreditsCents, &$adjustmentDebitsCents, &$adjustmentCreditsCents) {
+                    $totals = $accountTotals->get($account->id, [
+                        'opening_debit' => 0, 'opening_credit' => 0, 'period_debit' => 0, 'period_credit' => 0,
+                        'unadjusted_debit' => 0, 'unadjusted_credit' => 0, 'adjustment_debit' => 0, 'adjustment_credit' => 0,
+                        'adjusted_debit' => 0, 'adjusted_credit' => 0,
+                    ]);
+                    $totalDebitsCents += $totals['adjusted_debit'];
+                    $totalCreditsCents += $totals['adjusted_credit'];
                     $periodDebitsCents += $totals['period_debit'];
                     $periodCreditsCents += $totals['period_credit'];
+                    $unadjustedDebitsCents += $totals['unadjusted_debit'];
+                    $unadjustedCreditsCents += $totals['unadjusted_credit'];
+                    $adjustmentDebitsCents += $totals['adjustment_debit'];
+                    $adjustmentCreditsCents += $totals['adjustment_credit'];
 
                     return [
                         'account' => $account,
-                        'opening_debit_cents' => max(0, ($totals['debit'] - $totals['period_debit']) - ($totals['credit'] - $totals['period_credit'])),
-                        'opening_credit_cents' => max(0, -(($totals['debit'] - $totals['period_debit']) - ($totals['credit'] - $totals['period_credit']))),
+                        'opening_debit_cents' => $totals['opening_debit'],
+                        'opening_credit_cents' => $totals['opening_credit'],
                         'period_debit_cents' => $totals['period_debit'],
                         'period_credit_cents' => $totals['period_credit'],
-                        'closing_debit_cents' => $debit,
-                        'closing_credit_cents' => $credit,
+                        'unadjusted_debit_cents' => $totals['unadjusted_debit'],
+                        'unadjusted_credit_cents' => $totals['unadjusted_credit'],
+                        'adjustment_debit_cents' => $totals['adjustment_debit'],
+                        'adjustment_credit_cents' => $totals['adjustment_credit'],
+                        'closing_debit_cents' => $totals['adjusted_debit'],
+                        'closing_credit_cents' => $totals['adjusted_credit'],
                     ];
                 })->values();
 
@@ -108,6 +145,8 @@ class TrialBalance extends Component
             }
         }
 
+        $hasAdjustments = $adjustmentDebitsCents !== 0 || $adjustmentCreditsCents !== 0;
+
         return view('livewire.accounting.trial-balance', [
             'cutoverDate' => $cutoverDate,
             'dateError' => $dateError,
@@ -116,6 +155,16 @@ class TrialBalance extends Component
             'totalCreditsCents' => $totalCreditsCents,
             'periodDebitsCents' => $periodDebitsCents,
             'periodCreditsCents' => $periodCreditsCents,
+            'unadjustedDebitsCents' => $unadjustedDebitsCents,
+            'unadjustedCreditsCents' => $unadjustedCreditsCents,
+            'adjustmentDebitsCents' => $adjustmentDebitsCents,
+            'adjustmentCreditsCents' => $adjustmentCreditsCents,
+            'unadjustedDifferenceCents' => abs($unadjustedDebitsCents - $unadjustedCreditsCents),
+            'adjustmentDifferenceCents' => abs($adjustmentDebitsCents - $adjustmentCreditsCents),
+            'adjustedDifferenceCents' => abs($totalDebitsCents - $totalCreditsCents),
+            'hasAdjustments' => $hasAdjustments,
+            'isUnadjustedBalanced' => $dateError === null && $unadjustedDebitsCents === $unadjustedCreditsCents,
+            'isAdjustedBalanced' => $dateError === null && $totalDebitsCents === $totalCreditsCents,
             'isBalanced' => $dateError === null && $totalDebitsCents === $totalCreditsCents,
             'apBookCents' => $apBookCents,
             'apScheduleCents' => $apScheduleCents,
@@ -124,7 +173,7 @@ class TrialBalance extends Component
             'inventoryScheduleCents' => $inventoryScheduleCents,
             'inventoryMismatch' => $inventoryMismatch,
             'inventoryCoverageError' => $inventoryCoverageError,
-            'hasActivity' => $periodDebitsCents !== 0 || $periodCreditsCents !== 0,
+            'hasActivity' => $periodDebitsCents !== 0 || $periodCreditsCents !== 0 || $hasAdjustments,
         ])->layout('layouts.app', ['title' => 'Trial Balance']);
     }
 
@@ -147,5 +196,4 @@ class TrialBalance extends Component
 
         return null;
     }
-
 }

@@ -66,6 +66,14 @@ function statementJournal(AccountingPostingPeriod $period, Employee $actor, stri
         ]);
     }
     if ($status === 'posted') {
+        if ($source === 'manual') {
+            $journal->forceFill(['status' => 'pending_review'])->save();
+            $journal->forceFill([
+                'status' => 'approved',
+                'approved_by' => $actor->id,
+                'approved_at' => now(),
+            ])->save();
+        }
         $journal->forceFill([
             'status' => 'posted',
             'posted_by' => $actor->id,
@@ -110,7 +118,7 @@ test('accounting sidebar shows only the six scoped submodules and preserves rela
 
     $response->assertOk()
         ->assertSee('Notes to Financial Statements / Disclosure')
-        ->assertSee('No financial statement disclosures are currently available.')
+        ->assertSee('Management-prepared disclosures')
         ->assertSeeInOrder([
             'Chart of Accounts',
             'Journal Entry',
@@ -452,11 +460,11 @@ test('contra accounts reduce assets equity and net revenue by their posted debit
     $period = statementPeriod(2026);
     $cash = statementAccount('1000', 'cash', 'Asset', 'debit');
     $equipment = statementAccount('1500', 'equipment', 'Asset', 'debit');
-    $accumulatedDepreciation = statementAccount('1510', 'equipment', 'Asset', 'credit');
+    $accumulatedDepreciation = statementAccount('1510', 'contra_asset', 'Asset', 'credit');
     $capital = statementAccount('3010', 'capital', 'Equity', 'credit');
-    $dividends = statementAccount('3050', 'other_equity', 'Equity', 'debit');
+    $dividends = statementAccount('3050', 'contra_equity', 'Equity', 'debit');
     $sales = statementAccount('4010', 'sales', 'Revenue', 'credit');
-    $returns = statementAccount('4090', 'sales', 'Revenue', 'debit');
+    $returns = statementAccount('4090', 'contra_revenue', 'Revenue', 'debit');
 
     statementJournal($period, $viewer, '2026-01-01', 'opening', [
         [$cash, 100000, 0], [$equipment, 50000, 0], [$accumulatedDepreciation, 0, 10000],

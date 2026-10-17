@@ -2,7 +2,7 @@
     <header class="page-heading trial-balance-heading">
         <div>
             <h1 id="trial-balance-heading">Trial Balance</h1>
-            <p class="page-subtitle">Cumulative account balances through the selected date, with period movement and schedule reconciliation.</p>
+            <p class="page-subtitle">Unadjusted and adjusted account balances through the selected date, with period movement, adjusting entries, and schedule reconciliation.</p>
         </div>
         <button class="vat-detail-button" type="button" onclick="window.print()">Print report</button>
     </header>
@@ -36,19 +36,33 @@
             </div>
         @else
             <div class="trial-balance-totals" aria-label="Trial balance totals">
-                <div><span>Closing debits</span><strong>{{ number_format($totalDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Closing credits</span><strong>{{ number_format($totalCreditsCents / 100, 2) }}</strong></div>
-                <div><span>Period debits</span><strong>{{ number_format($periodDebitsCents / 100, 2) }}</strong></div>
-                <div><span>Period credits</span><strong>{{ number_format($periodCreditsCents / 100, 2) }}</strong></div>
+                <div><span>Unadjusted debits</span><strong>{{ number_format($unadjustedDebitsCents / 100, 2) }}</strong></div>
+                <div><span>Unadjusted credits</span><strong>{{ number_format($unadjustedCreditsCents / 100, 2) }}</strong></div>
+                <div><span>Adjustment debits</span><strong>{{ number_format($adjustmentDebitsCents / 100, 2) }}</strong></div>
+                <div><span>Adjustment credits</span><strong>{{ number_format($adjustmentCreditsCents / 100, 2) }}</strong></div>
+                <div><span>Adjusted debits</span><strong>{{ number_format($totalDebitsCents / 100, 2) }}</strong></div>
+                <div><span>Adjusted credits</span><strong>{{ number_format($totalCreditsCents / 100, 2) }}</strong></div>
+                <div><span>Period debits (standard)</span><strong>{{ number_format($periodDebitsCents / 100, 2) }}</strong></div>
+                <div><span>Period credits (standard)</span><strong>{{ number_format($periodCreditsCents / 100, 2) }}</strong></div>
             </div>
 
-            <div class="trial-balance-status {{ $isBalanced ? 'is-balanced' : 'has-accounting-error' }}" role="status">
-                @if ($isBalanced)
-                    Books balance: total closing debits equal total closing credits.
+            <div class="trial-balance-status {{ $isAdjustedBalanced ? 'is-balanced' : 'has-accounting-error' }}" role="status">
+                @if ($isAdjustedBalanced)
+                    Books balance: total adjusted debits equal total adjusted credits.
                 @else
-                    Accounting error: total closing debits do not equal total closing credits. No balancing entry has been added.
+                    Accounting error: total adjusted debits do not equal total adjusted credits. No balancing entry has been added.
                 @endif
             </div>
+            @if (! $isUnadjustedBalanced)
+                <div class="trial-balance-status has-accounting-error" role="status">
+                    Unadjusted trial balance is out of balance by {{ number_format($unadjustedDifferenceCents / 100, 2) }}.
+                    Review and post authorized adjusting entries to correct the affected accounts.
+                </div>
+            @endif
+            <p class="trial-balance-basis-note">
+                Adjusting entries are approved, referenced, and explained journals dated within the selected period.
+                The adjusted trial balance is the basis for the financial statements.
+            </p>
 
             @if ($accounts->isEmpty())
                 <div class="trial-balance-empty" role="status">
@@ -68,8 +82,12 @@
                                 <th scope="col">Opening credit</th>
                                 <th scope="col">Period debit</th>
                                 <th scope="col">Period credit</th>
-                                <th scope="col">Closing debit</th>
-                                <th scope="col">Closing credit</th>
+                                <th scope="col">Unadjusted debit</th>
+                                <th scope="col">Unadjusted credit</th>
+                                <th scope="col">Adjustments debit</th>
+                                <th scope="col">Adjustments credit</th>
+                                <th scope="col">Adjusted debit</th>
+                                <th scope="col">Adjusted credit</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -80,6 +98,10 @@
                                     <td>{{ number_format($row['opening_credit_cents'] / 100, 2) }}</td>
                                     <td>{{ number_format($row['period_debit_cents'] / 100, 2) }}</td>
                                     <td>{{ number_format($row['period_credit_cents'] / 100, 2) }}</td>
+                                    <td>{{ number_format($row['unadjusted_debit_cents'] / 100, 2) }}</td>
+                                    <td>{{ number_format($row['unadjusted_credit_cents'] / 100, 2) }}</td>
+                                    <td>{{ number_format($row['adjustment_debit_cents'] / 100, 2) }}</td>
+                                    <td>{{ number_format($row['adjustment_credit_cents'] / 100, 2) }}</td>
                                     <td>{{ number_format($row['closing_debit_cents'] / 100, 2) }}</td>
                                     <td>{{ number_format($row['closing_credit_cents'] / 100, 2) }}</td>
                                 </tr>

@@ -6,6 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingPostingPeriod;
+use App\Models\Employee;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class ManualJournalService
                 'book_key' => 'FCDC',
                 'reference' => $validated['reference'],
                 'source_type' => 'manual',
+                'entry_type' => $validated['entryType'] ?? AccountingJournal::ENTRY_TYPE_STANDARD,
                 'source_id' => $validated['reference'],
                 'accounting_date' => $validated['accountingDate'],
                 'posting_period_id' => $period->id,
@@ -55,13 +57,59 @@ class ManualJournalService
         });
     }
 
-    public function postDraft(int $journalId, int $actorId): AccountingJournal
+    public function submitForReview(int $journalId, int $actorId): AccountingJournal
     {
         return DB::transaction(function () use ($journalId, $actorId): AccountingJournal {
             $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'draft')
                 ->lockForUpdate()->with('lines.account')->findOrFail($journalId);
             $this->assertPostingEligible($journal->accounting_date->toDateString(), $journal->lines);
+            $journal->forceFill(['status' => 'pending_review'])->save();
+            $this->auditTransition($journal, $actorId, 'Journal submitted for approval', 'draft', 'pending_review');
+
+            return $journal->refresh()->load('lines.account');
+        });
+    }
+
+    public function approveDraft(int $journalId, int $actorId): AccountingJournal
+    {
+        return DB::transaction(function () use ($journalId, $actorId): AccountingJournal {
+            $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'pending_review')
+                ->lockForUpdate()->with('lines.account')->findOrFail($journalId);
+            if ($journal->prepared_by === $actorId) {
+                throw ValidationException::withMessages(['journal' => 'A different authorized employee must approve this journal.']);
+            }
+            $this->assertPostingEligible($journal->accounting_date->toDateString(), $journal->lines);
+            $journal->forceFill([
+                'status' => 'approved',
+                'approved_at' => now('UTC'),
+                'approved_by' => $actorId,
+            ])->save();
+            $this->auditTransition($journal, $actorId, 'Journal approved', 'pending_review', 'approved');
+
+            return $journal->refresh()->load('lines.account');
+        });
+    }
+
+    public function returnForChanges(int $journalId, int $actorId): AccountingJournal
+    {
+        return DB::transaction(function () use ($journalId, $actorId): AccountingJournal {
+            $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'pending_review')
+                ->lockForUpdate()->findOrFail($journalId);
+            $journal->forceFill(['status' => 'draft'])->save();
+            $this->auditTransition($journal, $actorId, 'Journal returned for changes', 'pending_review', 'draft');
+
+            return $journal->refresh()->load('lines.account');
+        });
+    }
+
+    public function postDraft(int $journalId, int $actorId): AccountingJournal
+    {
+        return DB::transaction(function () use ($journalId, $actorId): AccountingJournal {
+            $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'approved')
+                ->lockForUpdate()->with('lines.account')->findOrFail($journalId);
+            $this->assertPostingEligible($journal->accounting_date->toDateString(), $journal->lines);
             $journal->forceFill(['status' => 'posted', 'posted_at' => now('UTC'), 'posted_by' => $actorId])->save();
+            $this->auditTransition($journal, $actorId, 'Journal posted', 'approved', 'posted');
             foreach ($journal->lines as $line) {
                 $line->account->markUsed();
             }
@@ -115,6 +163,8 @@ class ManualJournalService
                     'debit_cents' => $line->credit_cents,
                     'credit_cents' => $line->debit_cents,
                 ])->all(),
+                null,
+                $original->entry_type ?? AccountingJournal::ENTRY_TYPE_STANDARD,
             );
             $replacement = $this->createPostedEntry(
                 $validated['reference'],
@@ -127,6 +177,7 @@ class ManualJournalService
                 $actorId,
                 $validated['lines'],
                 $validated['externalReference'] ?: null,
+                $validated['entryType'] ?? $original->entry_type ?? AccountingJournal::ENTRY_TYPE_STANDARD,
             );
             foreach ($reversal->lines->merge($replacement->lines) as $line) {
                 $line->account->markUsed();
@@ -147,11 +198,13 @@ class ManualJournalService
         int $actorId,
         array $lines,
         ?string $externalReference = null,
+        string $entryType = AccountingJournal::ENTRY_TYPE_STANDARD,
     ): AccountingJournal {
         $journal = AccountingJournal::create([
             'book_key' => 'FCDC',
             'reference' => $reference,
             'source_type' => $sourceType,
+            'entry_type' => $entryType,
             'source_id' => $reference,
             'accounting_date' => $date,
             'posting_period_id' => $period->id,
@@ -168,6 +221,23 @@ class ManualJournalService
         return $journal->load('lines.account');
     }
 
+    private function auditTransition(
+        AccountingJournal $journal,
+        int $actorId,
+        string $description,
+        string $oldStatus,
+        string $newStatus,
+    ): void {
+        activity()
+            ->causedBy(Employee::query()->findOrFail($actorId))
+            ->performedOn($journal)
+            ->withProperties([
+                'old' => ['status' => $oldStatus],
+                'attributes' => ['status' => $newStatus],
+            ])
+            ->log($description);
+    }
+
     private function validatedDraft(array $data, ?int $journalId = null): array
     {
         validator($data, [
@@ -175,6 +245,7 @@ class ManualJournalService
             'reference' => ['required', 'string', 'max:80'],
             'externalReference' => ['nullable', 'string', 'max:120'],
             'description' => ['required', 'string', 'max:255'],
+            'entryType' => ['nullable', 'string', 'in:standard,adjusting'],
             'lines' => ['required', 'array', 'min:2', 'max:100'],
             'lines.*.accountId' => ['required', 'integer', 'exists:accounting_accounts,id'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
@@ -206,6 +277,7 @@ class ManualJournalService
             'reference' => trim($data['reference']),
             'externalReference' => trim((string) ($data['externalReference'] ?? '')),
             'description' => trim($data['description']),
+            'entryType' => $data['entryType'] ?? null,
             'lines' => $lines,
         ];
     }
@@ -230,8 +302,8 @@ class ManualJournalService
             'journal',
             'The accounting date is not in an open accounting period.',
         );
-        if ($dateValue->lt(CarbonImmutable::parse($period->starts_on, 'Asia/Manila'))
-            || $dateValue->gt(CarbonImmutable::parse($period->ends_on, 'Asia/Manila'))) {
+        if ($date < $period->starts_on->toDateString()
+            || $date > $period->ends_on->toDateString()) {
             throw ValidationException::withMessages(['journal' => 'The accounting date is not in an open accounting period.']);
         }
 

@@ -1,0 +1,3 @@
+# Manual journal approval before posting
+
+Accepted. Manual and adjusting journal entries move from draft to pending review, then to approved by an authorized approver before posting; this supersedes ADR 0005 only for manual journals, while source-module postings remain atomic without a separate approval queue. Approval and posting actors and timestamps remain traceable, drafts and pending entries do not affect posted balances, and posted journals remain immutable.

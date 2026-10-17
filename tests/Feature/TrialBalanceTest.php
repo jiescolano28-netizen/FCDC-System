@@ -47,7 +47,7 @@ function trialBalanceAccount(string $code, string $classification, string $type,
     ]);
 }
 
-function postTrialBalanceJournal(string $reference, string $date, array $lines, string $source = 'manual', ?string $sourceId = null): AccountingJournal
+function postTrialBalanceJournal(string $reference, string $date, array $lines, string $source = 'manual', ?string $sourceId = null, string $entryType = 'standard'): AccountingJournal
 {
     $year = (int) substr($date, 0, 4);
     $period = AccountingPostingPeriod::firstOrCreate(
@@ -59,6 +59,7 @@ function postTrialBalanceJournal(string $reference, string $date, array $lines, 
         'book_key' => 'FCDC',
         'reference' => $reference,
         'source_type' => $source,
+        'entry_type' => $entryType,
         'source_id' => $sourceId ?? $reference,
         'accounting_date' => $date,
         'posting_period_id' => $period->id,
@@ -72,6 +73,14 @@ function postTrialBalanceJournal(string $reference, string $date, array $lines, 
             'debit_cents' => $debit,
             'credit_cents' => $credit,
         ]);
+    }
+    if ($source === 'manual') {
+        $journal->forceFill(['status' => 'pending_review'])->save();
+        $journal->forceFill([
+            'status' => 'approved',
+            'approved_by' => $actor->id,
+            'approved_at' => now(),
+        ])->save();
     }
     $journal->forceFill(['status' => 'posted'])->save();
 
@@ -250,4 +259,43 @@ test('trial balance reports an inventory schedule mismatch independently of bala
         ->assertSee('Books balance')
         ->assertSee('Inventory: book 100.00; valued-item schedule 100.01.')
         ->assertSee('Schedule mismatch.');
+});
+
+test('trial balance worksheet separates unadjusted balances from adjusting entries and bases the adjusted column on both', function () {
+    $viewer = createTrialBalanceEmployee();
+    $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
+    $sales = trialBalanceAccount('4000', 'sales', 'Revenue', 'credit');
+    $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
+    $expense = trialBalanceAccount('6000', 'operating_expense', 'Expense', 'debit');
+    postTrialBalanceJournal('OPENING-WS', '2026-01-01', [[$cash, 10000, 0], [$equity, 0, 10000]], 'opening', 'FCDC');
+    postTrialBalanceJournal('STANDARD-WS', '2026-02-05', [[$cash, 2500, 0], [$sales, 0, 2500]]);
+    postTrialBalanceJournal('ADJUSTING-WS', '2026-02-20', [[$expense, 500, 0], [$cash, 0, 500]], 'adjusting', null, 'adjusting');
+
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
+        ->set('fromDate', '2026-02-01')
+        ->set('toDate', '2026-02-28')
+        ->assertSee('Unadjusted debit')
+        ->assertSee('Adjustments debit')
+        ->assertSee('Adjusted debit')
+        ->assertSee('Adjusting entries are approved, referenced, and explained')
+        ->assertSee('Books balance')
+        ->assertSee('125.00')
+        ->assertSee('120.00')
+        ->assertSee('5.00');
+});
+
+test('adjusting entries dated before the selected period remain folded into the unadjusted and adjusted balances', function () {
+    $viewer = createTrialBalanceEmployee();
+    $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
+    $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
+    $expense = trialBalanceAccount('6000', 'operating_expense', 'Expense', 'debit');
+    postTrialBalanceJournal('OPENING-PRE', '2026-01-01', [[$cash, 10000, 0], [$equity, 0, 10000]], 'opening', 'FCDC');
+    postTrialBalanceJournal('ADJ-PRE', '2026-01-15', [[$expense, 500, 0], [$cash, 0, 500]], 'adjusting', null, 'adjusting');
+
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
+        ->set('fromDate', '2026-02-01')
+        ->set('toDate', '2026-02-28')
+        ->assertSee('95.00')
+        ->assertSee('No activity during this period')
+        ->assertSee('Books balance');
 });

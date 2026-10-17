@@ -19,9 +19,13 @@ class JournalEntry extends Component
 
     public string $description = '';
 
+    public string $entryType = 'standard';
+
     public array $lines = [];
 
     public ?int $editingDraftId = null;
+
+    public bool $showEntryModal = false;
 
     #[Url(as: 'journal')]
     public ?int $selectedJournalId = null;
@@ -33,6 +37,8 @@ class JournalEntry extends Component
     public string $dateTo = '';
 
     public string $sourceFilter = '';
+
+    public string $entryTypeFilter = '';
 
     public string $correctionReason = '';
 
@@ -56,6 +62,18 @@ class JournalEntry extends Component
         }
     }
 
+    public function openNewDraft(): void
+    {
+        $this->authorizePermission('accounting.create-journal-entry');
+        $this->resetForm();
+        $this->showEntryModal = true;
+    }
+
+    public function closeEntryModal(): void
+    {
+        $this->showEntryModal = false;
+    }
+
     public function removeLine(int $index): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
@@ -67,9 +85,28 @@ class JournalEntry extends Component
     public function saveDraft(): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
-        app(ManualJournalService::class)->saveDraft($this->formData(), auth()->id(), $this->editingDraftId);
-        $this->resetForm();
-        session()->flash('journal-entry-message', 'Journal draft saved. It has no accounting effect until posted.');
+        $journal = app(ManualJournalService::class)->saveDraft($this->formData(), auth()->id(), $this->editingDraftId);
+        $this->editingDraftId = $journal->id;
+        $this->showEntryModal = true;
+        session()->flash('journal-entry-message', 'Journal draft saved. Review the lines and submit it when ready.');
+    }
+
+    public function submitForReview(int $journalId): void
+    {
+        $this->authorizePermission('accounting.create-journal-entry');
+        app(ManualJournalService::class)->submitForReview($journalId, (int) auth()->id());
+        if ($this->editingDraftId === $journalId) {
+            $this->resetForm();
+            $this->showEntryModal = false;
+        }
+        session()->flash('journal-entry-message', 'Journal submitted for approval.');
+    }
+
+    public function returnForChanges(int $journalId): void
+    {
+        $this->authorizePermission('accounting.approve-journal-entry');
+        app(ManualJournalService::class)->returnForChanges($journalId, (int) auth()->id());
+        session()->flash('journal-entry-message', 'Journal returned to draft so the preparer can make changes.');
     }
 
     public function editDraft(int $journalId): void
@@ -79,6 +116,7 @@ class JournalEntry extends Component
             ->with('lines')->findOrFail($journalId);
         $this->editingDraftId = $journal->id;
         $this->fillFromJournal($journal);
+        $this->showEntryModal = true;
     }
 
     public function deleteDraft(int $journalId): void
@@ -96,6 +134,13 @@ class JournalEntry extends Component
         $this->authorizePermission('accounting.post-journal-entry');
         app(ManualJournalService::class)->postDraft($journalId, auth()->id());
         session()->flash('journal-entry-message', 'Journal posted to the accounting books.');
+    }
+
+    public function approveDraft(int $journalId): void
+    {
+        $this->authorizePermission('accounting.approve-journal-entry');
+        app(ManualJournalService::class)->approveDraft($journalId, (int) auth()->id());
+        session()->flash('journal-entry-message', 'Journal approved and ready to post.');
     }
 
     public function showJournal(int $journalId): void
@@ -116,10 +161,12 @@ class JournalEntry extends Component
         $this->replacementReference = '';
         $this->correctionReference = '';
         $this->correctionReason = '';
+        $this->showEntryModal = true;
     }
 
     public function correct(int $journalId): void
     {
+        $this->authorizePermission('accounting.approve-journal-entry');
         $this->authorizePermission('accounting.post-journal-entry');
         try {
             app(ManualJournalService::class)->correct($journalId, array_merge($this->formData(), [
@@ -137,12 +184,13 @@ class JournalEntry extends Component
         }
         $this->correctingJournalId = null;
         $this->resetForm();
+        $this->showEntryModal = false;
         session()->flash('journal-entry-message', 'Linked reversal and replacement posted.');
     }
 
     public function render()
     {
-        $journals = AccountingJournal::query()->with(['lines.account', 'poster', 'correctionOf', 'corrections'])
+        $journals = AccountingJournal::query()->with(['lines.account', 'preparer', 'approver', 'poster', 'correctionOf', 'corrections'])
             ->when($this->search !== '', function ($query): void {
                 $term = '%'.trim($this->search).'%';
                 $query->where(fn ($nested) => $nested->where('reference', 'like', $term)
@@ -152,13 +200,19 @@ class JournalEntry extends Component
             ->when($this->dateFrom !== '', fn ($query) => $query->whereDate('accounting_date', '>=', $this->dateFrom))
             ->when($this->dateTo !== '', fn ($query) => $query->whereDate('accounting_date', '<=', $this->dateTo))
             ->when($this->sourceFilter !== '', fn ($query) => $query->where('source_type', $this->sourceFilter))
+            ->when($this->entryTypeFilter !== '', fn ($query) => $query->where('entry_type', $this->entryTypeFilter))
             ->orderByDesc('accounting_date')->orderByDesc('id')->get();
+
+        [$debitTotal, $creditTotal, $isBalanced] = $this->previewTotals();
 
         return view('livewire.accounting.journal-entry', [
             'journals' => $journals,
-            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'correctionOf'])->where('status', 'posted')->find($this->selectedJournalId) : null,
+            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'approver', 'correctionOf'])->find($this->selectedJournalId) : null,
             'accounts' => AccountingAccount::where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get(),
             'isCorrecting' => $this->correctingJournalId !== null,
+            'debitTotal' => $debitTotal,
+            'creditTotal' => $creditTotal,
+            'isBalanced' => $isBalanced,
         ])->layout('layouts.app', ['title' => 'Journal Entry']);
     }
 
@@ -169,6 +223,7 @@ class JournalEntry extends Component
             'reference' => $this->reference,
             'externalReference' => $this->externalReference,
             'description' => $this->description,
+            'entryType' => $this->entryType,
             'lines' => $this->lines,
         ];
     }
@@ -179,6 +234,7 @@ class JournalEntry extends Component
         $this->reference = $journal->reference;
         $this->externalReference = $journal->external_reference ?? '';
         $this->description = $journal->description;
+        $this->entryType = $journal->entry_type ?? 'standard';
         $this->lines = $journal->lines->map(fn ($line) => [
             'accountId' => (string) $line->accounting_account_id,
             'description' => $line->description ?? '',
@@ -187,10 +243,41 @@ class JournalEntry extends Component
         ])->all();
     }
 
+    private function previewTotals(): array
+    {
+        $totals = ['debit' => 0.0, 'credit' => 0.0];
+        $valid = true;
+
+        foreach ($this->lines as $line) {
+            foreach (array_keys($totals) as $side) {
+                $amount = trim((string) ($line[$side] ?? ''));
+                if ($amount === '') {
+                    continue;
+                }
+                if (! preg_match('/^\d+(?:\.\d{1,2})?$/D', $amount)) {
+                    $valid = false;
+
+                    continue;
+                }
+
+                $totals[$side] += (float) $amount;
+                if (! is_finite($totals[$side])) {
+                    $valid = false;
+                }
+            }
+        }
+
+        $debitTotal = round($totals['debit'], 2);
+        $creditTotal = round($totals['credit'], 2);
+
+        return [$debitTotal, $creditTotal, $valid && $debitTotal > 0 && $debitTotal === $creditTotal];
+    }
+
     private function resetForm(): void
     {
         $this->reset('reference', 'externalReference', 'description', 'editingDraftId', 'correctingJournalId');
         $this->accountingDate = now('Asia/Manila')->toDateString();
+        $this->entryType = 'standard';
         $this->lines = [$this->emptyLine(), $this->emptyLine()];
     }
 

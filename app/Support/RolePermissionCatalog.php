@@ -37,8 +37,9 @@ class RolePermissionCatalog
             'Accounting' => [
                 'accounting.view' => 'View accounting',
                 'accounting.create-journal-entry' => 'Prepare manual journal entries',
-                'accounting.post-journal-entry' => 'Post manual journal entries and corrections',
-                'accounting.maintain-accounts' => 'Create and maintain accounts and posting mappings',
+                'accounting.maintain-accounts' => 'Maintain accounts and posting mappings',
+                'accounting.approve-journal-entry' => 'Approve manual and adjusting journal entries',
+                'accounting.post-journal-entry' => 'Post approved manual journal entries and corrections',
                 'accounting.approve-accounts' => 'Approve accounts and posting mappings',
                 'accounting.prepare-disbursements' => 'Prepare and maintain direct disbursement drafts',
                 'accounting.post-disbursements' => 'Post direct disbursements and corrections',
@@ -55,6 +56,8 @@ class RolePermissionCatalog
                 'accounting.activate-books' => 'Activate reconciled production accounting',
                 'accounting.reconcile-sources' => 'Reconcile existing post-cutover source activity',
                 'accounting.post-reconciled-sources' => 'Post reconciled existing source activity',
+                'accounting.manage-disclosures' => 'Prepare and maintain disclosure notes to financial statements',
+                'accounting.approve-disclosures' => 'Review, approve, and finalize disclosure notes',
             ],
             'Settings' => [
                 'settings.view' => 'View company settings',

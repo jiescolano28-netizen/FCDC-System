@@ -13,18 +13,24 @@ class AccountingJournalLine extends Model
     protected static function booted(): void
     {
         static::creating(function (AccountingJournalLine $line): void {
-            if ($line->journal?->status === 'posted') {
-                throw new DomainException('Posted journal lines are immutable.');
+            if (in_array($line->journal?->status, ['pending_review', 'approved', 'posted'], true)) {
+                throw new DomainException($line->journal->status === 'posted'
+                    ? 'Posted journal lines are immutable.'
+                    : 'Journal lines are immutable after submission for review.');
             }
         });
         static::updating(function (AccountingJournalLine $line): void {
-            if ($line->journal?->status === 'posted') {
-                throw new DomainException('Posted journal lines are immutable.');
+            if (in_array($line->journal?->status, ['pending_review', 'approved', 'posted'], true)) {
+                throw new DomainException($line->journal->status === 'posted'
+                    ? 'Posted journal lines are immutable.'
+                    : 'Journal lines are immutable after submission for review.');
             }
         });
         static::deleting(function (AccountingJournalLine $line): void {
-            if ($line->journal?->status === 'posted') {
-                throw new DomainException('Posted journal lines cannot be deleted.');
+            if (in_array($line->journal?->status, ['pending_review', 'approved', 'posted'], true)) {
+                throw new DomainException($line->journal->status === 'posted'
+                    ? 'Posted journal lines are immutable.'
+                    : 'Journal lines are immutable after submission for review.');
             }
         });
     }

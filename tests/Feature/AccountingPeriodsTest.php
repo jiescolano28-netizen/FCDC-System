@@ -97,7 +97,7 @@ test('a reconciled month closes with actor history and rejects posting into its 
             ['accountId' => $capitalId, 'debit' => '0', 'credit' => '1.00'],
         ],
     ], $actor->id);
-    expect(fn () => app(ManualJournalService::class)->postDraft($draft->id, $actor->id))
+    expect(fn () => app(ManualJournalService::class)->submitForReview($draft->id, $actor->id))
         ->toThrow(ValidationException::class);
     expect($draft->fresh()->status)->toBe('draft');
 });

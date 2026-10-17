@@ -17,7 +17,7 @@ uses(RefreshDatabase::class)->beforeEach(function () {
     $this->withoutMiddleware(ValidateCsrfToken::class);
 });
 
-function journalEmployee(array $permissions = ['accounting.view', 'accounting.create-journal-entry', 'accounting.post-journal-entry']): Employee
+function journalEmployee(array $permissions = ['accounting.view', 'accounting.create-journal-entry', 'accounting.approve-journal-entry', 'accounting.post-journal-entry']): Employee
 {
     return grantEmployeeTestPermissions(Employee::create([
         'username' => 'journal.employee.'.fake()->unique()->numerify('####'),
@@ -91,6 +91,13 @@ function fillJournal($component, array $journal)
 
     return $component;
 }
+function submitJournalForApproval(AccountingJournal $journal, Employee $preparer, Employee $approver): void
+{
+    Livewire::actingAs($preparer)->test(JournalEntry::class)
+        ->call('submitForReview', $journal->id)->assertHasNoErrors();
+    Livewire::actingAs($approver)->test(JournalEntry::class)
+        ->call('approveDraft', $journal->id)->assertHasNoErrors();
+}
 
 test('journal page visibility and draft preparation use separate permissions', function () {
     [$cash, $revenue] = prepareJournalBook();
@@ -153,15 +160,23 @@ test('manual journal posting rejects unequal centavos and admits a balanced entr
             ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '124.99'],
         ],
     ]);
-    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    fillJournal(Livewire::test(JournalEntry::class)->call('openNewDraft'), $journal)
+        ->assertSee('Debit total')
+        ->assertSee('₱125.00')
+        ->assertSee('₱124.99')
+        ->assertSee('Not balanced')
+        ->call('saveDraft')->assertHasNoErrors();
     $draft = AccountingJournal::where('reference', 'MANUAL-VALID-001')->firstOrFail();
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
     expect($draft->fresh()->status)->toBe('draft');
 
     $journal['lines'][1]['credit'] = '125.00';
-    Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', $journal['lines'])
+    $component = Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', $journal['lines']);
+    $component->assertSee('Balanced')->assertSee('₱125.00')
         ->call('saveDraft')->assertHasNoErrors();
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasNoErrors();
+    $reviewer = journalEmployee();
+    submitJournalForApproval($draft, $poster, $reviewer);
+    Livewire::actingAs($poster)->test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasNoErrors();
     expect($draft->fresh()->status)->toBe('posted')
         ->and($draft->fresh()->posted_by)->toBe($poster->id)
         ->and($draft->fresh()->source_type)->toBe('manual')
@@ -186,14 +201,14 @@ test('posting requires posting permission and approved active accounts, and refu
         ['accountId' => (string) $pending->id, 'debit' => '125.00', 'credit' => ''],
         ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
     ])->call('saveDraft')->assertHasNoErrors();
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
     $inactive = approvedJournalAccount('1010', 'Asset', 'cash', 'debit');
     $inactive->update(['is_active' => false, 'approved_at' => now()]);
     Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
         ['accountId' => (string) $inactive->id, 'debit' => '125.00', 'credit' => ''],
         ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
     ])->call('saveDraft')->assertHasNoErrors();
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
     expect($draft->fresh()->status)->toBe('draft');
 
     Livewire::test(JournalEntry::class)->call('editDraft', $draft->id)->set('lines', [
@@ -201,7 +216,7 @@ test('posting requires posting permission and approved active accounts, and refu
         ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '125.00'],
     ])->call('saveDraft')->assertHasNoErrors();
     $period->update(['status' => 'closed']);
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
     $period->update(['status' => 'open']);
 
     $ap = approvedJournalAccount('2000', 'Liability', 'accounts_payable', 'credit');
@@ -209,7 +224,7 @@ test('posting requires posting permission and approved active accounts, and refu
         ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
         ['accountId' => (string) $ap->id, 'debit' => '', 'credit' => '125.00'],
     ])->call('saveDraft')->assertHasNoErrors();
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
 });
 
 test('posting rejects future and pre-cutover dates while allowing approved GL-only receivable and card-clearing accounts', function () {
@@ -222,7 +237,7 @@ test('posting rejects future and pre-cutover dates while allowing approved GL-on
         $journal = journalInput($cash, $revenue, $case);
         fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
         $draft = AccountingJournal::where('reference', $case['reference'])->firstOrFail();
-        Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
+        Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
         expect($draft->fresh()->status)->toBe('draft');
     }
 
@@ -233,11 +248,30 @@ test('posting rejects future and pre-cutover dates while allowing approved GL-on
         $journal = journalInput($case['account'], $revenue, ['reference' => $case['reference']]);
         fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
         $entry = AccountingJournal::where('reference', $case['reference'])->firstOrFail();
+        submitJournalForApproval($entry, auth()->user(), journalEmployee());
         Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
         expect($entry->fresh()->status)->toBe('posted');
     }
 });
 
+test('miscellaneous expense remains ineligible for posting despite ordinary account approval', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $miscellaneous = approvedJournalAccount('6190', 'Expense', 'other_expense', 'debit');
+    $this->actingAs(journalEmployee());
+
+    $journal = journalInput($cash, $revenue, ['reference' => 'MISCELLANEOUS-BLOCKED-001', 'lines' => [
+        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
+        ['accountId' => (string) $miscellaneous->id, 'debit' => '', 'credit' => '125.00'],
+    ]]);
+    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
+    $draft = AccountingJournal::where('reference', 'MISCELLANEOUS-BLOCKED-001')->firstOrFail();
+
+    Livewire::test(JournalEntry::class)->call('submitForReview', $draft->id)->assertHasErrors('journal');
+
+    expect($draft->fresh()->status)->toBe('draft')
+        ->and($miscellaneous->fresh()->used_at)->toBeNull()
+        ->and(AccountingAccount::query()->where('code', '6190')->firstOrFail()->isApprovedForPosting())->toBeFalse();
+});
 test('manual journal lines reject two-sided or sub-cent amounts and block both controlled accounts', function () {
     [$cash, $revenue] = prepareJournalBook();
     $this->actingAs(journalEmployee());
@@ -256,7 +290,7 @@ test('manual journal lines reject two-sided or sub-cent amounts and block both c
     ]]);
     fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
     $entry = AccountingJournal::where('reference', 'INVENTORY-001')->firstOrFail();
-    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasErrors('journal');
+    Livewire::test(JournalEntry::class)->call('submitForReview', $entry->id)->assertHasErrors('journal');
     expect($entry->fresh()->status)->toBe('draft');
     $journal = journalInput($cash, $revenue, ['reference' => 'OVERFLOW-001']);
     $journal['lines'][0]['debit'] = '100000000000000000.00';
@@ -270,7 +304,8 @@ test('a correction posts a linked reversal and replacement with reason and actor
     $original = journalInput($cash, $revenue, ['reference' => 'MANUAL-ORIGINAL-001']);
     fillJournal(Livewire::test(JournalEntry::class), $original)->call('saveDraft')->assertHasNoErrors();
     $entry = AccountingJournal::where('reference', 'MANUAL-ORIGINAL-001')->firstOrFail();
-    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+    submitJournalForApproval($entry, $poster, journalEmployee());
+    Livewire::actingAs($poster)->test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
     $beforeLines = $entry->fresh()->lines->map(fn ($line) => [$line->accounting_account_id, $line->debit_cents, $line->credit_cents])->all();
     Livewire::test(JournalEntry::class)
         ->set('accountingDate', now('Asia/Manila')->toDateString())
@@ -333,30 +368,13 @@ test('posted journals cannot be edited or deleted and listing filters posted his
     $journal = journalInput($cash, $revenue, ['reference' => 'FILTERED-001', 'description' => 'Unique event text']);
     fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
     $entry = AccountingJournal::where('reference', 'FILTERED-001')->firstOrFail();
-    Livewire::test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+    submitJournalForApproval($entry, $poster, journalEmployee());
+    Livewire::actingAs($poster)->test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
     Livewire::test(JournalEntry::class)->set('search', 'FILTERED-001')->assertSee('FILTERED-001')->assertDontSee('OPENING-');
     Livewire::test(JournalEntry::class)->set('sourceFilter', 'manual')->set('dateFrom', now('Asia/Manila')->addDay()->toDateString())
         ->assertDontSee('FILTERED-001');
     expect(fn () => $entry->update(['description' => 'Rewritten']))->toThrow(DomainException::class);
     expect(fn () => $entry->fresh()->delete())->toThrow(DomainException::class);
-});
-test('miscellaneous expense remains ineligible for posting despite ordinary account approval', function () {
-    [$cash, $revenue] = prepareJournalBook();
-    $miscellaneous = approvedJournalAccount('6190', 'Expense', 'other_expense', 'debit');
-    $this->actingAs(journalEmployee());
-
-    $journal = journalInput($cash, $revenue, ['reference' => 'MISCELLANEOUS-BLOCKED-001', 'lines' => [
-        ['accountId' => (string) $cash->id, 'debit' => '125.00', 'credit' => ''],
-        ['accountId' => (string) $miscellaneous->id, 'debit' => '', 'credit' => '125.00'],
-    ]]);
-    fillJournal(Livewire::test(JournalEntry::class), $journal)->call('saveDraft')->assertHasNoErrors();
-    $draft = AccountingJournal::where('reference', 'MISCELLANEOUS-BLOCKED-001')->firstOrFail();
-
-    Livewire::test(JournalEntry::class)->call('postDraft', $draft->id)->assertHasErrors('journal');
-
-    expect($draft->fresh()->status)->toBe('draft')
-        ->and($miscellaneous->fresh()->used_at)->toBeNull()
-        ->and(AccountingAccount::query()->where('code', '6190')->firstOrFail()->isApprovedForPosting())->toBeFalse();
 });
 test('direct manual posting rejects current-year earnings as a ledger account after ordinary approval', function () {
     [$cash, $revenue] = prepareJournalBook();
@@ -373,7 +391,7 @@ test('direct manual posting rejects current-year earnings as a ledger account af
         ],
     ], $poster->id);
 
-    expect(fn () => app(ManualJournalService::class)->postDraft($draft->id, $poster->id))
+    expect(fn () => app(ManualJournalService::class)->submitForReview($draft->id, $poster->id))
         ->toThrow(ValidationException::class);
     expect($draft->fresh()->status)->toBe('draft')
         ->and($draft->fresh()->lines->pluck('accounting_account_id')->contains($earnings->id))->toBeTrue();
@@ -381,4 +399,101 @@ test('direct manual posting rejects current-year earnings as a ledger account af
         'status' => 'posted', 'posted_by' => $poster->id, 'posted_at' => now(),
     ])->save())->toThrow(DomainException::class);
     expect($draft->fresh()->status)->toBe('draft');
+});
+test('manual journals require separate approval before posting', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $preparer = journalEmployee([
+        'accounting.view',
+        'accounting.create-journal-entry',
+        'accounting.approve-journal-entry',
+        'accounting.post-journal-entry',
+    ]);
+    $this->actingAs($preparer);
+    fillJournal(Livewire::test(JournalEntry::class), journalInput($cash, $revenue, [
+        'reference' => 'REVIEW-REQUIRED-001',
+    ]))->call('saveDraft')->assertHasNoErrors();
+    $journal = AccountingJournal::where('reference', 'REVIEW-REQUIRED-001')->firstOrFail();
+
+    Livewire::test(JournalEntry::class)->call('submitForReview', $journal->id)
+        ->assertHasNoErrors()->assertSee('Pending Review')->assertSee('Approve')->assertDontSee('Post draft');
+    expect($journal->fresh()->status)->toBe('pending_review')
+        ->and(AccountingJournal::where('status', 'posted')->count())->toBe(1);
+    expect(fn () => $journal->fresh()->lines->first()->update(['description' => 'Changed while under review']))
+        ->toThrow(DomainException::class);
+    Livewire::test(JournalEntry::class)->call('approveDraft', $journal->id)->assertHasErrors('journal');
+    expect($journal->fresh()->status)->toBe('pending_review')
+        ->and($journal->fresh()->approved_by)->toBeNull();
+
+    $reviewer = journalEmployee([
+        'accounting.view',
+        'accounting.approve-journal-entry',
+        'accounting.post-journal-entry',
+    ]);
+    $this->actingAs($reviewer);
+    Livewire::test(JournalEntry::class)->call('approveDraft', $journal->id)
+        ->assertHasNoErrors()->assertSee('Approved');
+    expect($journal->fresh()->status)->toBe('approved')
+        ->and($journal->fresh()->approved_by)->toBe($reviewer->id)
+        ->and($journal->fresh()->approved_at)->not->toBeNull();
+
+    Livewire::test(JournalEntry::class)->call('postDraft', $journal->id)->assertHasNoErrors();
+    expect($journal->fresh()->status)->toBe('posted')
+        ->and($journal->fresh()->posted_by)->toBe($reviewer->id)
+        ->and($journal->fresh()->lines->sum('debit_cents'))->toBe(12500)
+        ->and($journal->fresh()->lines->sum('credit_cents'))->toBe(12500);
+});
+test('an authorized reviewer can return a pending journal to draft for correction', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $preparer = journalEmployee();
+    $reviewer = journalEmployee(['accounting.view', 'accounting.approve-journal-entry']);
+    $this->actingAs($preparer);
+    fillJournal(Livewire::test(JournalEntry::class), journalInput($cash, $revenue, [
+        'reference' => 'RETURN-TO-DRAFT-001',
+    ]))->call('saveDraft')->assertHasNoErrors();
+    $journal = AccountingJournal::where('reference', 'RETURN-TO-DRAFT-001')->firstOrFail();
+    Livewire::test(JournalEntry::class)->call('submitForReview', $journal->id)->assertHasNoErrors();
+
+    Livewire::actingAs($reviewer)->test(JournalEntry::class)
+        ->call('returnForChanges', $journal->id)->assertHasNoErrors();
+
+    expect($journal->fresh()->status)->toBe('draft')
+        ->and($journal->fresh()->lines)->toHaveCount(2);
+});
+
+test('adjusting entries stay referenced, authorized, and adjusting through posting and correction', function () {
+    [$cash, $revenue] = prepareJournalBook();
+    $poster = journalEmployee();
+    $this->actingAs($poster);
+    fillJournal(Livewire::test(JournalEntry::class), journalInput($cash, $revenue, [
+        'reference' => 'ADJ-ORIGINAL-001',
+        'entryType' => 'adjusting',
+        'description' => 'Accrue utility expense to the reviewed invoice',
+    ]))->call('saveDraft')->assertHasNoErrors();
+    $entry = AccountingJournal::where('reference', 'ADJ-ORIGINAL-001')->firstOrFail();
+    expect($entry->entry_type)->toBe('adjusting');
+
+    submitJournalForApproval($entry, $poster, journalEmployee(['accounting.view', 'accounting.approve-journal-entry']));
+    Livewire::actingAs($poster)->test(JournalEntry::class)->call('postDraft', $entry->id)->assertHasNoErrors();
+    expect($entry->fresh()->status)->toBe('posted')
+        ->and($entry->fresh()->entry_type)->toBe('adjusting');
+    Livewire::actingAs($poster)->test(JournalEntry::class)
+        ->set('entryTypeFilter', 'adjusting')
+        ->assertSee('ADJ-ORIGINAL-001')
+        ->assertSee('Adjusting entry');
+
+    Livewire::actingAs($poster)->test(JournalEntry::class)
+        ->call('beginCorrection', $entry->id)
+        ->assertSet('entryType', 'adjusting')
+        ->set('correctionReason', 'Refine accrual to supporting invoice')
+        ->set('correctionReference', 'ADJ-CORR-REV-001')
+        ->set('replacementReference', 'ADJ-CORR-REPL-001')
+        ->set('lines', [
+            ['accountId' => (string) $cash->id, 'debit' => '130.00', 'credit' => ''],
+            ['accountId' => (string) $revenue->id, 'debit' => '', 'credit' => '130.00'],
+        ])
+        ->call('correct', $entry->id)
+        ->assertHasNoErrors();
+
+    expect(AccountingJournal::where('reference', 'ADJ-CORR-REV-001')->firstOrFail()->entry_type)->toBe('adjusting')
+        ->and(AccountingJournal::where('reference', 'ADJ-CORR-REPL-001')->firstOrFail()->entry_type)->toBe('adjusting');
 });

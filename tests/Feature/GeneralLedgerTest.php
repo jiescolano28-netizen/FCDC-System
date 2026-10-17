@@ -5,7 +5,9 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
+use App\Models\Inventory;
 use App\Models\PosTransaction;
+use App\Models\StockMovement;
 use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -71,6 +73,14 @@ function postLedgerJournal(string $reference, string $source, string $date, stri
             'debit_cents' => $debit,
             'credit_cents' => $credit,
         ]);
+    }
+    if ($source === 'manual') {
+        $journal->forceFill(['status' => 'pending_review'])->save();
+        $journal->forceFill([
+            'status' => 'approved',
+            'approved_by' => $actor->id,
+            'approved_at' => now(),
+        ])->save();
     }
     $journal->forceFill(['status' => 'posted'])->save();
 
@@ -141,11 +151,11 @@ test('general ledger links existing operational sources to their detail pages', 
         'completed_at' => '2026-02-15 08:00:00',
     ]);
     postLedgerJournal('POS-GL-001', 'pos_sale', '2026-02-15', 'Completed sale', [[$cash, 11200, 0], [$equity, 0, 11200]], null, (string) $transaction->id);
-    $item = \App\Models\Inventory::create([
+    $item = Inventory::create([
         'name' => 'Corrected GL stock', 'category' => 'Other', 'qty' => '0.00',
         'unit' => 'piece', 'unit_cost' => '0.00', 'reorder_level' => '0',
     ]);
-    $movement = \App\Models\StockMovement::create([
+    $movement = StockMovement::create([
         'inventory_id' => $item->id, 'posted_by' => $viewer->id, 'type' => 'valuation_correction',
         'quantity' => '0.00', 'reason_category' => 'valuation_correction', 'reference' => 'STK-CORR-1',
         'effective_date' => '2026-02-15', 'posted_at' => now(), 'value_cents' => -100,
@@ -153,7 +163,6 @@ test('general ledger links existing operational sources to their detail pages', 
     ]);
     postLedgerJournal('STK-CORR-1', 'stock_valuation_correction', '2026-02-15', 'Stock value correction', [[$cash, 100, 0], [$equity, 0, 100]], null, (string) $movement->id);
     postLedgerJournal('REC-CORR-1', 'recovered_material_correction', '2026-02-15', 'Recovery reassessment', [[$cash, 100, 0], [$equity, 0, 100]], null, (string) $movement->id);
-
 
     Livewire::actingAs($viewer)->test(GeneralLedger::class)
         ->set('accountId', (string) $cash->id)->set('fromDate', '2026-02-01')->set('toDate', '2026-02-28')
