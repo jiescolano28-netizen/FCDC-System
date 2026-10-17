@@ -675,7 +675,7 @@
 .disclosure-editor-actions { display: flex; gap: 10px; margin-top: 12px; }
 .disclosure-editor-actions button { padding: 9px 16px; border: 0; border-radius: 8px; color: #fff; background: var(--emerald-700); font: inherit; font-size: 13px; cursor: pointer; }
 .disclosure-secondary-button { color: var(--slate-700) !important; background: var(--slate-100) !important; }
-.disclosure-note { margin-top: 12px; padding: 14px; border: 1px solid var(--slate-200); border-radius: 9px; }
+.disclosure-note { margin-top: 12px; padding: 16px; border: 1px solid var(--slate-200); border-radius: 9px; background: #fff; }
 .disclosure-note-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 .disclosure-note-head h3 { margin: 6px 0 0; font-size: 14px; }
 .disclosure-note-head strong { font-size: 14px; }
