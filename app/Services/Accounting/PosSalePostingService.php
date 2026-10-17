@@ -5,10 +5,8 @@ namespace App\Services\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingMapping;
-use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use App\Models\Inventory;
-use App\Models\OpeningInventoryValuation;
 use App\Models\PosTransaction;
 use App\Models\PosVatRecord;
 use App\Models\StockMovement;
@@ -19,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 class PosSalePostingService
 {
     /**
-     * Post a completed checkout using the persisted sale values and the valued-stock schedule.
+     * Post a completed checkout using the persisted sale values and the inventory item's current cost basis.
      * Returns rounded unit-cost and exact extended-cost snapshots for immutable POS lines.
      *
      * @param  array<int, array{inventory: Inventory, quantity: float}>  $items
@@ -42,14 +40,6 @@ class PosSalePostingService
             $date = CarbonImmutable::parse($sale->completed_at)->timezone('Asia/Manila');
             if ($date->isFuture()) {
                 throw ValidationException::withMessages(['accounting' => 'Completed POS sales cannot be future-dated.']);
-            }
-            $opening = AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')
-                ->where('status', 'posted')->first();
-            $openingDate = $opening?->accounting_date->toDateString();
-            $schedule = OpeningInventoryValuation::query()->where('book_key', 'FCDC')->where('status', 'approved')
-                ->with('lines')->first();
-            if (! $schedule) {
-                throw ValidationException::withMessages(['accounting' => 'An approved opening inventory valuation is required before POS posting.']);
             }
             $period = app(AccountingPeriodService::class)->lockOpenPeriodForDate(
                 $date->toDateString(),
@@ -91,29 +81,29 @@ class PosSalePostingService
                 }
                 $previousQuantity = $this->quantityHundredths((string) $item->qty);
                 if ($quantityHundredths > $previousQuantity) {
-                    throw ValidationException::withMessages(['cart' => 'The sale quantity exceeds available valued stock.']);
+                    throw ValidationException::withMessages(['cart' => 'The sale quantity exceeds available stock.']);
                 }
-                $latest = StockMovement::query()->where('inventory_id', $item->id)->whereNotNull('value_cents')
+                $latestMovement = StockMovement::query()->where('inventory_id', $item->id)
                     ->orderByDesc('effective_date')->orderByDesc('posted_at')->orderByDesc('id')->lockForUpdate()->first();
-                if ($latest && $date->toDateString() < $latest->effective_date->toDateString()) {
-                    throw ValidationException::withMessages(['cart' => 'A sale cannot precede the inventory item’s latest valued movement.']);
+                if ($latestMovement && $date->toDateString() < $latestMovement->effective_date->toDateString()) {
+                    throw ValidationException::withMessages(['cart' => 'A sale cannot precede the inventory item’s latest stock movement.']);
                 }
-                $openingLine = $schedule->lines->firstWhere('inventory_id', $item->id);
-                if (! $latest && (! $openingLine || $previousQuantity !== $this->quantityHundredths((string) $openingLine->quantity))) {
-                    throw ValidationException::withMessages(['cart' => 'The item has no matching approved opening valuation baseline.']);
+                $latestValuedMovement = StockMovement::query()->where('inventory_id', $item->id)->whereNotNull('value_cents')
+                    ->orderByDesc('effective_date')->orderByDesc('posted_at')->orderByDesc('id')->lockForUpdate()->first();
+                if ($latestValuedMovement && $latestMovement && $latestMovement->value_cents === null
+                    && $latestMovement->type !== 'opening_balance') {
+                    throw ValidationException::withMessages(['cart' => 'An unvalued stock movement after the latest valued movement prevents reliable sale valuation.']);
                 }
-                if (StockMovement::query()->where('inventory_id', $item->id)->whereNull('value_cents')
-                    ->where('type', '!=', 'opening_balance')->whereDate('effective_date', '>', $openingDate)->exists()) {
-                    throw ValidationException::withMessages(['cart' => 'An unvalued post-cutover movement prevents reliable sale valuation.']);
-                }
-                $previousValue = $latest
-                    ? (int) $latest->carrying_value_after_cents
-                    : (int) $openingLine->carrying_value_cents;
-                if ($previousValue <= 0 || $previousQuantity <= 0) {
-                    throw ValidationException::withMessages(['cart' => 'Positive valued stock is required before completing this sale.']);
-                }
-                if ($latest && $latest->carrying_value_after_cents === null) {
+                if ($latestValuedMovement && $latestValuedMovement->carrying_value_after_cents === null) {
                     throw ValidationException::withMessages(['cart' => 'The latest valued movement has no closing carrying value.']);
+                }
+                $previousValue = $latestValuedMovement
+                    ? (int) $latestValuedMovement->carrying_value_after_cents
+                    : ($item->carrying_value_cents !== null
+                        ? (int) $item->carrying_value_cents
+                        : (int) round($this->cents((string) $item->unit_cost) * $previousQuantity / 100));
+                if ($previousValue <= 0 || $previousQuantity <= 0) {
+                    throw ValidationException::withMessages(['cart' => 'Positive on-hand quantity and a positive saved inventory cost are required before completing this sale.']);
                 }
                 $movementCost = $quantityHundredths === $previousQuantity
                     ? $previousValue
