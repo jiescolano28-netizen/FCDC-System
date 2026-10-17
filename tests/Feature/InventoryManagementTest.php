@@ -6,10 +6,12 @@ use App\Models\AccountingJournal;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\StockMovement;
+use App\Services\Inventory\RecordStockIn;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -243,7 +245,6 @@ test('inventory form routes enforce create and update permissions separately', f
         ->assertSee('Receive stock')
         ->assertDontSee('Save changes');
 });
-
 
 test('inventory management renders inside the authenticated application shell', function () {
     $this->actingAs(createInventoryManager())
@@ -483,7 +484,6 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->and($movement->fresh()->quantity)->toBe('2.00');
 });
 
-
 test('stock-in is separately permission-gated and inactive items are unavailable to POS', function () {
     $employee = grantEmployeeTestPermissions(Employee::create([
         'username' => 'inventory.viewer',
@@ -509,7 +509,7 @@ test('stock-in is separately permission-gated and inactive items are unavailable
         ->toContain($active->id)
         ->not->toContain($inactive->id);
 
-    expect(fn () => app(\App\Services\Inventory\RecordStockIn::class)->handle(
+    expect(fn () => app(RecordStockIn::class)->handle(
         $inactive->id,
         1,
         'other',
@@ -517,7 +517,7 @@ test('stock-in is separately permission-gated and inactive items are unavailable
         null,
         '2026-10-08',
         (int) $employee->id,
-    ))->toThrow(\Illuminate\Validation\ValidationException::class);
+    ))->toThrow(ValidationException::class);
 });
 
 test('inventory page navigation offers both overview and management', function () {
@@ -556,7 +556,7 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('countedQuantity', '5.50')
         ->set('adjustmentReasonCategory', 'count_correction')
-        ->set('adjustmentEffectiveDate', now()->toDateString())
+        ->set('adjustmentEffectiveDate', now('Asia/Manila')->toDateString())
         ->set('adjustmentReference', 'COUNT-9')
         ->call('recordStockAdjustment')
         ->assertHasNoErrors()
@@ -592,7 +592,7 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
         ->set('countedQuantity', '6.50')
         ->set('adjustmentReasonCategory', 'count_correction')
-        ->set('adjustmentEffectiveDate', now()->toDateString())
+        ->set('adjustmentEffectiveDate', now('Asia/Manila')->toDateString())
         ->set('adjustmentReference', 'COUNT-9-CORRECTED')
         ->call('recordStockAdjustment')
         ->assertHasNoErrors();
@@ -619,7 +619,7 @@ test('backdated stock-out and adjustment are rejected when a later balance would
         ->assertForbidden();
 
     $this->actingAs(createInventoryManager());
-    app(\App\Services\Inventory\RecordStockIn::class)->handle(
+    app(RecordStockIn::class)->handle(
         $item->id,
         5,
         'purchase_receipt',

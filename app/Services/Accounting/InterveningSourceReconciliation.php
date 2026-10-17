@@ -74,7 +74,8 @@ class InterveningSourceReconciliation
             }
             $date = CarbonImmutable::parse($sale->completed_at)->timezone('Asia/Manila');
             $opening = $this->opening();
-            if (! $opening || $date->lt($opening->accounting_date) || $date->isFuture()) {
+            if (! $opening || $date->toDateString() < $opening->accounting_date->toDateString()
+                || $date->toDateString() > CarbonImmutable::now('Asia/Manila')->toDateString()) {
                 throw ValidationException::withMessages(['source' => 'The sale date is outside approved cutover coverage or is future-dated.']);
             }
             $period = $this->openPeriod($date->toDateString());
