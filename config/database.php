@@ -48,7 +48,7 @@ return [
             'driver' => env('DEMO_DB_DRIVER', 'sqlite'),
             'url' => null,
             'database' => env('DEMO_DB_DATABASE'),
-            'host' => env('DEMO_DB_HOST'),
+            ...(env('DEMO_DB_DRIVER', 'sqlite') === 'sqlite' ? [] : ['host' => env('DEMO_DB_HOST')]),
             'port' => env('DEMO_DB_PORT'),
             'username' => env('DEMO_DB_USERNAME'),
             'password' => env('DEMO_DB_PASSWORD'),

@@ -118,6 +118,141 @@ the effective write target; then run `php artisan demo:seed-proposed-chart`.
 The seed command repeats the isolation check, inserts definitions transactionally,
 and refuses conflicting definitions without changing the batch.
 
+## Complete synthetic demo setup
+
+`php artisan demo:setup --env=demo` migrates and populates a **dedicated demo
+database**. It does not change your normal `.env` or populate a real production
+database. The isolation checks also apply when invoking `FullDemoSeeder` directly
+from `db:seed` or Tinker. Ordinary `php artisan db:seed` remains production-safe:
+it seeds the permission catalog only.
+
+### First run (Windows PowerShell)
+
+From the repository root:
+
+```powershell
+Copy-Item .env.demo.example .env.demo
+New-Item -ItemType Directory -Force storage/app/demo
+New-Item -ItemType File storage/app/demo/fcdc-demo.sqlite
+```
+
+Set `DEMO_DB_DATABASE` in `.env.demo` to the **absolute path** of that new SQLite
+file. Keep it beneath this repository's `storage/app/demo` directory and do not
+point any other database connection at it. Do not overwrite an existing `.env.demo`
+or SQLite file when rerunning setup.
+
+Environment variables inherited from your terminal take precedence over env files.
+Select the demo target explicitly in this terminal before running Artisan:
+
+```powershell
+$env:APP_ENV = "demo"
+$env:DB_CONNECTION = "demo"
+$env:ACTIVITY_LOGGER_DB_CONNECTION = "demo"
+$env:SESSION_DRIVER = "file"
+$env:CACHE_STORE = "file"
+$env:QUEUE_CONNECTION = "sync"
+$env:DB_QUEUE_CONNECTION = "demo"
+$env:DB_QUEUE_FAILED_CONNECTION = "demo"
+$env:DB_QUEUE_BATCHING_CONNECTION = "demo"
+php artisan key:generate --env=demo
+php artisan demo:setup --env=demo
+php artisan serve --env=demo --host=127.0.0.1 --port=8001
+```
+
+Open <http://127.0.0.1:8001/login>. Login uses **email**, not username.
+The setup prints one randomly generated initial password shared by these
+demo-only accounts; save it when first displayed. It is not reset or printed on
+reruns. For the demo prepared in this working copy, login details are saved in
+the ignored `storage/app/demo/credentials.txt`.
+
+| Email | Access |
+| --- | --- |
+| `demo.admin@example.test` | All catalog permissions |
+| `demo.accountant@example.test` | Accounting, reports, tax, and inventory viewing |
+| `demo.cashier@example.test` | POS checkout and inventory viewing |
+| `demo.warehouse@example.test` | Inventory, valuation, and demolition recovery |
+| `demo.viewer@example.test` | Read-only reports, accounting, tax, inventory, and projects |
+
+Close this terminal or clear these environment overrides before operating on a
+different database. If configuration has been cached, select the intended
+configuration-cache path explicitly; do not reuse a production configuration cache
+for demo setup. The guard rejects an effective write connection other than `demo`.
+
+### Included workflows
+
+- The complete 54-account proposed chart plus a demo card-clearing account.
+  Only accounts used by the sample workflows are activated and synthetically
+  approved. Policy-held accounts remain inactive.
+- Approved demo mappings, opening stock valuation, balanced opening journal,
+  supplier opening invoices, and pre-cutover YTD summary when required.
+- Six inventory items and batch categories, including an out-of-stock item.
+- Three suppliers, a posted inventory purchase, an outstanding partial payment,
+  a purchase draft, a posted utility expense, and an expense draft.
+- Two demolition projects: one recovery assessed with accepted/rejected
+  quantities and a valued receipt, and another awaiting assessment.
+- Cash, card, and bank-transfer POS sales with stock/cost effects, receipt lines,
+  and linked VAT records.
+- A posted manual journal, a balanced draft, and an intentionally unbalanced
+  draft for testing correction and posting validation.
+
+Cutover and posted transactions use the setup day's Manila date. Opening
+invoices include overdue balances; new purchase drafts include future due dates.
+The setup simulates readiness-gated accounting activation **only in the isolated
+demo**, making ledger and financial reports available. None of its balances,
+policy approvals, evidence descriptions, or activation is valid production evidence.
+
+Business records are seeded in one transaction through the existing workflows.
+On failure, seed changes roll back; migrations remain applied. On a completed
+rerun, existing records, user changes, and passwords are preserved. A nonempty
+business database without the completion journal is rejected instead of merged
+or reset. To make a second independent dataset, provision another empty isolated
+demo database; do not run `migrate:fresh` against a working database.
+
+Use the seeded pages to try POS checkout, inventory receiving, assessment of the
+pending recovery, posting of drafts, invoice settlement, and linked corrections.
+The unbalanced journal must be corrected before posting. Check Trial Balance,
+General Ledger, Financial Statements, and VAT records after each operation.
+Receipt attachments still require real uploaded test files; the seeder does not
+invent supporting documents. Company settings currently remain session-local,
+not persisted company master data.
+
+Regression checks:
+
+```shell
+php artisan test tests/Feature/FullDemoSetupTest.php tests/Feature/DemoDatabaseIsolationTest.php tests/Feature/ProposedChartOfAccountsSeederTest.php
+```
+
+### Real production setup (no sample transactions)
+
+Use a separate database, production credentials, a private application key,
+`APP_ENV=production`, `APP_DEBUG=false`, and `DEMO_ENABLED=false`.
+Back up any existing target before migrations. Run:
+
+```shell
+php artisan migrate --force
+php artisan db:seed --force
+php artisan app:provision-administrator
+```
+
+Then use the application with actual authorized preparers and reviewers:
+
+1. Create employees and assign appropriate roles; do not reuse demo accounts.
+2. Enter the business's reviewed chart and approve eligible accounts and posting
+   mappings. Proposed classifications are not automatic accounting policy.
+3. Enter actual inventory counts, suppliers, and opening unpaid invoices.
+4. Prepare and approve the cutover stock valuation and balanced opening journal,
+   reconciling Inventory and Accounts Payable to their supporting schedules.
+5. For a midyear cutover, prepare and approve supported YTD balances through the
+   previous day. Reconcile any existing post-cutover source transactions.
+6. Resolve all Opening Books readiness blockers, then have an authorized user
+   activate the books. Verify a real controlled transaction and its reports.
+
+Production deployment still needs environment-specific HTTPS, storage access,
+backups/restores, email, queue processing where used, and reviewed company/tax
+policies. The sample setup is a testing aid, not certification of production or
+tax readiness.
+
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
