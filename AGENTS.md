@@ -72,6 +72,10 @@ Pest 3 with the Laravel plugin runs through Laravel's Artisan test runner. PHPUn
 
 Issues and specs are local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+Use the default canonical triage labels. See `docs/agents/triage-labels.md`.
+
 ### Domain docs
 
 Use the single-context layout. See `docs/agents/domain.md`.
