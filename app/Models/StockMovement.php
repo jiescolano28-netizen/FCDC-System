@@ -60,7 +60,7 @@ class StockMovement extends Model
 
     public function inventory(): BelongsTo
     {
-        return $this->belongsTo(Inventory::class);
+        return $this->belongsTo(Inventory::class)->withTrashed();
     }
 
     public function demolitionProject(): BelongsTo
@@ -97,6 +97,7 @@ class StockMovement extends Model
     {
         return $this->belongsTo(AccountingJournal::class);
     }
+
     public function valuationCorrectionOf(): BelongsTo
     {
         return $this->belongsTo(self::class, 'correction_of_movement_id');

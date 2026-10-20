@@ -5,6 +5,7 @@ use App\Livewire\Inventory\InventoryOverview;
 use App\Models\AccountingJournal;
 use App\Models\Employee;
 use App\Models\Inventory;
+use App\Models\InventoryBatchCategory;
 use App\Models\StockMovement;
 use App\Services\Inventory\RecordStockIn;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,6 +24,15 @@ function createInventoryManager(): Employee
         'email' => 'inventory@example.com',
         'password' => Hash::make('secret-password'),
     ]), ['inventory.view', 'inventory.create', 'inventory.update', 'inventory.delete', 'inventory.movements.record']);
+}
+
+function createInventoryAdministrator(): Employee
+{
+    return grantEmployeeAdministratorRole(Employee::create([
+        'username' => 'inventory.administrator',
+        'email' => 'inventory.administrator@example.com',
+        'password' => Hash::make('secret-password'),
+    ]));
 }
 
 function inventoryAttributes(array $overrides = []): array
@@ -75,7 +85,7 @@ test('inventory category filtering is tucked behind an expandable advanced filte
         ->assertSeeHtml('aria-expanded="false"');
 });
 
-test('authenticated employees can create, search, edit, and delete priced inventory', function () {
+test('authenticated employees can create, search, edit, and deactivate priced inventory', function () {
     $this->actingAs(createInventoryManager());
 
     Livewire::test(InventoryManagement::class)
@@ -115,22 +125,187 @@ test('authenticated employees can create, search, edit, and delete priced invent
         ->assertHasNoErrors();
 
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
-        ->set('stockQuantity', '2.50')
+        ->set('stockQuantity', '3')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockReference', 'GRN-100')
         ->set('stockEffectiveDate', '2026-10-08')
         ->call('recordStockIn')
         ->assertHasNoErrors();
 
-    expect($item->fresh()->qty)->toBe('14.50')
+    expect($item->fresh()->qty)->toBe('15.00')
         ->and($item->fresh()->selling_price)->toBe('12.00');
+
+    $this->actingAs(createInventoryAdministrator());
 
     Livewire::test(InventoryManagement::class)
         ->call('deactivate', $item->id)
         ->assertSee('Reclaimed timber')
-        ->assertSee('Inactive');
-    expect($item->fresh()->status)->toBe('inactive')
+        ->assertSee('Inactive')
+        ->call('reactivate', $item->id);
+
+    expect($item->fresh()->status)->toBe('active')
         ->and(Inventory::find($item->id))->not->toBeNull();
+});
+
+test('only administrators can deactivate reactivate delete and restore inventory items', function () {
+    $manager = createInventoryManager();
+    $item = Inventory::create(inventoryAttributes(['name' => 'Admin lifecycle timber']));
+
+    $this->actingAs($manager);
+
+    Livewire::test(InventoryManagement::class)->call('deactivate', $item->id)->assertForbidden();
+    Livewire::test(InventoryManagement::class)->call('reactivate', $item->id)->assertForbidden();
+    Livewire::test(InventoryManagement::class)->call('delete', $item->id)->assertForbidden();
+    Livewire::test(InventoryManagement::class)->call('restore', $item->id)->assertForbidden();
+
+    expect($item->fresh()->status)->toBe('active')
+        ->and(Inventory::find($item->id))->not->toBeNull();
+
+    $this->actingAs(createInventoryAdministrator());
+
+    Livewire::test(InventoryManagement::class)
+        ->call('deactivate', $item->id)
+        ->assertSee('Inactive')
+        ->call('reactivate', $item->id);
+
+    expect($item->fresh()->status)->toBe('active');
+
+    Livewire::test(InventoryManagement::class)
+        ->call('delete', $item->id)
+        ->assertDontSee('Admin lifecycle timber');
+
+    expect(Inventory::find($item->id))->toBeNull()
+        ->and(Inventory::withTrashed()->findOrFail($item->id)->trashed())->toBeTrue();
+
+    Livewire::test(InventoryManagement::class)
+        ->set('showDeleted', true)
+        ->assertSee('Admin lifecycle timber')
+        ->assertSee('Deleted')
+        ->call('restore', $item->id)
+        ->assertDontSee('Admin lifecycle timber');
+
+    expect(Inventory::find($item->id))->not->toBeNull()
+        ->and(Inventory::findOrFail($item->id)->trashed())->toBeFalse();
+});
+
+test('inventory lifecycle controls are only rendered for administrators', function () {
+    $manager = createInventoryManager();
+    Inventory::create(inventoryAttributes(['name' => 'Active timber']));
+    Inventory::create(inventoryAttributes(['name' => 'Inactive timber', 'status' => 'inactive']));
+
+    $this->actingAs($manager);
+
+    Livewire::test(InventoryManagement::class)
+        ->assertDontSee('Deactivate')
+        ->assertDontSee('Reactivate')
+        ->assertDontSee('Delete')
+        ->assertDontSee('Show deleted items');
+
+    $this->actingAs(createInventoryAdministrator());
+
+    Livewire::test(InventoryManagement::class)
+        ->assertSee('Deactivate')
+        ->assertSee('Reactivate')
+        ->assertSee('Delete')
+        ->assertSee('Show deleted items');
+});
+
+test('inventory lifecycle JSON routes also require the administrator role', function () {
+    $manager = createInventoryManager();
+    $item = Inventory::create(inventoryAttributes(['name' => 'Protected lifecycle timber']));
+
+    $this->actingAs($manager);
+
+    $this->patchJson(route('inventory.deactivate', $item))->assertForbidden();
+    $this->patchJson(route('inventory.reactivate', $item))->assertForbidden();
+    $this->deleteJson(route('inventory.destroy', $item))->assertForbidden();
+
+    expect($item->fresh()->status)->toBe('active')
+        ->and(Inventory::find($item->id))->not->toBeNull();
+
+    $this->actingAs(createInventoryAdministrator());
+
+    $this->patchJson(route('inventory.deactivate', $item))
+        ->assertOk()
+        ->assertJsonPath('inventory.status', 'inactive');
+    $this->patchJson(route('inventory.reactivate', $item))
+        ->assertOk()
+        ->assertJsonPath('inventory.status', 'active');
+
+    $this->actingAs($manager);
+    $this->putJson(route('inventory.update', $item), inventoryAttributes(['status' => 'inactive']))
+        ->assertOk();
+
+    expect($item->fresh()->status)->toBe('active');
+});
+
+test('inventory management table shows specification, batch, unit, and computed inventory value in the requested order', function () {
+    $manager = createInventoryManager();
+    $this->actingAs($manager);
+
+    $batch = InventoryBatchCategory::create([
+        'name' => '2026 salvage batch',
+        'created_by' => $manager->id,
+    ]);
+    $item = Inventory::create(inventoryAttributes([
+        'size_specification' => '2 in × 4 in × 8 ft',
+        'inventory_batch_category_id' => $batch->id,
+        'qty' => 12,
+        'unit' => 'piece',
+        'unit_cost' => 7.25,
+        'selling_price' => 11.50,
+    ]));
+    $item->forceFill(['carrying_value_cents' => 100])->saveQuietly();
+
+    Livewire::test(InventoryManagement::class)
+        ->assertSeeInOrder([
+            'Reference Code',
+            'Category',
+            'Size / Specification',
+            'Batch',
+            'Quantity',
+            'Unit',
+            'Unit Cost Price',
+            'Selling Price',
+            'Inventory Value',
+            'Actions',
+        ])
+        ->assertSee($item->code)
+        ->assertSee('2 in × 4 in × 8 ft')
+        ->assertSee('2026 salvage batch')
+        ->assertSee('7.25')
+        ->assertSee('11.50')
+        ->assertSee('87.00')
+        ->assertDontSee('Material Condition')
+        ->assertDontSee('Stock status')
+        ->assertDontSee('Sale status')
+        ->assertDontSee('Last updated');
+});
+
+test('size and specification persist when creating and editing inventory', function () {
+    $this->actingAs(createInventoryManager());
+
+    Livewire::test(InventoryManagement::class)
+        ->set('name', 'Sized timber')
+        ->set('category', 'Lumber')
+        ->set('sizeSpecification', '2 in × 6 in × 10 ft')
+        ->set('qty', '4')
+        ->set('unit', 'piece')
+        ->set('unitCost', '9.50')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $item = Inventory::firstOrFail();
+    expect($item->size_specification)->toBe('2 in × 6 in × 10 ft');
+
+    Livewire::test(InventoryManagement::class)
+        ->call('edit', $item->id)
+        ->assertSet('sizeSpecification', '2 in × 6 in × 10 ft')
+        ->set('sizeSpecification', '2 in × 8 in × 10 ft')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($item->fresh()->size_specification)->toBe('2 in × 8 in × 10 ft');
 });
 
 test('legacy inventory keeps its cost and has no selling price until manually priced', function () {
@@ -286,11 +461,14 @@ test('inventory JSON endpoints keep their existing authenticated response contra
         ->assertJsonPath('inventory.selling_price', '18.25')
         ->assertJsonPath('inventory.qty', '12.00');
 
+    $this->actingAs(createInventoryAdministrator());
+
     $this->deleteJson(route('inventory.destroy', $item))
         ->assertOk()
-        ->assertJsonPath('message', 'Inventory item deactivated successfully.');
+        ->assertJsonPath('message', 'Inventory item deleted successfully.');
 
-    expect($item->fresh()->status)->toBe('inactive');
+    expect(Inventory::find($item->id))->toBeNull()
+        ->and(Inventory::withTrashed()->findOrFail($item->id)->trashed())->toBeTrue();
 });
 test('inventory management screen requires authentication', function () {
     $this->get(route('inventory.management'))->assertRedirect(route('login'));
@@ -327,11 +505,12 @@ test('inventory overview shows persisted inventory calculations and filters', fu
     Livewire::test(InventoryOverview::class)
         ->assertSee('2 materials')
         ->assertSee('Reclaimed timber')
-        ->assertSee('3.50 piece')
+        ->assertSeeHtml('<strong>4</strong>')
+        ->assertSee('Unit: piece')
         ->assertSee('7.25')
         ->assertSee('11.50')
         ->assertSee('25.38')
-        ->assertSee('Reorder')
+        ->assertSee('Low Stock')
         ->assertSee('Jan 2, 2026')
         ->set('search', 'concrete')
         ->assertSee('1 material')
@@ -341,6 +520,36 @@ test('inventory overview shows persisted inventory calculations and filters', fu
         ->set('categoryFilter', 'Lumber')
         ->assertSee('Reclaimed timber')
         ->assertDontSee('Concrete block');
+});
+
+test('inventory overview renders in stock, low stock, and out of stock statuses', function (float $qty, float $reorderLevel, string $label, string $badgeClass) {
+    $this->actingAs(createInventoryManager());
+
+    $item = Inventory::create(inventoryAttributes([
+        'name' => 'Status check material',
+        'qty' => $qty,
+        'reorder_level' => $reorderLevel,
+    ]));
+
+    expect($item->stockStatusLabel())->toBe($label)
+        ->and($item->stockStatusBadgeClass())->toBe($badgeClass);
+
+    Livewire::test(InventoryOverview::class)
+        ->assertSeeHtml('<span class="'.$badgeClass.'">'.$label.'</span>');
+})->with([
+    'in stock' => [20.0, 10.0, 'In Stock', 'status'],
+    'above low stock level' => [12.0, 10.0, 'In Stock', 'status'],
+    'just above low stock level' => [12.5, 10.0, 'In Stock', 'status'],
+    'low stock at level' => [10.0, 10.0, 'Low Stock', 'status low'],
+    'low stock below level' => [4.0, 10.0, 'Low Stock', 'status low'],
+    'out of stock' => [0.0, 10.0, 'Out of Stock', 'status empty'],
+]);
+
+test('inventory stock status treats a zero reorder level as having no low stock warning', function () {
+    $item = new Inventory(['qty' => 1, 'reorder_level' => 0]);
+
+    expect($item->stockStatus())->toBe(Inventory::STOCK_STATUS_IN_STOCK)
+        ->and((new Inventory(['qty' => 0, 'reorder_level' => 0]))->stockStatus())->toBe(Inventory::STOCK_STATUS_OUT_OF_STOCK);
 });
 
 test('inventory overview reflects changes made in inventory management', function () {
@@ -367,8 +576,11 @@ test('inventory overview reflects changes made in inventory management', functio
 
     Livewire::test(InventoryOverview::class)
         ->assertSee('Reclaimed timber')
-        ->assertSee('15.00 piece')
+        ->assertSeeHtml('<strong>15</strong>')
+        ->assertSee('Unit: piece')
         ->assertSee('12.25');
+
+    $this->actingAs(createInventoryAdministrator());
 
     Livewire::test(InventoryManagement::class)
         ->call('deactivate', $item->id)
@@ -377,7 +589,8 @@ test('inventory overview reflects changes made in inventory management', functio
 
     Livewire::test(InventoryOverview::class)
         ->assertSee('Reclaimed timber')
-        ->assertSee('15.00 piece');
+        ->assertSeeHtml('<strong>15</strong>')
+        ->assertSee('Unit: piece');
 });
 
 test('inventory management persists uploaded images and preserves them when edited without a replacement', function () {
@@ -418,7 +631,7 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
     Livewire::test(InventoryManagement::class)
         ->set('name', 'Ledger timber')
         ->set('category', 'Lumber')
-        ->set('qty', '7.25')
+        ->set('qty', '7')
         ->set('unit', 'piece')
         ->set('unitCost', '4.50')
         ->set('sellingPrice', '8.00')
@@ -443,7 +656,8 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->set('stockEffectiveDate', '2026-10-01')
         ->call('recordStockIn')
         ->assertHasNoErrors()
-        ->assertSee('9.25 piece');
+        ->assertSeeHtml('Current on hand: <strong>9</strong>')
+        ->assertSeeHtml('Unit: <strong>piece</strong>');
 
     Livewire::test(InventoryManagement::class)
         ->call('showHistory', $item->id)
@@ -452,7 +666,7 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->assertSee('RET-22');
 
     $movement = $item->stockMovements()->where('type', 'stock_in')->firstOrFail();
-    expect($item->fresh()->qty)->toBe('9.25')
+    expect($item->fresh()->qty)->toBe('9.00')
         ->and($movement->posted_by)->toBe(auth()->id())
         ->and($movement->reason_category)->toBe('return')
         ->and($movement->quantity)->toBe('2.00')
@@ -466,21 +680,21 @@ test('new inventory receives a sequential code and opening stock ledger entry; l
         ->assertSee('Reversed by movement #');
 
     $reversal = $movement->fresh()->reversal;
-    expect($item->fresh()->qty)->toBe('7.25')
+    expect($item->fresh()->qty)->toBe('7.00')
         ->and($reversal->type)->toBe('reversal')
         ->and($reversal->quantity)->toBe('-2.00')
         ->and($reversal->reverses_movement_id)->toBe($movement->id)
         ->and($item->fresh()->unit_cost)->toBe('4.50');
 
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
-        ->set('stockQuantity', '2.50')
+        ->set('stockQuantity', '3')
         ->set('stockReasonCategory', 'purchase_receipt')
         ->set('stockReference', 'RET-22-CORRECTED')
         ->set('stockEffectiveDate', '2026-10-01')
         ->call('recordStockIn')
         ->assertHasNoErrors();
 
-    expect($item->fresh()->qty)->toBe('9.75')
+    expect($item->fresh()->qty)->toBe('10.00')
         ->and($movement->fresh()->quantity)->toBe('2.00');
 });
 
@@ -548,35 +762,37 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
         ->call('recordStockOut')
         ->assertHasNoErrors()
         ->assertSee('Post stock-out')
-        ->assertSee('7.00 piece');
+        ->assertSeeHtml('Current on hand: <strong>7</strong>')
+        ->assertSeeHtml('Unit: <strong>piece</strong>');
 
     expect($item->fresh()->qty)->toBe('7.00')
         ->and($otherItem->fresh()->qty)->toBe('4.00');
 
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
-        ->set('countedQuantity', '5.50')
+        ->set('countedQuantity', '5')
         ->set('adjustmentReasonCategory', 'count_correction')
         ->set('adjustmentEffectiveDate', now('Asia/Manila')->toDateString())
         ->set('adjustmentReference', 'COUNT-9')
         ->call('recordStockAdjustment')
         ->assertHasNoErrors()
-        ->assertSee('5.50 piece');
+        ->assertSeeHtml('Current on hand: <strong>5</strong>')
+        ->assertSeeHtml('Unit: <strong>piece</strong>');
 
     Livewire::test(InventoryManagement::class)
         ->call('showHistory', $item->id)
         ->assertSee('Stock adjustment')
-        ->assertSee('-1.50')
+        ->assertSee('-2')
         ->assertSee('COUNT-9')
         ->assertSee('posted ');
 
     $stockOut = $item->stockMovements()->where('type', 'stock_out')->firstOrFail();
     $adjustment = $item->stockMovements()->where('type', 'adjustment')->firstOrFail();
-    expect($item->fresh()->qty)->toBe('5.50')
+    expect($item->fresh()->qty)->toBe('5.00')
         ->and($item->fresh()->carrying_value_cents)->toBe(72500)
         ->and(AccountingJournal::query()->count())->toBe(0)
         ->and($stockOut->quantity)->toBe('-3.00')
         ->and($stockOut->reason_category)->toBe('project_use')
-        ->and($adjustment->quantity)->toBe('-1.50')
+        ->and($adjustment->quantity)->toBe('-2.00')
         ->and($adjustment->reason_category)->toBe('count_correction')
         ->and($adjustment->posted_by)->toBe($employee->id)
         ->and(fn () => $adjustment->update(['quantity' => 1]))->toThrow(LogicException::class)
@@ -590,15 +806,75 @@ test('authorized staff can record stock-out and counted-balance adjustments in t
         ->and($adjustment->fresh()->reversal->reverses_movement_id)->toBe($adjustment->id);
 
     Livewire::test(InventoryManagement::class, ['id' => $item->id])
-        ->set('countedQuantity', '6.50')
+        ->set('countedQuantity', '6')
         ->set('adjustmentReasonCategory', 'count_correction')
         ->set('adjustmentEffectiveDate', now('Asia/Manila')->toDateString())
         ->set('adjustmentReference', 'COUNT-9-CORRECTED')
         ->call('recordStockAdjustment')
         ->assertHasNoErrors();
 
-    expect($item->fresh()->qty)->toBe('6.50')
-        ->and($adjustment->fresh()->quantity)->toBe('-1.50');
+    expect($item->fresh()->qty)->toBe('6.00')
+        ->and($adjustment->fresh()->quantity)->toBe('-2.00');
+});
+test('inventory management only accepts whole-number quantities', function () {
+    $this->actingAs(createInventoryManager());
+
+    Livewire::test(InventoryManagement::class)
+        ->set('name', 'Fractional timber')
+        ->set('category', 'Lumber')
+        ->set('qty', '1.5')
+        ->set('unit', 'piece')
+        ->set('unitCost', '4.00')
+        ->call('save')
+        ->assertHasErrors(['qty' => 'multiple_of']);
+
+    expect(Inventory::count())->toBe(0);
+
+    $item = Inventory::create(inventoryAttributes(['qty' => 10]));
+
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
+        ->set('stockQuantity', '1.5')
+        ->set('stockReasonCategory', 'purchase_receipt')
+        ->set('stockEffectiveDate', '2026-10-08')
+        ->call('recordStockIn')
+        ->assertHasErrors(['stockQuantity' => 'multiple_of']);
+
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
+        ->set('issueQuantity', '1.5')
+        ->set('issueReasonCategory', 'project_use')
+        ->set('issueEffectiveDate', '2026-10-08')
+        ->call('recordStockOut')
+        ->assertHasErrors(['issueQuantity' => 'multiple_of']);
+
+    Livewire::test(InventoryManagement::class, ['id' => $item->id])
+        ->set('countedQuantity', '1.5')
+        ->set('adjustmentReasonCategory', 'count_correction')
+        ->set('adjustmentEffectiveDate', '2026-10-08')
+        ->call('recordStockAdjustment')
+        ->assertHasErrors(['countedQuantity' => 'multiple_of']);
+
+    expect($item->fresh()->qty)->toBe('10.00');
+});
+test('inventory management only accepts whole-number reorder levels', function () {
+    $this->actingAs(createInventoryManager());
+
+    Livewire::test(InventoryManagement::class)
+        ->set('name', 'Fractional reorder item')
+        ->set('category', 'Lumber')
+        ->set('qty', '12')
+        ->set('unit', 'piece')
+        ->set('unitCost', '4.00')
+        ->set('reorderLevel', '1.5')
+        ->call('save')
+        ->assertHasErrors(['reorderLevel' => 'multiple_of']);
+
+    expect(Inventory::count())->toBe(0);
+
+    $item = Inventory::create(inventoryAttributes(['reorder_level' => 3.5]));
+
+    Livewire::test(InventoryManagement::class)
+        ->call('edit', $item->id)
+        ->assertSet('reorderLevel', '4');
 });
 test('backdated stock-out and adjustment are rejected when a later balance would become negative', function () {
     $employee = grantEmployeeTestPermissions(Employee::create([

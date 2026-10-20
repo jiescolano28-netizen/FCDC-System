@@ -36,7 +36,7 @@ class OpeningInventoryValuationLine extends Model
 
     public function inventory(): BelongsTo
     {
-        return $this->belongsTo(Inventory::class);
+        return $this->belongsTo(Inventory::class)->withTrashed();
     }
 
     public function valuation(): BelongsTo

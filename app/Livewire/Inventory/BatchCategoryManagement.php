@@ -2,12 +2,21 @@
 
 namespace App\Livewire\Inventory;
 
+use App\Http\Requests\StoreInventoryBatchCategoryAttachmentsRequest;
 use App\Models\InventoryBatchCategory;
+use App\Models\InventoryBatchCategoryAttachment;
+use App\Services\Inventory\DeleteInventoryBatchCategoryAttachment;
+use App\Services\Inventory\ListInventoryBatchCategoryAttachments;
+use App\Services\Inventory\StoreInventoryBatchCategoryAttachments;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 class BatchCategoryManagement extends Component
 {
+    use WithFileUploads;
+
     public string $search = '';
 
     public bool $showDeleted = false;
@@ -18,6 +27,25 @@ class BatchCategoryManagement extends Component
     public string $name = '';
 
     public string $description = '';
+
+    /**
+     * Batch category whose attachments are being managed, if any.
+     */
+    #[Locked]
+    public ?int $attachmentsCategoryId = null;
+
+    /**
+     * Files staged for upload; no count limit, per-file size/type enforced by
+     * StoreInventoryBatchCategoryAttachmentsRequest.
+     *
+     * @var array<int, TemporaryUploadedFile>
+     */
+    public array $attachmentFiles = [];
+
+    /**
+     * Attachment currently shown in the preview modal, if any.
+     */
+    public ?int $previewAttachmentId = null;
 
     public function create(): void
     {
@@ -68,6 +96,12 @@ class BatchCategoryManagement extends Component
         $this->authorizePermission('inventory.delete');
 
         InventoryBatchCategory::findOrFail($id)->delete();
+
+        if ($this->attachmentsCategoryId === $id) {
+            $this->closeAttachments();
+            $this->dispatch('batch-category-attachments-modal-close');
+        }
+
         $this->resetForm();
     }
 
@@ -76,6 +110,62 @@ class BatchCategoryManagement extends Component
         $this->authorizePermission('inventory.delete');
 
         InventoryBatchCategory::onlyTrashed()->findOrFail($id)->restore();
+    }
+
+    public function manageAttachments(int $id): void
+    {
+        $this->authorizePermission('inventory.view');
+
+        $category = InventoryBatchCategory::findOrFail($id);
+        $this->attachmentsCategoryId = $category->id;
+        $this->reset(['attachmentFiles', 'previewAttachmentId']);
+        $this->resetValidation();
+        $this->dispatch('batch-category-attachments-modal-open');
+    }
+
+    public function closeAttachments(): void
+    {
+        $this->reset(['attachmentsCategoryId', 'attachmentFiles', 'previewAttachmentId']);
+        $this->resetValidation();
+    }
+
+    public function uploadAttachments(): void
+    {
+        $this->authorizePermission('inventory.update');
+
+        $validated = $this->validate(StoreInventoryBatchCategoryAttachmentsRequest::uploadRules());
+
+        app(StoreInventoryBatchCategoryAttachments::class)->handle(
+            InventoryBatchCategory::findOrFail($this->attachmentsCategoryId),
+            $validated['attachmentFiles'],
+            auth()->id(),
+        );
+
+        $this->reset('attachmentFiles');
+        $this->dispatch('batch-category-attachments-uploaded');
+    }
+
+    public function deleteAttachment(int $attachmentId): void
+    {
+        $this->authorizePermission('inventory.update');
+
+        $attachment = InventoryBatchCategoryAttachment::findOrFail($attachmentId);
+        abort_unless($attachment->inventory_batch_category_id === $this->attachmentsCategoryId, 404);
+
+        app(DeleteInventoryBatchCategoryAttachment::class)->handle($attachment);
+    }
+
+    public function previewAttachment(int $attachmentId): void
+    {
+        $attachment = InventoryBatchCategoryAttachment::findOrFail($attachmentId);
+        abort_unless($attachment->inventory_batch_category_id === $this->attachmentsCategoryId, 404);
+
+        $this->previewAttachmentId = $attachmentId;
+    }
+
+    public function closeAttachmentPreview(): void
+    {
+        $this->previewAttachmentId = null;
     }
 
     public function resetForm(): void
@@ -99,8 +189,23 @@ class BatchCategoryManagement extends Component
             ->orderBy('name')
             ->get();
 
+        $attachmentsCategory = $this->attachmentsCategoryId
+            ? InventoryBatchCategory::find($this->attachmentsCategoryId)
+            : null;
+
+        $attachments = $attachmentsCategory
+            ? app(ListInventoryBatchCategoryAttachments::class)->handle($attachmentsCategory)
+            : collect();
+
+        $previewAttachment = $this->previewAttachmentId
+            ? $attachments->firstWhere('id', $this->previewAttachmentId)
+            : null;
+
         return view('livewire.inventory.batch-category-management', [
             'categories' => $categories,
+            'attachmentsCategory' => $attachmentsCategory,
+            'attachments' => $attachments,
+            'previewAttachment' => $previewAttachment,
         ])->layout('layouts.app', ['title' => 'Inventory batch categories']);
     }
 

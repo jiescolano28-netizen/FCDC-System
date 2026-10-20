@@ -2,13 +2,18 @@
 
 namespace App\Livewire\Inventory;
 
+use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
 use App\Models\Inventory;
 use App\Models\InventoryBatchCategory;
 use App\Models\StockMovement;
+use App\Services\Inventory\CorrectValuedStockMovement;
 use App\Services\Inventory\RecordStockAdjustment;
 use App\Services\Inventory\RecordStockIn;
 use App\Services\Inventory\RecordStockOut;
+use App\Services\Inventory\RecordValuedStockMovement;
 use App\Services\Inventory\ReverseStockMovement;
+use App\Support\AdministratorAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
@@ -21,49 +26,88 @@ class InventoryManagement extends Component
     use WithFileUploads;
 
     public string $search = '';
+
     public string $categoryFilter = '';
+
     public bool $advancedFiltersOpen = false;
+
+    public bool $showDeleted = false;
+
     #[Locked]
     public ?int $editingId = null;
+
     #[Locked]
     public bool $formPage = false;
+
     public string $name = '';
+
     public string $category = '';
+
+    public string $sizeSpecification = '';
+
     public string $batchCategoryId = '';
+
     public string $qty = '';
+
     public string $unit = '';
+
     public string $unitCost = '';
+
     public string $sellingPrice = '';
+
     public string $reorderLevel = '';
+
     public string $description = '';
-    public string $status = 'active';
 
     #[Url(as: 'item')]
     public ?int $historyItemId = null;
 
     public string $stockQuantity = '';
+
     public string $stockReasonCategory = '';
+
     public string $stockNotes = '';
+
     public string $stockReference = '';
+
     public string $stockEffectiveDate = '';
+
     public string $issueQuantity = '';
+
     public string $issueReasonCategory = '';
+
     public string $issueNotes = '';
+
     public string $issueReference = '';
+
     public string $issueEffectiveDate = '';
+
     public string $countedQuantity = '';
+
     public string $adjustmentReasonCategory = '';
+
     public string $adjustmentNotes = '';
+
     public string $adjustmentReference = '';
+
     public string $adjustmentEffectiveDate = '';
+
     public string $stockUnitValue = '';
+
     public string $adjustmentUnitValue = '';
+
     public ?int $correctionMovementId = null;
+
     public string $correctionReason = '';
+
     public string $remainingValueDelta = '0.00';
+
     public string $consumedValueDelta = '0.00';
+
     public ?int $consumedExpenseAccountId = null;
+
     public $image;
+
     public function mount(?int $id = null): void
     {
         $today = now('Asia/Manila')->toDateString();
@@ -77,7 +121,6 @@ class InventoryManagement extends Component
         }
     }
 
-
     public function save(): void
     {
         $this->authorizePermission($this->editingId ? 'inventory.update' : 'inventory.create');
@@ -87,6 +130,7 @@ class InventoryManagement extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', 'max:255'],
+            'sizeSpecification' => ['nullable', 'string', 'max:255'],
             'batchCategoryId' => [
                 'nullable',
                 'integer',
@@ -103,14 +147,16 @@ class InventoryManagement extends Component
                     $fail('Select an active batch category.');
                 },
             ],
-            'qty' => $this->editingId ? ['prohibited'] : ['required', 'numeric', 'min:0'],
+            'qty' => $this->editingId ? ['prohibited'] : ['required', 'numeric', 'min:0', 'multiple_of:1'],
             'unit' => ['required', 'string', 'max:50'],
             'unitCost' => ['required', 'numeric', 'min:0'],
             'sellingPrice' => ['nullable', 'numeric', 'min:0'],
-            'reorderLevel' => ['nullable', 'numeric', 'min:0'],
+            'reorderLevel' => ['nullable', 'numeric', 'min:0', 'multiple_of:1'],
             'description' => ['nullable', 'string'],
-            'status' => ['required', 'in:active,inactive'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ], [
+            'qty.multiple_of' => 'The opening quantity must be a whole number.',
+            'reorderLevel.multiple_of' => 'The low stock level must be a whole number.',
         ]);
         if ($this->valuedPostingEnabled() && ! $this->editingId && (float) $validated['qty'] !== 0.0) {
             throw ValidationException::withMessages(['qty' => 'New items after cutover must start at zero and receive stock through valued movements.']);
@@ -119,6 +165,7 @@ class InventoryManagement extends Component
         $item->fill([
             'name' => $validated['name'],
             'category' => $validated['category'],
+            'size_specification' => $validated['sizeSpecification'] ?: null,
             'unit' => $validated['unit'],
             'unit_cost' => $this->valuedPostingEnabled()
                 ? ($this->editingId ? $item->unit_cost : '0.00')
@@ -126,7 +173,6 @@ class InventoryManagement extends Component
             'selling_price' => $validated['sellingPrice'] === '' ? null : $validated['sellingPrice'],
             'reorder_level' => $validated['reorderLevel'] === '' ? 10 : $validated['reorderLevel'],
             'description' => $validated['description'] ?? null,
-            'status' => $validated['status'],
         ]);
         $item->inventory_batch_category_id = $validated['batchCategoryId'] ?: null;
 
@@ -146,6 +192,7 @@ class InventoryManagement extends Component
         }
 
     }
+
     public function edit(int $id): void
     {
         abort_unless(
@@ -156,14 +203,14 @@ class InventoryManagement extends Component
         $this->editingId = $item->id;
         $this->name = $item->name;
         $this->category = $item->category;
+        $this->sizeSpecification = $item->size_specification ?? '';
         $this->batchCategoryId = (string) ($item->inventory_batch_category_id ?? '');
         $this->qty = '';
         $this->unit = $item->unit;
         $this->unitCost = $item->unit_cost;
         $this->sellingPrice = $item->selling_price ?? '';
-        $this->reorderLevel = $item->reorder_level;
+        $this->reorderLevel = (string) (int) round((float) $item->reorder_level);
         $this->description = $item->description ?? '';
-        $this->status = $item->status;
         $this->resetValidation();
     }
 
@@ -174,9 +221,42 @@ class InventoryManagement extends Component
 
     public function deactivate(int $id): void
     {
-        $this->authorizePermission('inventory.delete');
-        Inventory::findOrFail($id)->update(['status' => 'inactive']);
+        $this->authorizeAdministrator();
+        Inventory::findOrFail($id)->update(['status' => Inventory::STATUS_INACTIVE]);
         $this->resetForm();
+    }
+
+    public function reactivate(int $id): void
+    {
+        $this->authorizeAdministrator();
+        Inventory::findOrFail($id)->update(['status' => Inventory::STATUS_ACTIVE]);
+        $this->resetForm();
+    }
+
+    public function delete(int $id): void
+    {
+        $this->authorizeAdministrator();
+        Inventory::findOrFail($id)->delete();
+
+        if ($this->historyItemId === $id) {
+            $this->historyItemId = null;
+        }
+
+        $this->resetForm();
+    }
+
+    public function restore(int $id): void
+    {
+        $this->authorizeAdministrator();
+        Inventory::onlyTrashed()->findOrFail($id)->restore();
+        $this->resetForm();
+    }
+
+    public function updatedShowDeleted(): void
+    {
+        if (! AdministratorAccess::allows(auth()->user())) {
+            $this->showDeleted = false;
+        }
     }
 
     public function showHistory(int $id): void
@@ -218,7 +298,7 @@ class InventoryManagement extends Component
             'consumedValueDelta' => ['required', 'numeric', 'decimal:0,2'],
             'consumedExpenseAccountId' => ['nullable', 'integer', 'exists:accounting_accounts,id'],
         ]);
-        app(\App\Services\Inventory\CorrectValuedStockMovement::class)->correct(
+        app(CorrectValuedStockMovement::class)->correct(
             (int) $validated['correctionMovementId'],
             $validated['correctionReason'],
             $this->amountToCents($validated['remainingValueDelta']),
@@ -241,15 +321,17 @@ class InventoryManagement extends Component
         $itemId = $this->movementItemId();
         $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
-            'issueQuantity' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'issueQuantity' => ['required', 'numeric', 'gt:0', 'multiple_of:1'],
             'issueReasonCategory' => ['required', $valued ? 'in:project_use,damage_loss,count_correction,other' : 'in:purchase_receipt,project_use,sale,return,damage_loss,count_correction,other'],
             'issueNotes' => ['nullable', 'string', 'max:2000'],
             'issueReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'issueEffectiveDate' => ['required', 'date'],
+        ], [
+            'issueQuantity.multiple_of' => 'The quantity issued must be a whole number.',
         ]);
 
         if ($valued) {
-            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+            app(RecordValuedStockMovement::class)->handle(
                 $itemId, 'stock_out', $validated['issueQuantity'],
                 $validated['issueReasonCategory'], $validated['issueReference'],
                 $validated['issueEffectiveDate'], (int) auth()->id(), null, $validated['issueNotes'] ?: null,
@@ -273,16 +355,18 @@ class InventoryManagement extends Component
         $itemId = $this->movementItemId();
         $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
-            'countedQuantity' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
+            'countedQuantity' => ['required', 'numeric', 'min:0', 'multiple_of:1'],
             'adjustmentReasonCategory' => ['required', 'in:project_use,damage_loss,count_correction,other'],
             'adjustmentNotes' => ['nullable', 'string', 'max:2000'],
             'adjustmentReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'adjustmentEffectiveDate' => ['required', 'date'],
             'adjustmentUnitValue' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
+        ], [
+            'countedQuantity.multiple_of' => 'The counted on-hand quantity must be a whole number.',
         ]);
 
         if ($valued) {
-            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+            app(RecordValuedStockMovement::class)->handle(
                 $itemId, 'adjustment', $validated['countedQuantity'],
                 $validated['adjustmentReasonCategory'], $validated['adjustmentReference'],
                 $validated['adjustmentEffectiveDate'], (int) auth()->id(), $validated['adjustmentUnitValue'] ?: null, $validated['adjustmentNotes'] ?: null,
@@ -306,17 +390,19 @@ class InventoryManagement extends Component
         $itemId = $this->movementItemId();
         $valued = $this->valuedPostingEnabled();
         $validated = $this->validate([
-            'stockQuantity' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'stockQuantity' => ['required', 'numeric', 'gt:0', 'multiple_of:1'],
             'stockReasonCategory' => ['required', 'in:purchase_receipt,return,other'],
             'stockNotes' => ['nullable', 'string', 'max:2000'],
             'stockReference' => [$valued ? 'required' : 'nullable', 'string', 'max:255'],
             'stockEffectiveDate' => ['required', 'date'],
             'stockUnitValue' => [$valued ? 'required' : 'nullable', 'numeric', 'min:0', 'decimal:0,2'],
+        ], [
+            'stockQuantity.multiple_of' => 'The quantity received must be a whole number.',
         ]);
 
         if ($valued) {
             $this->authorizePermission('inventory.valuation.approve');
-            app(\App\Services\Inventory\RecordValuedStockMovement::class)->handle(
+            app(RecordValuedStockMovement::class)->handle(
                 $itemId, 'stock_in', $validated['stockQuantity'],
                 $validated['stockReasonCategory'], $validated['stockReference'],
                 $validated['stockEffectiveDate'], (int) auth()->id(), $validated['stockUnitValue'], $validated['stockNotes'] ?: null,
@@ -334,11 +420,9 @@ class InventoryManagement extends Component
         $this->resetValidation();
     }
 
-
     public function resetForm(): void
     {
-        $this->reset(['editingId', 'name', 'category', 'batchCategoryId', 'qty', 'unit', 'unitCost', 'sellingPrice', 'reorderLevel', 'description', 'image']);
-        $this->status = 'active';
+        $this->reset(['editingId', 'name', 'category', 'sizeSpecification', 'batchCategoryId', 'qty', 'unit', 'unitCost', 'sellingPrice', 'reorderLevel', 'description', 'image']);
         $this->resetValidation();
     }
 
@@ -359,12 +443,17 @@ class InventoryManagement extends Component
             ])->layout('layouts.app', ['title' => $this->editingId ? 'Edit inventory item' : 'Add inventory item']);
         }
 
-        $items = Inventory::query()
+        $isAdministrator = AdministratorAccess::allows(auth()->user());
+        $showDeleted = $this->showDeleted && $isAdministrator;
+        $scope = $showDeleted ? Inventory::onlyTrashed() : Inventory::query();
+
+        $items = $scope
             ->with(['batchCategory', 'stockMovements.poster', 'stockMovements.reversal', 'stockMovements.accountingJournal'])
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
                     $query->where('name', 'like', '%'.$this->search.'%')
                         ->orWhere('category', 'like', '%'.$this->search.'%')
+                        ->orWhere('size_specification', 'like', '%'.$this->search.'%')
                         ->orWhere('code', 'like', '%'.$this->search.'%');
                 });
             })
@@ -374,11 +463,14 @@ class InventoryManagement extends Component
 
         return view('livewire.inventory.management', [
             'items' => $items,
-            'categories' => Inventory::query()->distinct()->orderBy('category')->pluck('category'),
+            'categories' => ($showDeleted ? Inventory::onlyTrashed() : Inventory::query())
+                ->distinct()->orderBy('category')->pluck('category'),
             'batchCategories' => InventoryBatchCategory::query()->orderBy('name')->get(),
+            'isAdministrator' => $isAdministrator,
+            'showDeleted' => $showDeleted,
 
             'valuedPostingEnabled' => $this->valuedPostingEnabled(),
-            'approvedExpenseAccounts' => \App\Models\AccountingAccount::query()->where('type', 'Expense')
+            'approvedExpenseAccounts' => AccountingAccount::query()->where('type', 'Expense')
                 ->where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get(),
         ])->layout('layouts.app', ['title' => 'Inventory Management']);
     }
@@ -408,10 +500,15 @@ class InventoryManagement extends Component
     {
         abort_unless(auth()->user()?->can($permission), 403);
     }
-    private function valuedPostingEnabled(): bool
+
+    private function authorizeAdministrator(): void
     {
-        return \App\Models\AccountingJournal::query()
-            ->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists();
+        abort_unless(AdministratorAccess::allows(auth()->user()), 403);
     }
 
+    private function valuedPostingEnabled(): bool
+    {
+        return AccountingJournal::query()
+            ->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists();
+    }
 }

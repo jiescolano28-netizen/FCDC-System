@@ -45,13 +45,14 @@ class RecoveredMaterialAssessment extends Model
 
     public function inventory(): BelongsTo
     {
-        return $this->belongsTo(Inventory::class);
+        return $this->belongsTo(Inventory::class)->withTrashed();
     }
 
     public function stockMovement(): BelongsTo
     {
         return $this->belongsTo(StockMovement::class);
     }
+
     public function valuationCounterpart(): BelongsTo
     {
         return $this->belongsTo(AccountingAccount::class, 'counterpart_accounting_account_id');

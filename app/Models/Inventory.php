@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use LogicException;
 use Spatie\Activitylog\LogOptions;
@@ -12,11 +13,22 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class Inventory extends Model
 {
-    use LogsActivity;
+    use LogsActivity, SoftDeletes;
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_INACTIVE = 'inactive';
+
+    public const STOCK_STATUS_IN_STOCK = 'in_stock';
+
+    public const STOCK_STATUS_LOW_STOCK = 'low_stock';
+
+    public const STOCK_STATUS_OUT_OF_STOCK = 'out_of_stock';
 
     protected $fillable = [
         'name',
         'category',
+        'size_specification',
         'inventory_batch_category_id',
         'qty',
         'unit',
@@ -39,9 +51,9 @@ class Inventory extends Model
     protected static function booted(): void
     {
         static::creating(function (Inventory $inventory): void {
-            $inventory->status ??= 'active';
+            $inventory->status ??= self::STATUS_ACTIVE;
             $inventory->code ??= 'TMP-'.Str::uuid();
-            if (\App\Models\AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
+            if (AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
                 if ((float) $inventory->qty !== 0.0) {
                     throw new LogicException('New post-cutover inventory items must start with zero quantity.');
                 }
@@ -72,12 +84,12 @@ class Inventory extends Model
                 throw new LogicException('Inventory quantities must be changed through stock movements.');
             }
             if ($inventory->isDirty('unit_cost')
-                && \App\Models\AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
+                && AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
                 throw new LogicException('Post-cutover accounting cost is derived from the valued stock schedule.');
             }
         });
 
-        static::deleting(fn () => throw new LogicException('Inventory items must be deactivated, not deleted.'));
+        static::forceDeleting(fn () => throw new LogicException('Inventory items cannot be permanently deleted.'));
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -92,6 +104,7 @@ class Inventory extends Model
     {
         return $this->hasMany(StockMovement::class)->orderByDesc('effective_date')->orderByDesc('posted_at');
     }
+
     public function batchCategory(): BelongsTo
     {
         return $this->belongsTo(InventoryBatchCategory::class, 'inventory_batch_category_id')->withTrashed();
@@ -104,8 +117,41 @@ class Inventory extends Model
 
     public function scopeAvailableForSale($query)
     {
-        return $query->where('status', 'active')
+        return $query->where('status', self::STATUS_ACTIVE)
             ->whereNotNull('selling_price')
             ->where('qty', '>', 0);
+    }
+
+    public function stockStatus(): string
+    {
+        $quantity = (float) $this->qty;
+
+        if ($quantity <= 0) {
+            return self::STOCK_STATUS_OUT_OF_STOCK;
+        }
+
+        if ($quantity <= (float) $this->reorder_level) {
+            return self::STOCK_STATUS_LOW_STOCK;
+        }
+
+        return self::STOCK_STATUS_IN_STOCK;
+    }
+
+    public function stockStatusLabel(): string
+    {
+        return match ($this->stockStatus()) {
+            self::STOCK_STATUS_LOW_STOCK => 'Low Stock',
+            self::STOCK_STATUS_OUT_OF_STOCK => 'Out of Stock',
+            default => 'In Stock',
+        };
+    }
+
+    public function stockStatusBadgeClass(): string
+    {
+        return match ($this->stockStatus()) {
+            self::STOCK_STATUS_LOW_STOCK => 'status low',
+            self::STOCK_STATUS_OUT_OF_STOCK => 'status empty',
+            default => 'status',
+        };
     }
 }

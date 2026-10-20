@@ -19,7 +19,7 @@ A named set of access permissions that an employee can hold.
 The association of one or more roles with an employee; an employee may hold multiple roles at the same time.
 
 **Inventory item**:
-A construction material tracked by name, category, unit, quantity, cost, and stock-reorder threshold.
+A construction material tracked by name, category, unit, quantity, cost, and stock low-stock threshold.
 _Avoid_: Product when referring to the tracked inventory record
 
 **Stock transaction**:

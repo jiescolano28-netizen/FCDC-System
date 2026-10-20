@@ -5,6 +5,7 @@ use App\Models\AccountingPostingMapping;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Services\Accounting\OpeningBooksService;
+use App\Support\RolePermissionCatalog;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -60,6 +61,18 @@ function grantEmployeeTestPermissions(Employee $employee, array $permissions): E
     $role->syncPermissions(array_map(
         fn (string $name) => Permission::findOrCreate($name, 'web'),
         $permissions,
+    ));
+    $employee->assignRole($role);
+
+    return $employee;
+}
+
+function grantEmployeeAdministratorRole(Employee $employee): Employee
+{
+    $role = Role::findOrCreate(RolePermissionCatalog::ADMIN_ROLE, 'web');
+    $role->syncPermissions(array_map(
+        fn (string $name) => Permission::findOrCreate($name, 'web'),
+        RolePermissionCatalog::names(),
     ));
     $employee->assignRole($role);
 

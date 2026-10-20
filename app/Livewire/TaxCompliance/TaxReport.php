@@ -6,6 +6,7 @@ use App\Models\PosVatRecord;
 use App\Services\RecordedVatSummary;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -127,6 +128,9 @@ class TaxReport extends Component
             fputcsv($output, ['Taxable sales', $summary['taxable_sales']]);
             fputcsv($output, ['Output VAT', $summary['output_vat']]);
             fputcsv($output, ['VAT-inclusive total sales', $summary['total_sales']]);
+            fputcsv($output, ['Reworking cost total (reworking cost records)', $summary['input_vat_reworking_cost']]);
+            fputcsv($output, ['Input VAT (reworking cost records)', $summary['input_vat']]);
+            fputcsv($output, ['Net VAT payable estimate', $summary['vat_payable_estimate']]);
             fputcsv($output, []);
             fputcsv($output, [
                 'Transaction number',
@@ -168,6 +172,34 @@ class TaxReport extends Component
                     }
                 });
 
+            $inputVatRecords = $this->inputVatRecordsForRange($startDate, $endDate);
+
+            if ($inputVatRecords->isNotEmpty()) {
+                fputcsv($output, []);
+                fputcsv($output, ['Input VAT records from reworking cost records']);
+                fputcsv($output, [
+                    'Batch number',
+                    'Project',
+                    'Record date (Asia/Manila)',
+                    'Description',
+                    'Reworking cost',
+                    'Input VAT',
+                ]);
+
+                foreach ($inputVatRecords as $record) {
+                    fputcsv($output, [
+                        $record['batch_number'],
+                        $record['project'],
+                        $record['date'],
+                        $record['description'],
+                        $record['total_reworking_cost'],
+                        $record['input_vat'],
+                    ]);
+                }
+
+                fputcsv($output, ['Input VAT total', $summary['input_vat']]);
+            }
+
             fclose($output);
         }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
@@ -191,6 +223,7 @@ class TaxReport extends Component
         $selectedRecord = $this->selectedRecordId
             ? $this->reportQuery()->with('posTransaction.lines')->find($this->selectedRecordId)
             : null;
+        $inputVatRecords = $this->inputVatRecordsForRange($startDate, $endDate);
         $generatedAt = CarbonImmutable::now('Asia/Manila');
 
         return view('livewire.tax-compliance.tax-report', [
@@ -209,6 +242,7 @@ class TaxReport extends Component
             'records' => $records,
             'printRecords' => $printRecords,
             'selectedRecord' => $selectedRecord,
+            'inputVatRecords' => $inputVatRecords,
         ])->layout('layouts.app', ['title' => 'Tax Report']);
     }
 
@@ -217,6 +251,11 @@ class TaxReport extends Component
         [$startDate, $endDate] = $this->selectedDateRange();
 
         return app(RecordedVatSummary::class)->recordsForDateRange($startDate, $endDate);
+    }
+
+    private function inputVatRecordsForRange(string $startDate, string $endDate): Collection
+    {
+        return app(RecordedVatSummary::class)->inputVatRecordsForDateRange($startDate, $endDate);
     }
 
     private function selectedDateRange(): array
@@ -278,6 +317,12 @@ class TaxReport extends Component
         $latestYear = $bounds->latest
             ? CarbonImmutable::parse($bounds->latest, 'UTC')->setTimezone('Asia/Manila')->year
             : $nowYear;
+        $inputVatBounds = app(RecordedVatSummary::class)->inputVatDateBounds();
+
+        if ($inputVatBounds !== null) {
+            $earliestYear = min($earliestYear, CarbonImmutable::parse($inputVatBounds[0], 'Asia/Manila')->year);
+            $latestYear = max($latestYear, CarbonImmutable::parse($inputVatBounds[1], 'Asia/Manila')->year);
+        }
 
         return array_reverse(range(min($earliestYear, $nowYear - 10), max($latestYear, $nowYear)));
     }

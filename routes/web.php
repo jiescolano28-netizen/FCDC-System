@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\EmployeePasswordResetController;
+use App\Http\Controllers\InventoryBatchCategoryAttachmentController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InventoryReceiptAttachmentController;
 use App\Http\Controllers\LoginController;
@@ -27,6 +28,7 @@ use App\Livewire\Inventory\BatchCategoryManagement;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Livewire\Inventory\InventoryProfile;
+use App\Livewire\Inventory\ReworkingCostRecordManagement;
 use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Profile\ProfilePage;
 use App\Livewire\Roles\RoleManagement;
@@ -96,6 +98,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/manage', InventoryManagement::class)->middleware('permission:inventory.view')->name('inventory.management');
     Route::get('/inventory/batch-categories', BatchCategoryManagement::class)
         ->middleware('permission:inventory.view')->name('inventory.batch-categories');
+    Route::get('/inventory/reworking-cost-records', ReworkingCostRecordManagement::class)
+        ->middleware('permission:inventory.view')->name('inventory.reworking-cost-records');
+
+    // Inventory batch category attachments (dedicated controller/service surface)
+    Route::get('/inventory/batch-categories/{batchCategory}/attachments', [InventoryBatchCategoryAttachmentController::class, 'index'])
+        ->middleware('permission:inventory.view')->name('inventory.batch-categories.attachments.index');
+    Route::post('/inventory/batch-categories/{batchCategory}/attachments', [InventoryBatchCategoryAttachmentController::class, 'store'])
+        ->middleware('permission:inventory.update')->name('inventory.batch-categories.attachments.store');
+    Route::get('/inventory/batch-categories/attachments/{attachment}/download', [InventoryBatchCategoryAttachmentController::class, 'download'])
+        ->middleware('permission:inventory.view')->name('inventory.batch-categories.attachments.download');
+    Route::get('/inventory/batch-categories/attachments/{attachment}/preview', [InventoryBatchCategoryAttachmentController::class, 'preview'])
+        ->middleware('permission:inventory.view')->name('inventory.batch-categories.attachments.preview');
+    Route::delete('/inventory/batch-categories/attachments/{attachment}', [InventoryBatchCategoryAttachmentController::class, 'destroy'])
+        ->middleware('permission:inventory.update')->name('inventory.batch-categories.attachments.destroy');
     Route::get('/tax/vat-summary', VatSummary::class)->middleware('permission:tax.view')->name('tax.vat-summary');
     Route::get('/tax/report', TaxReport::class)->middleware('permission:tax.view')->name('tax.report');
     Route::get('/inventory/overview', InventoryOverview::class)->middleware('permission:inventory.view')->name('inventory.overview');
@@ -106,6 +122,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:inventory.create')->name('inventory.store');
     Route::put('/inventory/{inventory}', [InventoryController::class, 'update'])
         ->middleware('permission:inventory.update')->name('inventory.update');
+    Route::patch('/inventory/{inventory}/deactivate', [InventoryController::class, 'deactivate'])
+        ->middleware('permission:inventory.delete')->name('inventory.deactivate');
+    Route::patch('/inventory/{inventory}/reactivate', [InventoryController::class, 'reactivate'])
+        ->middleware('permission:inventory.delete')->name('inventory.reactivate');
     Route::delete('/inventory/{inventory}', [InventoryController::class, 'destroy'])
         ->middleware('permission:inventory.delete')->name('inventory.destroy');
 

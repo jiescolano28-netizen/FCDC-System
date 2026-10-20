@@ -19,6 +19,13 @@
                         @enderror
                     </div>
                     <div class="inventory-form-field">
+                        <label for="sizeSpecification">Size / specification (optional)</label>
+                        <input id="sizeSpecification" wire:model="sizeSpecification" maxlength="255" placeholder="e.g., 2 in × 4 in × 8 ft">
+                        @error('sizeSpecification')
+                            <span class="error">{{ $message }}</span>
+                        @enderror
+                    </div>
+                    <div class="inventory-form-field">
                         <label for="batchCategoryId">Batch category (optional)</label>
                         <select id="batchCategoryId" wire:model="batchCategoryId">
                             <option value="">No batch category</option>
@@ -31,8 +38,9 @@
                         @enderror
                     </div>
                     <div class="inventory-form-field">
-                        <label for="unit">Unit</label>
+                        <label for="unit">Unit label (e.g., pc, bag, kg)</label>
                         <input id="unit" wire:model="unit">
+                        <span class="muted">This is the material’s unit name, not a quantity.</span>
                         @error('unit')
                             <span class="error">{{ $message }}</span>
                         @enderror
@@ -46,7 +54,8 @@
                     @if (!$editingId)
                         <div class="inventory-form-field">
                             <label for="qty">Opening quantity</label>
-                            <input id="qty" type="number" min="0" step="0.01" wire:model="qty">
+                            <input id="qty" type="number" min="0" step="1" wire:model="qty">
+                            <span class="muted">How many are on hand at the start.</span>
                             @error('qty')
                                 <span class="error">{{ $message }}</span>
                             @enderror
@@ -68,24 +77,12 @@
                         @enderror
                     </div>
                     <div class="inventory-form-field">
-                        <label for="reorderLevel">Reorder level</label>
-                        <input id="reorderLevel" type="number" min="0" step="0.01" wire:model="reorderLevel">
+                        <label for="reorderLevel">Low stock level</label>
+                        <input id="reorderLevel" type="number" min="0" step="1" wire:model="reorderLevel">
                         @error('reorderLevel')
                             <span class="error">{{ $message }}</span>
                         @enderror
                     </div>
-                    @if ($editingId)
-                        <div class="inventory-form-field">
-                            <label for="status">Lifecycle status</label>
-                            <select id="status" wire:model="status">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
-                            @error('status')
-                                <span class="error">{{ $message }}</span>
-                            @enderror
-                        </div>
-                    @endif
                 </div>
             </fieldset>
 

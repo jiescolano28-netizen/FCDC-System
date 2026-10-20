@@ -86,6 +86,12 @@ class VatSummary extends Component
         $latestYear = $bounds->latest
             ? CarbonImmutable::parse($bounds->latest, 'UTC')->setTimezone('Asia/Manila')->year
             : $nowYear;
+        $inputVatBounds = app(RecordedVatSummary::class)->inputVatDateBounds();
+
+        if ($inputVatBounds !== null) {
+            $earliestYear = min($earliestYear, CarbonImmutable::parse($inputVatBounds[0], 'Asia/Manila')->year);
+            $latestYear = max($latestYear, CarbonImmutable::parse($inputVatBounds[1], 'Asia/Manila')->year);
+        }
 
         return array_reverse(range(
             min($earliestYear, $nowYear - 10, $nowYear),

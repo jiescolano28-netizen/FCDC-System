@@ -65,15 +65,12 @@
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.batch-categories') ? 'active' : '' }}" href="{{ route('inventory.batch-categories') }}" @if (request()->routeIs('inventory.batch-categories')) aria-current="page" @endif>
                                 <span class="nav-label">Batch categories</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('inventory.reworking-cost-records') ? 'active' : '' }}" href="{{ route('inventory.reworking-cost-records') }}" @if (request()->routeIs('inventory.reworking-cost-records')) aria-current="page" @endif>
+                                <span class="nav-label">Reworking Cost Record</span>
+                            </a>
                         </div>
                     </div>
                 @endcan
-                @can('demolition-projects.view')
-                    <a class="nav-item {{ request()->routeIs('demolition-projects.*') ? 'active' : '' }}" href="{{ route('demolition-projects.index') }}" @if (request()->routeIs('demolition-projects.*')) aria-current="page" @endif>
-                        <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V5.5L12 3l8 2.5V20M4 9h16M9 20v-5h6v5M11 9l-1 4 2 1-1 3"/></svg></span><span class="nav-label">Demolition Projects</span>
-                    </a>
-                @endcan
-
                 @php($taxNavigationActive = request()->routeIs('tax.*'))
                 @can('tax.view')
                     <div class="nav-group">
@@ -88,7 +85,7 @@
                                 <span class="nav-label">VAT Summary</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('tax.report') ? 'active' : '' }}" href="{{ route('tax.report') }}" @if (request()->routeIs('tax.report')) aria-current="page" @endif>
-                                <span class="nav-label">Tax Report</span>
+                                <span class="nav-label">VAT Report</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-return-preparation') ? 'active' : '' }}" href="{{ route('tax.vat-return-preparation') }}" @if (request()->routeIs('tax.vat-return-preparation')) aria-current="page" @endif>
                                 <span class="nav-label">VAT Return Preparation</span>

@@ -17,7 +17,7 @@
         </article>
         <article class="dashboard-card dashboard-stat">
             <span class="dashboard-stat-icon warning" aria-hidden="true">!</span>
-            <div><p class="dashboard-stat-label">Low stock items</p><p class="dashboard-stat-value">{{ $lowStockItems->count() }}</p><p class="dashboard-stat-note">Available items at or below reorder level</p></div>
+            <div><p class="dashboard-stat-label">Low stock items</p><p class="dashboard-stat-value">{{ $lowStockCount }}</p><p class="dashboard-stat-note">Items at or below low stock level</p></div>
         </article>
         <article class="dashboard-card dashboard-stat">
             <span class="dashboard-stat-icon" aria-hidden="true">▥</span>
@@ -26,15 +26,18 @@
     </div>
 
     <div class="dashboard-chart-grid">
-        <section class="dashboard-card" aria-labelledby="low-stock-title">
-            <h2 class="dashboard-card-title" id="low-stock-title">Low stock alerts</h2>
-            @forelse ($lowStockItems as $item)
-                <div class="dashboard-list-row" wire:key="dashboard-low-stock-{{ $item->id }}">
-                    <div><strong>{{ $item->name }}</strong><span>{{ $item->category }} · reorder at {{ number_format((float) $item->reorder_level, 2) }} {{ $item->unit }}</span></div>
-                    <span class="dashboard-stock-badge">{{ number_format((float) $item->qty, 2) }} {{ $item->unit }}</span>
+        <section class="dashboard-card" aria-labelledby="stock-alerts-title">
+            <h2 class="dashboard-card-title" id="stock-alerts-title">Stock alerts</h2>
+            @forelse ($stockAlerts as $item)
+                <div class="dashboard-list-row" wire:key="dashboard-stock-alert-{{ $item->id }}">
+                    <div>
+                        <strong>{{ $item->name }}</strong>
+                        <span>{{ $item->category }} · {{ number_format((float) $item->qty, 2) }} {{ $item->unit }} on hand · low stock at {{ number_format((float) $item->reorder_level, 2) }}</span>
+                    </div>
+                    <span class="dashboard-stock-badge">{{ $item->stockStatusLabel() }}</span>
                 </div>
             @empty
-                <p class="dashboard-empty">No low-stock items need reordering.</p>
+                <p class="dashboard-empty">No low-stock items need attention.</p>
             @endforelse
         </section>
 

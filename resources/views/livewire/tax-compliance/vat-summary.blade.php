@@ -50,7 +50,15 @@
             <p class="dashboard-stat-value">{{ $money($summary['total_sales']) }}</p>
         </article>
         <article class="dashboard-card">
-            <p class="dashboard-stat-label">POS-only VAT payable estimate</p>
+            <p class="dashboard-stat-label">Reworking cost total</p>
+            <p class="dashboard-stat-value">{{ $money($summary['input_vat_reworking_cost']) }}</p>
+        </article>
+        <article class="dashboard-card">
+            <p class="dashboard-stat-label">Input VAT</p>
+            <p class="dashboard-stat-value">{{ $money($summary['input_vat']) }}</p>
+        </article>
+        <article class="dashboard-card">
+            <p class="dashboard-stat-label">POS-only VAT payable estimate (net of input VAT)</p>
             <p class="dashboard-stat-value">{{ $money($summary['vat_payable_estimate']) }}</p>
         </article>
     </section>
@@ -60,7 +68,11 @@
             <h2>{{ $periodLabel }} recorded VAT totals</h2>
             <a class="vat-detail-button" href="{{ route('tax.vat-records') }}">View VAT Records</a>
         </div>
-        <p class="dashboard-chart-note">Input VAT not captured. Deductions applied: {{ $money($summary['deductions_applied']) }}. This does not establish that the company incurred no input VAT.</p>
+        @if ($summary['input_vat_record_count'] > 0)
+            <p class="dashboard-chart-note">Input VAT of {{ $money($summary['input_vat']) }} comes from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s) for {{ $summary['input_vat_batch_count'] }} batch(es). Deductions applied: {{ $money($summary['deductions_applied']) }}. This is a POS-plus-reworking preparation estimate, not a final company VAT liability.</p>
+        @else
+            <p class="dashboard-chart-note">Input VAT not captured. Deductions applied: {{ $money($summary['deductions_applied']) }}. This does not establish that the company incurred no input VAT.</p>
+        @endif
         <p class="dashboard-chart-note">Output VAT is the sum of saved record amounts. Checkout-level rounding can differ from applying 12% once to the aggregate taxable sales.</p>
         @if ($summary['record_count'] === 0)
             <p class="temporary-notice" role="status">No recorded POS sales for {{ $periodLabel }}.</p>
@@ -70,7 +82,9 @@
             <div><dt>Taxable sales</dt><dd>{{ $money($summary['taxable_sales']) }}</dd></div>
             <div><dt>Output VAT</dt><dd>{{ $money($summary['output_vat']) }}</dd></div>
             <div><dt>Total sales including VAT</dt><dd>{{ $money($summary['total_sales']) }}</dd></div>
-            <div><dt>Input VAT status</dt><dd>Not captured</dd></div>
+            <div><dt>Reworking cost total</dt><dd>{{ $money($summary['input_vat_reworking_cost']) }}</dd></div>
+            <div><dt>Input VAT</dt><dd>{{ $money($summary['input_vat']) }}</dd></div>
+            <div><dt>Input VAT status</dt><dd>{{ $summary['input_vat_status'] === 'captured' ? 'Captured from saved Reworking Cost Records' : 'Not captured' }}</dd></div>
             <div><dt>Deductions applied</dt><dd>{{ $money($summary['deductions_applied']) }}</dd></div>
             <div><dt>POS-only VAT payable estimate</dt><dd>{{ $money($summary['vat_payable_estimate']) }}</dd></div>
         </dl>

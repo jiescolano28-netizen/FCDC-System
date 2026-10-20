@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Inventory;
+use App\Support\AdministratorAccess;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class InventoryController extends Controller
 {
@@ -31,7 +32,6 @@ class InventoryController extends Controller
         return response()->json($items);
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | POST /inventory
@@ -42,6 +42,7 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
+            'size_specification' => 'nullable|string|max:255',
             'inventory_batch_category_id' => [
                 'nullable',
                 'integer',
@@ -81,7 +82,6 @@ class InventoryController extends Controller
         return response()->json($item, 201);
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | PUT /inventory/{id}
@@ -93,6 +93,7 @@ class InventoryController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
+            'size_specification' => 'nullable|string|max:255',
             'inventory_batch_category_id' => [
                 'nullable',
                 'integer',
@@ -103,13 +104,15 @@ class InventoryController extends Controller
             'selling_price' => 'nullable|numeric|min:0',
             'reorder_level' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
-            'status' => 'sometimes|in:active,inactive',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         $inventory->fill([
             'name' => $validated['name'],
             'category' => $validated['category'],
+            'size_specification' => array_key_exists('size_specification', $validated)
+                ? $validated['size_specification']
+                : $inventory->size_specification,
             'unit' => $validated['unit'],
             'inventory_batch_category_id' => array_key_exists('inventory_batch_category_id', $validated)
                 ? $validated['inventory_batch_category_id']
@@ -118,7 +121,6 @@ class InventoryController extends Controller
             'selling_price' => $validated['selling_price'] ?? null,
             'reorder_level' => $validated['reorder_level'] ?? 10,
             'description' => $validated['description'] ?? null,
-            'status' => $validated['status'] ?? $inventory->status,
         ]);
 
         if ($request->hasFile('image')) {
@@ -145,14 +147,45 @@ class InventoryController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    public function deactivate($id)
     {
+        $this->authorizeAdministrator();
+
         $inventory = Inventory::findOrFail($id);
-        $inventory->status = 'inactive';
-        $inventory->save();
+        $inventory->update(['status' => Inventory::STATUS_INACTIVE]);
 
         return response()->json([
             'message' => 'Inventory item deactivated successfully.',
+            'inventory' => $inventory,
         ]);
+    }
+
+    public function reactivate($id)
+    {
+        $this->authorizeAdministrator();
+
+        $inventory = Inventory::findOrFail($id);
+        $inventory->update(['status' => Inventory::STATUS_ACTIVE]);
+
+        return response()->json([
+            'message' => 'Inventory item reactivated successfully.',
+            'inventory' => $inventory,
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $this->authorizeAdministrator();
+
+        Inventory::findOrFail($id)->delete();
+
+        return response()->json([
+            'message' => 'Inventory item deleted successfully.',
+        ]);
+    }
+
+    private function authorizeAdministrator(): void
+    {
+        abort_unless(AdministratorAccess::allows(auth()->user()), 403);
     }
 }

@@ -104,7 +104,11 @@ deleted or stripped of its administrator role through employee management.
 
 The permission catalog gates Employee, Role, and Inventory management.
 Inventory batch categories are managed from Inventory → Batch categories and
-use the inventory view, create, update, and delete permissions. Inventory items
+use the inventory view, create, update, and delete permissions. Each batch
+category can hold uploaded attachment files (any type, up to 10 MB per file)
+through its Attachments dialog; listing and downloading reuse the inventory view
+permission, and uploading or deleting reuse the inventory update permission.
+Inventory items
 can optionally select an active batch category when created or edited; leaving
 the field empty means the item has no batch category. POS and Settings continue
 to use their existing access rules.
