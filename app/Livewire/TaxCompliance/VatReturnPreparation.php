@@ -5,6 +5,7 @@ namespace App\Livewire\TaxCompliance;
 use App\Models\PosVatRecord;
 use App\Services\RecordedVatSummary;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -55,24 +56,47 @@ class VatReturnPreparation extends Component
     {
         $this->authorizePermission();
         $summary = $this->summary();
+        $inputVatRecords = $this->inputVatRecords();
         $generatedAt = CarbonImmutable::now('Asia/Manila');
         $year = $this->selectedYear;
         $quarter = $this->selectedQuarter;
 
-        return response()->streamDownload(function () use ($summary, $generatedAt, $year, $quarter): void {
+        return response()->streamDownload(function () use ($summary, $inputVatRecords, $generatedAt, $year, $quarter): void {
             $output = fopen('php://output', 'w');
             fputcsv($output, ['Company', 'Fabellion Construction and Development Corp.']);
             fputcsv($output, ['Reporting period', 'Q'.$quarter.' '.$year]);
             fputcsv($output, ['Taxable sales', $summary['taxable_sales']]);
             fputcsv($output, ['Recorded output VAT', $summary['output_vat']]);
             fputcsv($output, ['VAT-inclusive total', $summary['total_sales']]);
-            fputcsv($output, ['Input-VAT capture status', 'not captured']);
+            fputcsv($output, ['Input-VAT capture status', $summary['input_vat_status']]);
+            fputcsv($output, ['Reworking cost total (reworking cost records)', $summary['input_vat_reworking_cost']]);
+            fputcsv($output, ['Input VAT (reworking cost records)', $summary['input_vat']]);
             fputcsv($output, ['Deductions applied', $summary['deductions_applied']]);
-            fputcsv($output, ['POS-only VAT payable estimate', $summary['vat_payable_estimate']]);
+            fputcsv($output, ['POS-only VAT payable estimate (Net VAT payable)', $summary['vat_payable_estimate']]);
             fputcsv($output, ['Reporting timezone', 'Asia/Manila']);
             fputcsv($output, ['Generated at', $generatedAt->format('Y-m-d H:i:s P')]);
             fputcsv($output, ['Scope', 'Recorded POS sales only']);
             fputcsv($output, ['Status', 'Preparation aid only; not an official Form 2550Q, complete official return, or submitted filing']);
+
+            if ($inputVatRecords->isNotEmpty()) {
+                fputcsv($output, []);
+                fputcsv($output, ['Input VAT records from reworking cost records']);
+                fputcsv($output, ['Batch number', 'Project', 'Record date (Asia/Manila)', 'Description', 'Reworking cost', 'Input VAT']);
+
+                foreach ($inputVatRecords as $record) {
+                    fputcsv($output, [
+                        $record['batch_number'],
+                        $record['project'],
+                        $record['date'],
+                        $record['description'],
+                        $record['total_reworking_cost'],
+                        $record['input_vat'],
+                    ]);
+                }
+
+                fputcsv($output, ['Input VAT total', $summary['input_vat']]);
+            }
+
             fclose($output);
         }, sprintf('vat-preparation-%d-Q%d.csv', $year, $quarter), ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
@@ -88,6 +112,7 @@ class VatReturnPreparation extends Component
         $selectedRecord = $this->selectedRecordId
             ? $records->firstWhere('id', $this->selectedRecordId)
             : null;
+        $inputVatRecords = $this->inputVatRecords();
 
         return view('livewire.tax-compliance.vat-return-preparation', [
             'years' => $this->availableYears(),
@@ -96,6 +121,7 @@ class VatReturnPreparation extends Component
             'summary' => $summary,
             'records' => $records,
             'selectedRecord' => $selectedRecord,
+            'inputVatRecords' => $inputVatRecords,
             'generatedAt' => CarbonImmutable::now('Asia/Manila'),
         ])->layout('layouts.app', ['title' => 'VAT Return Preparation']);
     }
@@ -110,6 +136,13 @@ class VatReturnPreparation extends Component
         [$start, $end] = $this->quarterDateRange();
 
         return app(RecordedVatSummary::class)->recordsForDateRange($start, $end);
+    }
+
+    private function inputVatRecords(): Collection
+    {
+        [$start, $end] = $this->quarterDateRange();
+
+        return app(RecordedVatSummary::class)->inputVatRecordsForDateRange($start, $end);
     }
 
     private function quarterDateRange(): array
@@ -131,6 +164,12 @@ class VatReturnPreparation extends Component
         $latestYear = $bounds->latest
             ? CarbonImmutable::parse($bounds->latest, 'UTC')->setTimezone('Asia/Manila')->year
             : $nowYear;
+        $inputVatBounds = app(RecordedVatSummary::class)->inputVatDateBounds();
+
+        if ($inputVatBounds !== null) {
+            $earliestYear = min($earliestYear, CarbonImmutable::parse($inputVatBounds[0], 'Asia/Manila')->year);
+            $latestYear = max($latestYear, CarbonImmutable::parse($inputVatBounds[1], 'Asia/Manila')->year);
+        }
 
         return array_reverse(range(min($earliestYear, $nowYear - 10), max($latestYear, $nowYear)));
     }

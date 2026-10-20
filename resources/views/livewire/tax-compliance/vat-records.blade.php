@@ -4,15 +4,15 @@
     <header class="vat-page-heading">
         <div>
             <h1 id="vat-records-heading">VAT Records</h1>
-            <p class="page-subtitle">Recorded POS sales only · completion dates shown in Asia/Manila.</p>
+            <p class="page-subtitle">Recorded POS sales and reworking-cost input VAT · dates shown in Asia/Manila.</p>
         </div>
-        <span class="vat-rate-badge">Standard-rated sales · 12% VAT</span>
+        <span class="vat-rate-badge">POS output VAT · recorded input VAT</span>
     </header>
 
-    <div class="vat-record-filters" aria-label="Filter recorded POS VAT records">
+    <div class="vat-record-filters" aria-label="Filter recorded VAT records">
         <label>
-            <span>Search transaction number</span>
-            <input type="search" wire:model.live.debounce.250ms="search" placeholder="Search transaction number">
+            <span>Search transaction, batch, or project</span>
+            <input type="search" wire:model.live.debounce.250ms="search" placeholder="Search transaction or batch">
         </label>
         <label>
             <span>From (Manila date)</span>
@@ -63,6 +63,51 @@
             </table>
         </div>
         {{ $records->links() }}
+    </section>
+
+    <section class="vat-record-card" aria-labelledby="vat-input-record-table-heading">
+        <header>
+            <div>
+                <h2 id="vat-input-record-table-heading">Recorded input VAT</h2>
+                <p>Input VAT copied from saved Reworking Cost Records for the selected dates. One row represents one saved batch record.</p>
+            </div>
+            <span class="vat-record-count">{{ $inputVatSummary['record_count'] }} input VAT records</span>
+        </header>
+        <div class="vat-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Batch number</th>
+                        <th>Project</th>
+                        <th>Record date (Asia/Manila)</th>
+                        <th>Description</th>
+                        <th class="numeric">Reworking cost</th>
+                        <th class="numeric">Input VAT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($inputVatRecords as $record)
+                        <tr wire:key="vat-input-record-{{ $record['source_key'] }}">
+                            <td><strong>{{ $record['batch_number'] }}</strong></td>
+                            <td>{{ $record['project'] }}</td>
+                            <td>{{ $record['date'] }}</td>
+                            <td>{{ $record['description'] }}</td>
+                            <td class="numeric">{{ $money($record['total_reworking_cost']) }}</td>
+                            <td class="numeric"><strong>{{ $money($record['input_vat']) }}</strong></td>
+                        </tr>
+                    @empty
+                        <tr><td class="vat-empty" colspan="6">No recorded input VAT from reworking cost records for this period.</td></tr>
+                    @endforelse
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="4">Input VAT total</th>
+                        <th class="numeric">{{ $money($inputVatSummary['total_reworking_cost']) }}</th>
+                        <th class="numeric">{{ $money($inputVatSummary['input_vat']) }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </section>
 
     @if ($selectedRecord)

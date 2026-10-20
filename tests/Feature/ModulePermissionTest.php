@@ -91,6 +91,30 @@ test('inventory API separates view from create update and delete permissions', f
     $this->deleteJson(route('inventory.destroy', 1))->assertForbidden();
 });
 
+test('inventory lifecycle actions require the administrator role even with the delete permission', function () {
+    $item = Inventory::create([
+        'name' => 'Cement',
+        'category' => 'Building Materials',
+        'qty' => 5,
+        'unit' => 'bag',
+        'unit_cost' => 5,
+        'selling_price' => 8,
+        'reorder_level' => 2,
+    ]);
+    $this->actingAs(modulePermissionEmployee(['inventory.view', 'inventory.delete']));
+
+    Livewire::test(InventoryManagement::class)->call('deactivate', $item->id)->assertForbidden();
+    Livewire::test(InventoryManagement::class)->call('reactivate', $item->id)->assertForbidden();
+    Livewire::test(InventoryManagement::class)->call('delete', $item->id)->assertForbidden();
+
+    $this->patchJson(route('inventory.deactivate', $item))->assertForbidden();
+    $this->patchJson(route('inventory.reactivate', $item))->assertForbidden();
+    $this->deleteJson(route('inventory.destroy', $item))->assertForbidden();
+
+    expect($item->fresh()->status)->toBe('active')
+        ->and(Inventory::find($item->id))->not->toBeNull();
+});
+
 test('livewire business actions require their dedicated permissions', function () {
     $this->actingAs(modulePermissionEmployee(['inventory.view', 'pos.view', 'accounting.view', 'settings.view']));
 
@@ -199,7 +223,10 @@ test('view-only roles see module content without operation controls', function (
         ->assertDontSee('Add inventory item')
         ->assertDontSee('Receive stock')
         ->assertDontSee('Edit')
-        ->assertDontSee('Deactivate');
+        ->assertDontSee('Deactivate')
+        ->assertDontSee('Reactivate')
+        ->assertDontSee('Delete')
+        ->assertDontSee('Show deleted items');
 
     Livewire::test(PointOfSale::class)
         ->assertDontSee('Add to Sale')

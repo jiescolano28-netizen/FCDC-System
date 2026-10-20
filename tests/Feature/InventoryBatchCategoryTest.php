@@ -1,7 +1,7 @@
 <?php
 
-use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\BatchCategoryManagement;
+use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Models\Employee;
 use App\Models\Inventory;
@@ -25,6 +25,15 @@ function batchCategoryEmployee(array $permissions = ['inventory.view', 'inventor
 
     return grantEmployeeTestPermissions($employee, $permissions);
 }
+
+test('inventory management provides button links to add an item and manage batch categories', function () {
+    $this->actingAs(batchCategoryEmployee());
+
+    Livewire::test(InventoryManagement::class)
+        ->assertSee('Batch Categories')
+        ->assertSeeHtml('class="primary-link" href="'.route('inventory.batch-categories').'">Batch Categories</a>')
+        ->assertSeeHtml('class="primary-link" href="'.route('inventory.management.create').'">Add Inventory Item</a>');
+});
 
 test('batch categories support create, update, soft delete, listing and restore with audit users', function () {
     $employee = batchCategoryEmployee();
@@ -62,7 +71,6 @@ test('batch categories support create, update, soft delete, listing and restore 
         ->call('save')
         ->assertHasNoErrors()
         ->assertSee('Bulk materials');
-
 
     expect($category->fresh()->name)->toBe('Bulk materials')
         ->and($category->fresh()->created_by)->toBe($employee->id)

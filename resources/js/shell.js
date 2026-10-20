@@ -163,6 +163,41 @@ if (batchCategoryModal) {
     else document.addEventListener('livewire:init', registerBatchCategoryEvents, { once: true });
 }
 
+const batchCategoryAttachmentsModal = document.querySelector('#batch-category-attachments-modal');
+
+if (batchCategoryAttachmentsModal) {
+    const closeBatchCategoryAttachmentsModal = () => {
+        if (batchCategoryAttachmentsModal.open) batchCategoryAttachmentsModal.close();
+        const componentId = batchCategoryAttachmentsModal.closest('[wire\\:id]')?.getAttribute('wire:id');
+        if (componentId) window.Livewire.find(componentId).call('closeAttachments');
+    };
+
+    batchCategoryAttachmentsModal.querySelectorAll('[data-close-batch-category-attachments-modal]').forEach((button) => {
+        button.addEventListener('click', closeBatchCategoryAttachmentsModal);
+    });
+
+    batchCategoryAttachmentsModal.addEventListener('click', (event) => {
+        if (event.target === batchCategoryAttachmentsModal) closeBatchCategoryAttachmentsModal();
+    });
+
+    batchCategoryAttachmentsModal.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeBatchCategoryAttachmentsModal();
+    });
+
+    const registerBatchCategoryAttachmentEvents = () => {
+        window.Livewire.on('batch-category-attachments-modal-open', () => {
+            if (!batchCategoryAttachmentsModal.open) batchCategoryAttachmentsModal.showModal();
+        });
+        window.Livewire.on('batch-category-attachments-modal-close', () => {
+            if (batchCategoryAttachmentsModal.open) batchCategoryAttachmentsModal.close();
+        });
+    };
+
+    if (window.Livewire) registerBatchCategoryAttachmentEvents();
+    else document.addEventListener('livewire:init', registerBatchCategoryAttachmentEvents, { once: true });
+}
+
 
 document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-delete-employee]');

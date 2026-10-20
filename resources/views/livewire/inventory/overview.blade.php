@@ -33,7 +33,7 @@
                     <th>Material</th>
                     <th>Category</th>
                     <th>Batch category</th>
-                    <th>Quantity</th>
+                    <th>On-hand quantity</th>
                     <th>Unit cost</th>
                     <th>Selling price</th>
                     <th>Inventory value</th>
@@ -47,18 +47,16 @@
                         <td>{{ $item->name }}</td>
                         <td>{{ $item->category }}</td>
                         <td>{{ $item->batchCategory?->name ?? '—' }}</td>
-                        <td>{{ number_format((float) $item->qty, 2) }} {{ $item->unit }}</td>
+                        <td>
+                            <strong>{{ number_format((float) $item->qty, 0) }}</strong>
+                            <span class="muted">on hand</span><br>
+                            <span class="muted">Unit: {{ filled($item->unit) ? $item->unit : '—' }}</span>
+                        </td>
                         <td>{{ number_format((float) $item->unit_cost, 2) }}</td>
                         <td>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</td>
                         <td>{{ number_format($item->carrying_value_cents === null ? (float) $item->qty * (float) $item->unit_cost : $item->carrying_value_cents / 100, 2) }}</td>
                         <td>
-                            @if ((float) $item->qty <= 0)
-                                <span class="status empty">Out of stock</span>
-                            @elseif ((float) $item->qty <= (float) $item->reorder_level)
-                                <span class="status warning">Reorder</span>
-                            @else
-                                <span class="status">In stock</span>
-                            @endif
+                            <span class="{{ $item->stockStatusBadgeClass() }}">{{ $item->stockStatusLabel() }}</span>
                         </td>
                         <td>{{ $item->updated_at->format('M j, Y') }}</td>
                     </tr>

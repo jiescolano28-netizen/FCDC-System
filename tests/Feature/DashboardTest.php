@@ -53,7 +53,7 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
         'category' => 'Lumber',
         'qty' => 10,
         'unit_cost' => 5,
-        'reorder_level' => 2,
+        'reorder_level' => 8,
         'created_at' => now()->subDay(),
     ]);
     createDashboardInventory([
@@ -88,8 +88,9 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
     Livewire::test(DashboardPage::class)
         ->assertSee('4 tracked materials')
         ->assertSee('₱52.00')
-        ->assertSeeInOrder(['Low stock items', '1', 'Available items at or below reorder level'])
-        ->assertSee('Low stock alerts')
+        ->assertSeeInOrder(['Low stock items', '1', 'Items at or below low stock level'])
+        ->assertSee('Stock alerts')
+        ->assertSee('Pine board')
         ->assertSee('Cement bag')
         ->assertSee('Steel rod')
         ->assertSee('Tile')
@@ -110,7 +111,7 @@ test('dashboard shows useful empty states when inventory and low-stock matches a
         ->assertSee('0 tracked materials')
         ->assertSee('₱0.00')
         ->assertSee('No inventory materials have been added yet.')
-        ->assertSee('No low-stock items need reordering.')
+        ->assertSee('No low-stock items need attention.')
         ->assertSee('No inventory categories to chart yet.')
         ->assertSee('0');
 });

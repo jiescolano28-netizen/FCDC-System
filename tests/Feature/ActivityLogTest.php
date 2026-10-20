@@ -2,14 +2,16 @@
 
 use App\Livewire\ActivityLog\ActivityLogPage;
 use App\Livewire\Employees\EmployeeManagement;
+use App\Livewire\Roles\RoleManagement;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Support\EmployeeRoleAssignment;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 uses(RefreshDatabase::class);
@@ -52,12 +54,7 @@ test('activity log route and sidebar require the dedicated view permission', fun
 });
 
 test('inventory API changes create globally visible activity with safe field diffs', function () {
-    $employee = activityLogTestEmployee('inventory-auditor', [
-        'inventory.create',
-        'inventory.update',
-        'inventory.delete',
-        'activity-log.view',
-    ]);
+    $employee = grantEmployeeAdministratorRole(activityLogTestEmployee('inventory-auditor'));
     $this->actingAs($employee);
 
     $response = $this->postJson(route('inventory.store'), [
@@ -92,10 +89,13 @@ test('inventory API changes create globally visible activity with safe field dif
 
     $this->deleteJson(route('inventory.destroy', $inventoryId))
         ->assertOk()
-        ->assertJsonPath('message', 'Inventory item deactivated successfully.');
-    $deactivated = Activity::query()->where('subject_type', Inventory::class)
-        ->where('subject_id', $inventoryId)->where('event', 'updated')->orderByDesc('id')->firstOrFail();
-    expect($deactivated->properties['attributes']['status'])->toBe('inactive');
+        ->assertJsonPath('message', 'Inventory item deleted successfully.');
+    $deleted = Activity::query()->where('subject_type', Inventory::class)
+        ->where('subject_id', $inventoryId)->where('event', 'deleted')->firstOrFail();
+    expect($deleted->causer_id)->toBe($employee->id)
+        ->and($deleted->properties['old']['name'])->toBe('Washed gravel')
+        ->and(Inventory::find($inventoryId))->toBeNull()
+        ->and(Inventory::withTrashed()->findOrFail($inventoryId)->trashed())->toBeTrue();
 });
 
 test('employee changes exclude password values and role assignments record role diffs', function () {
@@ -135,7 +135,6 @@ test('employee changes exclude password values and role assignments record role 
     expect($assignment->properties['old']['roles'])->toBe([])
         ->and($assignment->properties['attributes']['roles'])->toBe([$role->name]);
 
-
     $employee->delete();
     Livewire::test(EmployeeManagement::class)
         ->call('restore', $employee->id)
@@ -156,9 +155,9 @@ test('role creation, permission updates and deletion are recorded', function () 
         'activity-log.view',
     ]);
     $this->actingAs($actor);
-    \Spatie\Permission\Models\Permission::findOrCreate('inventory.view', 'web');
+    Permission::findOrCreate('inventory.view', 'web');
 
-    Livewire::test(\App\Livewire\Roles\RoleManagement::class)
+    Livewire::test(RoleManagement::class)
         ->set('name', 'Audited inventory role')
         ->set('selectedPermissionNames', ['inventory.view'])
         ->call('save')
@@ -168,7 +167,7 @@ test('role creation, permission updates and deletion are recorded', function () 
     expect(Activity::query()->where('subject_type', Role::class)
         ->where('subject_id', $role->id)->where('description', 'Role created')->exists())->toBeTrue();
 
-    Livewire::test(\App\Livewire\Roles\RoleManagement::class)
+    Livewire::test(RoleManagement::class)
         ->set('editingId', $role->id)
         ->set('name', 'Audited stock role')
         ->set('selectedPermissionNames', [])
@@ -182,7 +181,7 @@ test('role creation, permission updates and deletion are recorded', function () 
         ->and($updated->properties['old']['permissions'])->toBe(['inventory.view'])
         ->and($updated->properties['attributes']['permissions'])->toBe([]);
 
-    Livewire::test(\App\Livewire\Roles\RoleManagement::class)
+    Livewire::test(RoleManagement::class)
         ->call('delete', $role->id)
         ->assertHasNoErrors();
 

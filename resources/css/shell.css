@@ -83,13 +83,16 @@
 .inventory-page label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; }
 .inventory-page input, .inventory-page select { width: 100%; padding: 9px; border: 1px solid #cbd5cb; border-radius: 6px; }
 .inventory-page button.primary { padding: 10px 14px; border: 0; border-radius: 6px; color: #fff; background: #1f5b2c; cursor: pointer; }
-.inventory-page a.primary-link { display: inline-block; padding: 10px 14px; border-radius: 6px; color: #fff; background: #1f5b2c; text-decoration: none; }
+.inventory-page a.primary-link { display: inline-flex; min-height: 40px; align-items: center; padding: 10px 14px; border-radius: 6px; color: #fff; background: #1f5b2c; font-size: 13px; font-weight: 600; text-decoration: none; }
 .inventory-page a.primary-link:hover { background: #245332; }
 .inventory-page a.primary-link:focus-visible { outline: 2px solid #1f5b2c; outline-offset: 3px; }
+.inventory-page a.secondary-link { display: inline-flex; min-height: 40px; align-items: center; padding: 9px 14px; border: 1px solid #cbd5cb; border-radius: 6px; color: var(--slate-700); background: #fff; font-size: 13px; font-weight: 600; text-decoration: none; }
+.inventory-page a.secondary-link:hover { border-color: var(--emerald-700); color: var(--emerald-800); background: var(--emerald-50); }
+.inventory-page a.secondary-link:focus-visible { outline: 2px solid var(--emerald-700); outline-offset: 2px; }
 .inventory-page button.secondary, .inventory-page button.danger { padding: 7px 10px; border: 1px solid #d3dcd3; border-radius: 6px; background: #fff; cursor: pointer; }
 .inventory-page button.danger { color: #b91c1c; }
 .inventory-page .inventory-row-actions { align-items: center; gap: 6px; flex-wrap: nowrap; }
-.inventory-page .inventory-row-actions a.secondary, .inventory-page .inventory-row-actions button.danger { display: inline-flex; min-width: 0; min-height: 36px; align-items: center; justify-content: center; padding: 6px 8px; border: 1px solid; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 650; line-height: 1.2; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.inventory-page .inventory-row-actions a.secondary, .inventory-page .inventory-row-actions button.secondary, .inventory-page .inventory-row-actions button.danger { display: inline-flex; min-width: 0; min-height: 36px; align-items: center; justify-content: center; padding: 6px 8px; border: 1px solid; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 650; line-height: 1.2; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .inventory-page .inventory-row-actions a.secondary { border-color: var(--emerald-900); color: #fff; background: var(--emerald-900); }
 .inventory-page .inventory-row-actions a.secondary:hover { border-color: var(--emerald-800); color: #fff; background: var(--emerald-800); }
 .inventory-page .inventory-row-actions button.danger { border-color: #d8958e; color: #9b3731; background: #fff5f4; }
@@ -122,7 +125,7 @@
     .inventory-page .receipt-table th, .inventory-page .receipt-table td { padding-inline: 12px; }
 }
 .inventory-page .status { display: inline-block; padding: 4px 8px; border-radius: 999px; color: #1f5b2c; background: #e3ede1; font-size: 12px; }
-.inventory-page .status.warning { color: #92400e; background: #fef3c7; }
+.inventory-page .status.warning, .inventory-page .status.low { color: #92400e; background: #fef3c7; }
 .inventory-page .status.empty { color: #b91c1c; background: #fee2e2; }
 .inventory-page .error { color: #b91c1c; font-size: 12px; }
 .inventory-page .muted { color: #666; }
@@ -163,9 +166,49 @@
 .inventory-page .inventory-advanced-filters { flex: 0 0 100%; padding-top: 14px; border-top: 1px solid #edf1ed; }
 .inventory-page .inventory-advanced-filters > div { width: min(100%, 260px); }
 .inventory-page .inventory-advanced-filters select { min-height: 40px; }
+.inventory-page .inventory-deleted-toggle { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e5e9e5; border-radius: 8px; color: var(--slate-700); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.inventory-page .inventory-deleted-toggle input { margin: 0; }
 
 @media (max-width: 520px) {
     .inventory-page .inventory-filter-toggle { width: 100%; }
+}
+
+.inventory-page .reworking-cost-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.inventory-page .reworking-cost-stat { display: grid; gap: 5px; margin: 0; padding: 16px 18px; }
+.inventory-page .reworking-cost-stat-label { color: var(--slate-500); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.inventory-page .reworking-cost-stat-value { color: var(--slate-900); font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25; overflow-wrap: anywhere; }
+.inventory-page .reworking-cost-stat-note { color: var(--slate-400); font-size: 11px; line-height: 1.4; }
+.inventory-page .reworking-cost-flash { margin: 0 0 14px; padding: 11px 14px; border: 1px solid #bcd6b8; border-radius: 8px; color: var(--emerald-800); background: #f2f8f1; font-size: 13px; }
+.inventory-page .reworking-cost-table { min-width: 1040px; }
+.inventory-page .reworking-cost-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.inventory-page .reworking-cost-description { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-page .reworking-cost-attachment { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.inventory-page .reworking-cost-file-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 24px; padding: 0 6px; border-radius: 5px; color: #9b3731; background: #fff5f4; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.inventory-page .reworking-cost-file-name { max-width: 150px; overflow: hidden; color: var(--slate-600); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-page .reworking-cost-no-file { color: var(--slate-400); font-size: 12px; }
+.inventory-page .reworking-cost-attachment a.secondary-link,
+.inventory-page .reworking-cost-existing-file a.secondary-link { min-height: 28px; padding: 4px 9px; border-radius: 6px; font-size: 11px; line-height: 1.2; }
+.inventory-page .reworking-cost-modal { width: min(720px, calc(100vw - 32px)); max-height: min(92vh, 860px); }
+.inventory-page .reworking-cost-form .inventory-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.inventory-page .reworking-cost-field-wide { grid-column: 1 / -1; }
+.inventory-page .reworking-cost-hint { display: block; color: var(--slate-500); font-size: 11px; line-height: 1.45; }
+.inventory-page .reworking-cost-form-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; grid-column: 1 / -1; margin: 0; padding: 10px 12px; border: 1px solid #e7eee7; border-radius: 7px; color: var(--slate-700); background: #f8faf8; font-size: 12px; }
+.inventory-page .reworking-cost-form-total strong { color: var(--emerald-800); font-size: 14px; font-variant-numeric: tabular-nums; }
+.inventory-page .reworking-cost-existing-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; padding: 8px 10px; border: 1px solid #e7eee7; border-radius: 7px; background: #fbfdfb; font-size: 12px; }
+.inventory-page .reworking-cost-existing-file .secondary { min-height: 30px; padding: 4px 8px; font-size: 11px; }
+.inventory-page .reworking-cost-empty { display: grid; gap: 4px; padding: 34px 16px; text-align: center; white-space: normal; }
+.inventory-page .reworking-cost-empty strong { color: var(--slate-700); font-size: 14px; }
+.inventory-page .reworking-cost-empty span { color: var(--slate-500); font-size: 12px; }
+
+@media (max-width: 1000px) {
+    .inventory-page .reworking-cost-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+    .inventory-page .reworking-cost-summary { grid-template-columns: minmax(0, 1fr); }
+    .inventory-page .reworking-cost-form .inventory-form-fields { grid-template-columns: minmax(0, 1fr); }
+    .inventory-page .reworking-cost-field-wide,
+    .inventory-page .reworking-cost-form-total { grid-column: auto; }
 }
 
 
@@ -328,6 +371,10 @@
 .dashboard-stock-badge { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; color: #92400e; background: #fef3c7; font-size: 11px; }
 .dashboard-empty { margin: 0; padding: 12px 0; color: var(--slate-400); font-size: 13px; }
 .dashboard-category-card { margin-top: 16px; }
+
+@media (max-width: 1280px) {
+    .dashboard-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 @media (max-width: 1000px) {
     .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -2,12 +2,13 @@
     <div class="columns" style="justify-content:space-between; margin-bottom:18px;">
         <div>
             <h1>Inventory management</h1>
-            <p class="muted">Persisted stock records. Unit cost and customer selling price are separate values.</p>
+            <p class="muted">Persisted stock records. Quantity is the on-hand stock count; Unit is the material label (e.g., pc, bag, kg). Inventory value is calculated from on-hand quantity × unit cost.</p>
         </div>
         <div class="actions">
             <span>{{ $items->count() }} matching item(s)</span>
+            <a class="primary-link" href="{{ route('inventory.batch-categories') }}">Batch Categories</a>
             @can('inventory.create')
-                <a class="primary" href="{{ route('inventory.management.create') }}">Add Inventory Item</a>
+                <a class="primary-link" href="{{ route('inventory.management.create') }}">Add Inventory Item</a>
             @endcan
         </div>
     </div>
@@ -15,7 +16,7 @@
     <div class="toolbar panel inventory-toolbar">
         <div class="inventory-search">
             <label for="search">Search inventory</label>
-            <input id="search" type="search" placeholder="Code, name or category" wire:model.live.debounce.300ms="search">
+            <input id="search" type="search" placeholder="Code, name, category, size or specification" wire:model.live.debounce.300ms="search">
         </div>
         <button
             class="secondary inventory-filter-toggle"
@@ -42,78 +43,89 @@
                 </div>
             </div>
         @endif
+        @if ($isAdministrator)
+            <label class="inventory-deleted-toggle">
+                <input type="checkbox" wire:model.live="showDeleted">
+                Show deleted items
+            </label>
+        @endif
     </div>
 
     <div class="panel table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>Code / material</th>
+                    <th>Reference Code</th>
                     <th>Category</th>
-                    <th>Batch category</th>
+                    <th>Size / Specification</th>
+                    <th>Batch</th>
                     <th>Quantity</th>
-                    <th>Unit cost</th>
-                    <th>Selling price</th>
-                    <th>Lifecycle</th>
-                    <th>Stock status</th>
-                    <th>Sale status</th>
-                    <th>History</th>
-                    @if (auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete'))
-                        <th>Actions</th>
-                    @endif
+                    <th>Unit</th>
+                    <th>Unit Cost Price</th>
+                    <th>Selling Price</th>
+                    <th>Inventory Value</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($items as $item)
                     <tr wire:key="inventory-{{ $item->id }}">
-                        <td><a href="{{ route('inventory.management.show', $item->id) }}"><strong>{{ $item->code }}</strong></a><br>{{ $item->name }}</td>
+                        <td>
+                            @if ($item->trashed())
+                                <strong>{{ $item->code }}</strong><br>{{ $item->name }}
+                                <br><span class="status empty">Deleted</span>
+                            @else
+                                <a href="{{ route('inventory.management.show', $item->id) }}"><strong>{{ $item->code }}</strong></a><br>{{ $item->name }}
+                                @if ($item->status !== 'active')
+                                    <br><span class="status empty">Inactive</span>
+                                @endif
+                            @endif
+                        </td>
                         <td>{{ $item->category }}</td>
+                        <td>{{ filled($item->size_specification) ? $item->size_specification : '—' }}</td>
                         <td>{{ $item->batchCategory?->name ?? '—' }}</td>
-                        <td>{{ $item->qty }} {{ $item->unit }}</td>
+                        <td><strong>{{ number_format((float) $item->qty, 0) }}</strong></td>
+                        <td>{{ filled($item->unit) ? $item->unit : '—' }}</td>
                         <td>{{ number_format((float) $item->unit_cost, 2) }}</td>
-                        <td>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</td>
-                        <td><span class="status {{ $item->status === 'active' ? '' : 'empty' }}">{{ ucfirst($item->status) }}</span></td>
                         <td>
-                            @if ((float) $item->qty <= 0)
-                                <span class="status empty">Out of stock</span>
-                            @elseif ((float) $item->qty <= (float) $item->reorder_level)
-                                <span class="status warning">Reorder</span>
+                            @if ($item->selling_price === null)
+                                <span class="muted">Not priced</span>
                             @else
-                                <span class="status">In stock</span>
+                                {{ number_format((float) $item->selling_price, 2) }}
                             @endif
                         </td>
+                        <td><strong>{{ number_format((float) $item->qty * (float) $item->unit_cost, 2) }}</strong></td>
                         <td>
-                            @if ($item->status !== 'active')
-                                <span class="status empty">Inactive</span>
-                            @elseif ($item->selling_price === null)
-                                <span class="status warning">Not priced · unavailable</span>
-                            @else
-                                <span class="status">Sale price set</span>
-                            @endif
-                        </td>
-                        <td><button class="secondary" type="button" wire:click="showHistory({{ $item->id }})">{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}</button></td>
-                        @if (auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete'))
-                            <td>
-                                <div class="actions inventory-row-actions">
+                            <div class="actions inventory-row-actions">
+                                @if ($item->trashed())
+                                    <button class="secondary" type="button" wire:click="showHistory({{ $item->id }})">{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}</button>
+                                    @if ($isAdministrator)
+                                        <button class="secondary" type="button" wire:click="restore({{ $item->id }})" wire:confirm="Restore {{ $item->name }} to the inventory list?">Restore</button>
+                                    @endif
+                                @else
+                                    <button class="secondary" type="button" wire:click="showHistory({{ $item->id }})">{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}</button>
                                     @can('inventory.update')
                                         <a class="secondary" href="{{ route('inventory.management.edit', $item->id) }}">Edit</a>
                                     @endcan
-                                    @can('inventory.delete')
+                                    @if ($isAdministrator)
                                         @if ($item->status === 'active')
-                                            <button class="danger" type="button" wire:click="deactivate({{ $item->id }})" wire:confirm="Deactivate {{ $item->name }}?">Deactivate</button>
+                                            <button class="danger" type="button" wire:click="deactivate({{ $item->id }})" wire:confirm="Deactivate {{ $item->name }}? You can reactivate it later.">Deactivate</button>
+                                        @else
+                                            <button class="secondary" type="button" wire:click="reactivate({{ $item->id }})" wire:confirm="Reactivate {{ $item->name }}?">Reactivate</button>
                                         @endif
-                                    @endcan
-                                </div>
-                            </td>
-                        @endif
+                                        <button class="danger" type="button" wire:click="delete({{ $item->id }})" wire:confirm="Delete {{ $item->name }}? It will be removed from the inventory list; its stock history is kept and it can be restored.">Delete</button>
+                                    @endif
+                                @endif
+                            </div>
+                        </td>
                     </tr>
                     @if ($historyItemId === $item->id)
                         <tr wire:key="inventory-history-{{ $item->id }}">
-                            <td colspan="{{ auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete') ? 11 : 10 }}">
+                            <td colspan="10">
                                 <strong>Stock history · {{ $item->code }}</strong>
                                 @forelse ($item->stockMovements as $movement)
                                     <div>
-                                        {{ $movement->type === 'adjustment' ? 'Stock adjustment' : ucfirst(str_replace('_', ' ', $movement->type)) }} · {{ number_format((float) $movement->quantity, 2) }} {{ $item->unit }} · {{ ucfirst(str_replace('_', ' ', $movement->reason_category)) }} · effective {{ $movement->effective_date->format('Y-m-d') }} · posted {{ $movement->posted_at->format('Y-m-d H:i') }} · by {{ $movement->poster?->username ?? 'System migration' }}@if ($movement->reference) · ref {{ $movement->reference }}@endif @if ($movement->value_cents !== null) · value PHP {{ number_format(abs($movement->value_cents) / 100, 2) }} · carrying PHP {{ number_format($movement->carrying_value_after_cents / 100, 2) }} · journal {{ $movement->accountingJournal?->reference }}@endif @if ($movement->demolition_project_id) · project #{{ $movement->demolition_project_id }} · recovery #{{ $movement->recovered_material_id }}@endif @if ($movement->notes) · {{ $movement->notes }}@endif
+                                        {{ $movement->type === 'adjustment' ? 'Stock adjustment' : ucfirst(str_replace('_', ' ', $movement->type)) }} · {{ number_format((float) $movement->quantity, 0) }} · Unit: {{ filled($item->unit) ? $item->unit : '—' }} · {{ ucfirst(str_replace('_', ' ', $movement->reason_category)) }} · effective {{ $movement->effective_date->format('Y-m-d') }} · posted {{ $movement->posted_at->format('Y-m-d H:i') }} · by {{ $movement->poster?->username ?? 'System migration' }}@if ($movement->reference) · ref {{ $movement->reference }}@endif @if ($movement->value_cents !== null) · value PHP {{ number_format(abs($movement->value_cents) / 100, 2) }} · carrying PHP {{ number_format($movement->carrying_value_after_cents / 100, 2) }} · journal {{ $movement->accountingJournal?->reference }}@endif @if ($movement->demolition_project_id) · project #{{ $movement->demolition_project_id }} · recovery #{{ $movement->recovered_material_id }}@endif @if ($movement->notes) · {{ $movement->notes }}@endif
                                         @if ($movement->correction_of_movement_id) · corrects movement #{{ $movement->correction_of_movement_id }} @endif
                                         @if ($movement->correction_reason) · reason: {{ $movement->correction_reason }} @endif
                                         @if ($movement->reversal)
@@ -158,7 +170,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="{{ auth()->user()->can('inventory.update') || auth()->user()->can('inventory.delete') ? 10 : 9 }}" class="muted">No inventory items match these filters.</td></tr>
+                    <tr><td colspan="10" class="muted">No inventory items match these filters.</td></tr>
                 @endforelse
             </tbody>
         </table>

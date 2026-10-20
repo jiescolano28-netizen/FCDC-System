@@ -9,7 +9,7 @@
         <span class="vat-rate-badge">POS-only preparation</span>
     </header>
 
-    <p class="temporary-notice" role="note">Preparation aid only: this is not an official Form 2550Q, not a complete official return and not a submitted filing. It does not map official form fields or submit anything to BIR. Input VAT is not captured here; that does not mean the company has no actual input VAT. Additional completed POS sales can change these live figures.</p>
+    <p class="temporary-notice" role="note">Preparation aid only: this is not an official Form 2550Q, not a complete official return and not a submitted filing. It does not map official form fields or submit anything to BIR. @if ($summary['input_vat_record_count'] > 0) Input VAT is taken from saved Reworking Cost Records; this still does not mean every company input VAT is captured. @else Input VAT is not captured here; that does not mean the company has no actual input VAT. @endif Additional completed POS sales can change these live figures.</p>
 
     <div class="vat-return-controls vat-return-screen-only">
         <div class="vat-return-period-controls">
@@ -54,13 +54,22 @@
                         <tr><td>Taxable sales</td><td class="numeric">{{ $money($summary['taxable_sales']) }}</td></tr>
                         <tr><td>Recorded output VAT</td><td class="numeric">{{ $money($summary['output_vat']) }}</td></tr>
                         <tr><td>VAT-inclusive total</td><td class="numeric">{{ $money($summary['total_sales']) }}</td></tr>
-                        <tr><td>Input VAT not captured</td><td class="numeric">Not captured</td></tr>
+                        <tr><td>Reworking cost total (reworking cost records)</td><td class="numeric">{{ $money($summary['input_vat_reworking_cost']) }}</td></tr>
+                        @if ($summary['input_vat_record_count'] > 0)
+                            <tr><td>Input VAT on reworking cost records</td><td class="numeric">{{ $money($summary['input_vat']) }}</td></tr>
+                        @else
+                            <tr><td>Input VAT not captured</td><td class="numeric">Not captured</td></tr>
+                        @endif
                         <tr><td>Deductions applied</td><td class="numeric">{{ $money($summary['deductions_applied']) }}</td></tr>
-                        <tr><td><strong>POS-only VAT payable estimate</strong></td><td class="numeric"><strong>{{ $money($summary['vat_payable_estimate']) }}</strong></td></tr>
+                        <tr><td><strong>POS-only VAT payable estimate (Net VAT payable)</strong></td><td class="numeric"><strong>{{ $money($summary['vat_payable_estimate']) }}</strong></td></tr>
                     </tbody>
                 </table>
             </div>
-            <p class="vat-return-note">Output VAT sums saved transaction amounts, preserving checkout-level rounding. Input VAT is unavailable in this worksheet; deductions are shown as PHP 0.00 and do not establish that the company incurred no input VAT. The estimate covers recorded POS sales only and is not a determination of final VAT liability.</p>
+            @if ($summary['input_vat_record_count'] > 0)
+                <p class="vat-return-note">Output VAT sums saved transaction amounts, preserving checkout-level rounding. Input VAT of {{ $money($summary['input_vat']) }} is copied from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s) for {{ $summary['input_vat_batch_count'] }} batch(es) dated within this quarter. The payable estimate deducts that recorded input VAT from recorded output VAT and is not a determination of final VAT liability.</p>
+            @else
+                <p class="vat-return-note">Output VAT sums saved transaction amounts, preserving checkout-level rounding. Input VAT is unavailable in this worksheet; deductions are shown as PHP 0.00 and do not establish that the company incurred no input VAT. The estimate covers recorded POS sales only and is not a determination of final VAT liability.</p>
+            @endif
             @if ($summary['record_count'] === 0)
                 <p class="temporary-notice" role="status">No recorded POS sales for {{ $periodLabel }}. All totals are PHP 0.00.</p>
             @endif
@@ -92,6 +101,42 @@
                         <tr><td class="vat-empty" colspan="6">No recorded POS sales.</td></tr>
                     @endforelse
                 </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="vat-record-card vat-return-records vat-return-screen-only" aria-labelledby="vat-return-input-records-heading">
+        <header>
+            <div>
+                <h2 id="vat-return-input-records-heading">{{ $periodLabel }} supporting input VAT records</h2>
+                <p>Saved Reworking Cost Records for this calendar quarter. Review is read-only.</p>
+            </div>
+            <span class="vat-record-count">{{ $summary['input_vat_record_count'] }} input VAT records</span>
+        </header>
+        <div class="vat-table-wrap">
+            <table>
+                <thead><tr><th>Batch number</th><th>Project</th><th>Record date (Asia/Manila)</th><th>Description</th><th class="numeric">Reworking cost</th><th class="numeric">Input VAT</th></tr></thead>
+                <tbody>
+                    @forelse ($inputVatRecords as $record)
+                        <tr wire:key="vat-preparation-input-{{ $record['source_key'] }}">
+                            <td><strong>{{ $record['batch_number'] }}</strong></td>
+                            <td>{{ $record['project'] }}</td>
+                            <td>{{ $record['date'] }}</td>
+                            <td>{{ $record['description'] }}</td>
+                            <td class="numeric">{{ $money($record['total_reworking_cost']) }}</td>
+                            <td class="numeric"><strong>{{ $money($record['input_vat']) }}</strong></td>
+                        </tr>
+                    @empty
+                        <tr><td class="vat-empty" colspan="6">No recorded input VAT from reworking cost records for this period.</td></tr>
+                    @endforelse
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="4">Input VAT total</th>
+                        <th class="numeric">{{ $money($summary['input_vat_reworking_cost']) }}</th>
+                        <th class="numeric">{{ $money($summary['input_vat']) }}</th>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </section>

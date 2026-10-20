@@ -20,10 +20,11 @@
             <div><dt>Code</dt><dd>{{ $item->code }}</dd></div>
             <div><dt>Category</dt><dd>{{ $item->category }}</dd></div>
             <div><dt>Batch category</dt><dd>{{ $item->batchCategory?->name ?? '—' }}</dd></div>
-            <div><dt>Quantity</dt><dd>{{ number_format((float) $item->qty, 2) }} {{ $item->unit }}</dd></div>
+            <div><dt>Quantity (on hand)</dt><dd>{{ number_format((float) $item->qty, 0) }}</dd></div>
+            <div><dt>Unit label</dt><dd>{{ filled($item->unit) ? $item->unit : '—' }}</dd></div>
             <div><dt>Unit cost (PHP)</dt><dd>{{ number_format((float) $item->unit_cost, 2) }}</dd></div>
             <div><dt>Selling price (PHP)</dt><dd>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</dd></div>
-            <div><dt>Reorder level</dt><dd>{{ number_format((float) $item->reorder_level, 2) }} {{ $item->unit }}</dd></div>
+            <div><dt>Low stock level</dt><dd>{{ number_format((float) $item->reorder_level, 0) }}</dd></div>
             <div><dt>Status</dt><dd>{{ ucfirst($item->status) }}</dd></div>
             <div><dt>Description</dt><dd>{{ $item->description ?: '—' }}</dd></div>
         </dl>
@@ -54,7 +55,7 @@
                         <td class="receipt-date">{{ $receipt->effective_date->format('Y-m-d') }}</td>
                         <td>{{ $receipt->reference ?: '—' }}</td>
                         <td>{{ ucfirst(str_replace('_', ' ', $receipt->reason_category)) }}</td>
-                        <td class="numeric">{{ number_format((float) $receipt->quantity, 2) }} {{ $item->unit }}</td>
+                        <td class="numeric">{{ number_format((float) $receipt->quantity, 0) }} {{ $item->unit }}</td>
                         <td class="numeric">{{ $receipt->value_cents === null ? '—' : number_format($receipt->value_cents / 100, 2) }}</td>
                         <td>{{ $receipt->poster?->username ?? 'System migration' }}</td>
                     </tr>

@@ -7,6 +7,11 @@ use Spatie\Permission\Models\Role;
 
 class AdministratorAccess
 {
+    public static function allows(?Employee $employee): bool
+    {
+        return $employee?->hasRole(RolePermissionCatalog::ADMIN_ROLE) === true;
+    }
+
     public static function lockRole(): void
     {
         Role::where('name', RolePermissionCatalog::ADMIN_ROLE)

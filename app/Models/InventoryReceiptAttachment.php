@@ -27,7 +27,7 @@ class InventoryReceiptAttachment extends Model
 
     public function inventory(): BelongsTo
     {
-        return $this->belongsTo(Inventory::class);
+        return $this->belongsTo(Inventory::class)->withTrashed();
     }
 
     public function uploader(): BelongsTo

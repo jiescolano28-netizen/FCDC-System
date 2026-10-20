@@ -78,7 +78,7 @@ The authenticated `/profile` Livewire page is available to every signed-in emplo
 
 ## Dashboard
 
-The authenticated `/dashboard` uses the `DashboardPage` Livewire component. Inventory count, value (quantity × unit cost), category totals, stock alerts, and recently added materials come from persisted inventory. Low-stock alerts include only items with positive quantity at or below reorder level; out-of-stock items have zero or negative quantity.
+The authenticated `/dashboard` uses the `DashboardPage` Livewire component. Inventory count, value (quantity × unit cost), category totals, stock alerts, and recently added materials come from persisted inventory. Low-stock alerts include only items with positive quantity at or below their low stock level; out-of-stock items have zero or negative quantity.
 
 The dashboard shows the five newest inventory materials, ordered by creation time and then ID. Empty inventory and low-stock states are explicit. Demo sales, VAT and accounting totals, and payable or VAT-filing alerts are not shown on this dashboard.
 

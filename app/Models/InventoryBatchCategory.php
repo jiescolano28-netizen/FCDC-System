@@ -27,8 +27,14 @@ class InventoryBatchCategory extends Model
     {
         return $this->belongsTo(Employee::class, 'updated_by');
     }
+
     public function inventories(): HasMany
     {
         return $this->hasMany(Inventory::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(InventoryBatchCategoryAttachment::class)->latest();
     }
 }

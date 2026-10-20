@@ -29,6 +29,7 @@ class SupplierPurchaseVatReclassificationLine extends Model
     {
         return $this->belongsTo(SupplierPurchaseLine::class, 'supplier_purchase_line_id');
     }
+
     public function disbursementLine(): BelongsTo
     {
         return $this->belongsTo(CashDisbursementLine::class, 'cash_disbursement_line_id');
@@ -36,7 +37,7 @@ class SupplierPurchaseVatReclassificationLine extends Model
 
     public function inventory(): BelongsTo
     {
-        return $this->belongsTo(Inventory::class);
+        return $this->belongsTo(Inventory::class)->withTrashed();
     }
 
     public function account(): BelongsTo
