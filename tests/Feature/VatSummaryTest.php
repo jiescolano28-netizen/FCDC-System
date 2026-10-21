@@ -131,3 +131,30 @@ test('empty period displays zero totals and explicitly reports no recorded POS s
         ->assertSee('Input VAT not captured')
         ->assertSee('₱0.00');
 });
+
+test('yearly summary and monthly and quarterly breakdowns reconcile with recorded sales', function () {
+    createVatSummaryRecord('YEAR-OCT', '2026-10-15 08:00:00', '180.05', '21.61', '201.66');
+    createVatSummaryRecord('YEAR-NOV', '2026-11-15 08:00:00', '100.00', '12.00', '112.00');
+    createVatSummaryRecord('YEAR-2025', '2025-12-31 15:00:00', '50.00', '6.00', '56.00');
+    $this->actingAs(createVatSummaryEmployee());
+
+    Livewire::test(VatSummary::class)
+        ->set('periodType', 'yearly')
+        ->set('selectedYear', 2026)
+        ->assertSee('Year 2026')
+        ->assertSee('₱280.05')
+        ->assertSee('₱33.61')
+        ->assertDontSee('₱50.00');
+
+    $monthly = app(RecordedVatSummary::class)->monthlyBreakdown('2026-10-01', '2026-12-31');
+    expect($monthly)->toHaveCount(3)
+        ->and($monthly[0]['label'])->toBe('October 2026')
+        ->and($monthly[0]['summary']['taxable_sales'])->toBe('180.05')
+        ->and($monthly[1]['summary']['taxable_sales'])->toBe('100.00')
+        ->and($monthly[2]['summary']['taxable_sales'])->toBe('0.00');
+
+    $quarters = app(RecordedVatSummary::class)->quarterlyBreakdown('2026-01-01', '2026-12-31');
+    expect($quarters)->toHaveCount(4)
+        ->and($quarters[3]['label'])->toBe('Q4 2026')
+        ->and($quarters[3]['summary']['taxable_sales'])->toBe('280.05');
+});

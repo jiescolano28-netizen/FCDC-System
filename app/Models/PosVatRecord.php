@@ -10,7 +10,11 @@ class PosVatRecord extends Model
 {
     protected $fillable = [
         'pos_transaction_id',
+        'tax_classification',
         'taxable_sales',
+        'zero_rated_sales',
+        'exempt_sales',
+        'non_vat_sales',
         'vat_rate',
         'output_vat',
         'total',
@@ -19,6 +23,9 @@ class PosVatRecord extends Model
 
     protected $casts = [
         'taxable_sales' => 'decimal:2',
+        'zero_rated_sales' => 'decimal:2',
+        'exempt_sales' => 'decimal:2',
+        'non_vat_sales' => 'decimal:2',
         'vat_rate' => 'decimal:4',
         'output_vat' => 'decimal:2',
         'total' => 'decimal:2',

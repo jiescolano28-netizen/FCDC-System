@@ -2,9 +2,11 @@
 
 namespace App\Livewire\TaxCompliance;
 
+use App\Models\PosTransaction;
 use App\Models\PosVatRecord;
 use App\Services\RecordedInputVat;
 use App\Services\RecordedVatSummary;
+use App\Support\TaxClassification;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -14,6 +16,12 @@ class VatRecords extends Component
     use WithPagination;
 
     public string $search = '';
+
+    public string $transactionNumber = '';
+
+    public string $taxClassification = '';
+
+    public string $transactionStatus = '';
 
     public string $startDate = '';
 
@@ -32,6 +40,21 @@ class VatRecords extends Component
         $this->resetPage();
     }
 
+    public function updatedTransactionNumber(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedTaxClassification(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedTransactionStatus(): void
+    {
+        $this->resetPage();
+    }
+
     public function updatedStartDate(): void
     {
         $this->resetPage();
@@ -39,6 +62,16 @@ class VatRecords extends Component
 
     public function updatedEndDate(): void
     {
+        $this->resetPage();
+    }
+
+    public function clearFilters(): void
+    {
+        $this->search = '';
+        $this->transactionNumber = '';
+        $this->taxClassification = '';
+        $this->transactionStatus = '';
+        $this->mount();
         $this->resetPage();
     }
 
@@ -59,11 +92,25 @@ class VatRecords extends Component
     {
         $this->authorizePermission();
         $search = mb_strtolower(trim($this->search));
+        $transactionNumber = mb_strtolower(trim($this->transactionNumber));
         $records = PosVatRecord::query()
             ->with('posTransaction.lines')
             ->when($search !== '', fn ($query) => $query->whereHas(
                 'posTransaction',
-                fn ($transaction) => $transaction->whereRaw('LOWER(transaction_number) LIKE ?', ['%'.$search.'%']),
+                fn ($transaction) => $transaction->where(
+                    fn ($transactionQuery) => $transactionQuery
+                        ->whereRaw('LOWER(transaction_number) LIKE ?', ['%'.$search.'%'])
+                        ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%'.$search.'%']),
+                ),
+            ))
+            ->when($transactionNumber !== '', fn ($query) => $query->whereHas(
+                'posTransaction',
+                fn ($transaction) => $transaction->whereRaw('LOWER(transaction_number) LIKE ?', ['%'.$transactionNumber.'%']),
+            ))
+            ->when($this->taxClassification !== '', fn ($query) => $query->where('tax_classification', $this->taxClassification))
+            ->when($this->transactionStatus !== '', fn ($query) => $query->whereHas(
+                'posTransaction',
+                fn ($transaction) => $transaction->where('status', $this->transactionStatus),
             ))
             ->when($this->startDate !== '', fn ($query) => $query->where(
                 'completed_at',
@@ -92,7 +139,31 @@ class VatRecords extends Component
                 : null,
             'inputVatRecords' => $inputVatRecords,
             'inputVatSummary' => $inputVatSummary,
+            'taxClassifications' => $this->taxClassificationOptions(),
+            'transactionStatuses' => $this->transactionStatusOptions(),
         ])->layout('layouts.app', ['title' => 'VAT Records']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function taxClassificationOptions(): array
+    {
+        return TaxClassification::options() + [TaxClassification::MIXED => 'Mixed'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function transactionStatusOptions(): array
+    {
+        return PosTransaction::query()
+            ->select('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->mapWithKeys(fn (string $status): array => [$status => ucfirst($status)])
+            ->all();
     }
 
     /**

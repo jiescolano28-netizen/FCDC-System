@@ -64,19 +64,29 @@ class VatReturnPreparation extends Component
         return response()->streamDownload(function () use ($summary, $inputVatRecords, $generatedAt, $year, $quarter): void {
             $output = fopen('php://output', 'w');
             fputcsv($output, ['Company', 'Fabellion Construction and Development Corp.']);
+            fputcsv($output, ['Worksheet', 'BIR Form 2550Q quarterly VAT return preparation']);
             fputcsv($output, ['Reporting period', 'Q'.$quarter.' '.$year]);
+            fputcsv($output, ['Reporting timezone', 'Asia/Manila']);
+            fputcsv($output, ['Generated at', $generatedAt->format('Y-m-d H:i:s P')]);
+            fputcsv($output, ['Scope', 'Recorded POS sales only']);
+            fputcsv($output, ['Status', 'Preparation only; this worksheet does not submit the return to the BIR and is not an official Form 2550Q, complete official return, or submitted filing']);
+            fputcsv($output, []);
+            fputcsv($output, ['Part II - Sales and output VAT']);
             fputcsv($output, ['Taxable sales', $summary['taxable_sales']]);
+            fputcsv($output, ['Zero-rated sales', $summary['zero_rated_sales']]);
+            fputcsv($output, ['VAT-exempt sales', $summary['exempt_sales']]);
+            fputcsv($output, ['Non-VAT / outside scope sales', $summary['non_vat_sales']]);
             fputcsv($output, ['Recorded output VAT', $summary['output_vat']]);
             fputcsv($output, ['VAT-inclusive total', $summary['total_sales']]);
+            fputcsv($output, []);
+            fputcsv($output, ['Part III - Input VAT']);
             fputcsv($output, ['Input-VAT capture status', $summary['input_vat_status']]);
             fputcsv($output, ['Reworking cost total (reworking cost records)', $summary['input_vat_reworking_cost']]);
             fputcsv($output, ['Input VAT (reworking cost records)', $summary['input_vat']]);
             fputcsv($output, ['Deductions applied', $summary['deductions_applied']]);
+            fputcsv($output, []);
+            fputcsv($output, ['Part IV - Net VAT payable']);
             fputcsv($output, ['POS-only VAT payable estimate (Net VAT payable)', $summary['vat_payable_estimate']]);
-            fputcsv($output, ['Reporting timezone', 'Asia/Manila']);
-            fputcsv($output, ['Generated at', $generatedAt->format('Y-m-d H:i:s P')]);
-            fputcsv($output, ['Scope', 'Recorded POS sales only']);
-            fputcsv($output, ['Status', 'Preparation aid only; not an official Form 2550Q, complete official return, or submitted filing']);
 
             if ($inputVatRecords->isNotEmpty()) {
                 fputcsv($output, []);

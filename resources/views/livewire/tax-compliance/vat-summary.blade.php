@@ -3,90 +3,68 @@
     <header class="vat-page-heading">
         <div>
             <h1 id="vat-summary-heading">VAT Summary</h1>
-            <p class="page-subtitle">Recorded VAT summary for POS sales only. This is not the company’s final VAT liability or a filed return.</p>
+            <p class="page-subtitle">Recorded VAT totals for completed POS sales and recorded reworking-cost input VAT · Asia/Manila.</p>
         </div>
-        <span class="vat-rate-badge">POS-only coverage</span>
+        <span class="vat-rate-badge">POS-only · recorded input VAT</span>
     </header>
 
-    <p class="temporary-notice" role="note">Figures reconcile to saved VAT Records and use each source sale’s completed date in Asia/Manila. This summary does not include non-POS sales or purchase-based input VAT.</p>
+    <p class="temporary-notice" role="note">Figures reconcile to saved VAT Records and use each source sale’s completed date in Asia/Manila. This summary covers recorded POS sales only; it is not the company’s final VAT liability or a filed return.</p>
 
-    <div class="vat-summary-controls">
-        <label>
-            <span>Reporting period</span>
-            <select wire:model.live="periodType">
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-            </select>
-        </label>
-        <label>
-            <span>Year</span>
-            <select wire:model.live="selectedYear">
-                @foreach ($years as $year)
-                    <option value="{{ $year }}">{{ $year }}</option>
-                @endforeach
-            </select>
-        </label>
-        <label>
-            <span>{{ $periodType === 'quarterly' ? 'Quarter' : 'Month' }}</span>
-            <select wire:model.live="selectedPeriod">
-                @foreach ($periods as $number => $label)
-                    <option value="{{ $number }}">{{ $label }}</option>
-                @endforeach
-            </select>
-        </label>
-    </div>
-
-    <section class="dashboard-stats reports-stats vat-summary-stats" aria-label="{{ $periodLabel }} POS-only VAT totals">
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">Taxable sales</p>
-            <p class="dashboard-stat-value">{{ $money($summary['taxable_sales']) }}</p>
-        </article>
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">Output VAT</p>
-            <p class="dashboard-stat-value">{{ $money($summary['output_vat']) }}</p>
-        </article>
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">Total sales including VAT</p>
-            <p class="dashboard-stat-value">{{ $money($summary['total_sales']) }}</p>
-        </article>
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">Reworking cost total</p>
-            <p class="dashboard-stat-value">{{ $money($summary['input_vat_reworking_cost']) }}</p>
-        </article>
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">Input VAT</p>
-            <p class="dashboard-stat-value">{{ $money($summary['input_vat']) }}</p>
-        </article>
-        <article class="dashboard-card">
-            <p class="dashboard-stat-label">POS-only VAT payable estimate (net of input VAT)</p>
-            <p class="dashboard-stat-value">{{ $money($summary['vat_payable_estimate']) }}</p>
-        </article>
+    <section class="vat-filter-panel" aria-label="Select VAT summary period">
+        <div class="vat-filter-grid">
+            <label>
+                <span>Summary period</span>
+                <select wire:model.live="periodType">
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="yearly">Yearly</option>
+                </select>
+            </label>
+            <label>
+                <span>Year</span>
+                <select wire:model.live="selectedYear">
+                    @foreach ($years as $year)
+                        <option value="{{ $year }}">{{ $year }}</option>
+                    @endforeach
+                </select>
+            </label>
+            @if ($periodType !== 'yearly')
+                <label>
+                    <span>{{ $periodType === 'quarterly' ? 'Quarter' : 'Month' }}</span>
+                    <select wire:model.live="selectedPeriod">
+                        @foreach ($periods as $number => $label)
+                            <option value="{{ $number }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            @endif
+        </div>
+        <div class="vat-filter-footer">
+            <p class="vat-filter-count">{{ $periodLabel }} · {{ $summary['record_count'] }} recorded POS sale(s) · {{ $summary['input_vat_record_count'] }} input VAT record(s)</p>
+            <a class="vat-secondary-button" href="{{ route('tax.vat-records') }}">View VAT Records</a>
+        </div>
     </section>
 
-    <section class="dashboard-card vat-summary-records">
+    @include('livewire.tax-compliance.partials.summary-cards', [
+        'summary' => $summary,
+        'ariaLabel' => $periodLabel.' recorded VAT totals',
+    ])
+
+    <section class="dashboard-card vat-summary-context" aria-labelledby="vat-summary-context-heading">
         <div class="dashboard-card-heading">
-            <h2>{{ $periodLabel }} recorded VAT totals</h2>
-            <a class="vat-detail-button" href="{{ route('tax.vat-records') }}">View VAT Records</a>
+            <h2 id="vat-summary-context-heading">{{ $periodLabel }} coverage and reconciliation</h2>
+            <span class="vat-record-count">Total sales including VAT: {{ $money($summary['total_sales']) }}</span>
         </div>
         @if ($summary['input_vat_record_count'] > 0)
             <p class="dashboard-chart-note">Input VAT of {{ $money($summary['input_vat']) }} comes from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s) for {{ $summary['input_vat_batch_count'] }} batch(es). Deductions applied: {{ $money($summary['deductions_applied']) }}. This is a POS-plus-reworking preparation estimate, not a final company VAT liability.</p>
+            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Input VAT status: Captured from saved Reworking Cost Records.</p>
         @else
             <p class="dashboard-chart-note">Input VAT not captured. Deductions applied: {{ $money($summary['deductions_applied']) }}. This does not establish that the company incurred no input VAT.</p>
+            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Input VAT status: Not captured.</p>
         @endif
         <p class="dashboard-chart-note">Output VAT is the sum of saved record amounts. Checkout-level rounding can differ from applying 12% once to the aggregate taxable sales.</p>
         @if ($summary['record_count'] === 0)
             <p class="temporary-notice" role="status">No recorded POS sales for {{ $periodLabel }}.</p>
         @endif
-        <dl class="vat-summary-totals">
-            <div><dt>Selected period</dt><dd>{{ $periodLabel }} (Asia/Manila)</dd></div>
-            <div><dt>Taxable sales</dt><dd>{{ $money($summary['taxable_sales']) }}</dd></div>
-            <div><dt>Output VAT</dt><dd>{{ $money($summary['output_vat']) }}</dd></div>
-            <div><dt>Total sales including VAT</dt><dd>{{ $money($summary['total_sales']) }}</dd></div>
-            <div><dt>Reworking cost total</dt><dd>{{ $money($summary['input_vat_reworking_cost']) }}</dd></div>
-            <div><dt>Input VAT</dt><dd>{{ $money($summary['input_vat']) }}</dd></div>
-            <div><dt>Input VAT status</dt><dd>{{ $summary['input_vat_status'] === 'captured' ? 'Captured from saved Reworking Cost Records' : 'Not captured' }}</dd></div>
-            <div><dt>Deductions applied</dt><dd>{{ $money($summary['deductions_applied']) }}</dd></div>
-            <div><dt>POS-only VAT payable estimate</dt><dd>{{ $money($summary['vat_payable_estimate']) }}</dd></div>
-        </dl>
     </section>
 </section>

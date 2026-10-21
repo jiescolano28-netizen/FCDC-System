@@ -17,6 +17,7 @@ class IncludeMissingPosVatRecords
                 $now = now();
                 $records = $transactions->map(fn (object $transaction): array => [
                     'pos_transaction_id' => $transaction->id,
+                    'tax_classification' => $transaction->tax_classification ?? 'vatable',
                     'taxable_sales' => $transaction->subtotal,
                     'vat_rate' => $transaction->vat_rate,
                     'output_vat' => $transaction->vat_amount,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\TaxClassification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -34,6 +35,7 @@ class Inventory extends Model
         'unit',
         'unit_cost',
         'selling_price',
+        'tax_classification',
         'reorder_level',
         'image',
         'description',
@@ -120,6 +122,23 @@ class Inventory extends Model
         return $query->where('status', self::STATUS_ACTIVE)
             ->whereNotNull('selling_price')
             ->where('qty', '>', 0);
+    }
+
+    public function taxClassification(): string
+    {
+        return in_array($this->tax_classification, TaxClassification::all(), true)
+            ? $this->tax_classification
+            : TaxClassification::VATABLE;
+    }
+
+    public function taxClassificationLabel(): string
+    {
+        return TaxClassification::label($this->taxClassification());
+    }
+
+    public function vatRate(): float
+    {
+        return TaxClassification::rate($this->taxClassification());
     }
 
     public function stockStatus(): string

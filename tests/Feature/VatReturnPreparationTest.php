@@ -1,8 +1,8 @@
 <?php
 
+use App\Livewire\TaxCompliance\VatRecords;
 use App\Livewire\TaxCompliance\VatReturnPreparation;
 use App\Livewire\TaxCompliance\VatSummary;
-use App\Livewire\TaxCompliance\VatRecords;
 use App\Models\Employee;
 use App\Models\PosTransaction;
 use App\Models\PosTransactionLine;
@@ -107,8 +107,8 @@ test('worksheet starts in current Manila quarter and its selectable periods reco
         ->assertSee('VAT-inclusive total')
         ->assertSee('Saved worksheet item');
 
-    $printDocument = new DOMDocument();
-    @$printDocument->loadHTML('<?xml encoding="UTF-8">'. $worksheet->html(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+    $printDocument = new DOMDocument;
+    @$printDocument->loadHTML('<?xml encoding="UTF-8">'.$worksheet->html(), LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
     $printText = $printDocument->getElementById('vat-return-print')?->textContent;
     expect($printText)->toContain(
         'Fabellion Construction and Development Corp.',
@@ -207,4 +207,18 @@ test('worksheet detail review and CSV export are forbidden without tax.view', fu
 
     Livewire::test(VatReturnPreparation::class)
         ->assertForbidden();
+});
+
+test('worksheet is organized into preparation-only BIR 2550Q sections with CSV and PDF export', function () {
+    $this->actingAs(createVatReturnPreparationEmployee());
+
+    Livewire::test(VatReturnPreparation::class)
+        ->assertSee('Part I — Taxpayer and return period')
+        ->assertSee('Part II — Sales and output VAT')
+        ->assertSee('Part III — Input VAT')
+        ->assertSee('Part IV — Net VAT payable')
+        ->assertSee('BIR Form 2550Q')
+        ->assertSee('does not submit the return to the BIR')
+        ->assertSee('Export CSV')
+        ->assertSee('Save as PDF');
 });
