@@ -50,8 +50,12 @@ class PosSalePostingService
             $subtotalCents = $this->cents((string) $sale->subtotal);
             $vatCents = $this->cents((string) $sale->vat_amount);
             $totalCents = $this->cents((string) $sale->total);
+            $classifiedSalesCents = $this->cents((string) $vat->taxable_sales)
+                + $this->cents((string) $vat->zero_rated_sales)
+                + $this->cents((string) $vat->exempt_sales)
+                + $this->cents((string) $vat->non_vat_sales);
             if ($subtotalCents < 1 || $vatCents < 0 || $totalCents !== $subtotalCents + $vatCents
-                || $this->cents((string) $vat->taxable_sales) !== $subtotalCents
+                || $classifiedSalesCents !== $subtotalCents
                 || $this->cents((string) $vat->output_vat) !== $vatCents
                 || $this->cents((string) $vat->total) !== $totalCents) {
                 throw ValidationException::withMessages(['accounting' => 'The saved sale totals and linked VAT record do not reconcile.']);

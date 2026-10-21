@@ -4,6 +4,7 @@ namespace App\Livewire\TaxCompliance;
 
 use App\Models\PosVatRecord;
 use App\Services\RecordedVatSummary;
+use App\Support\TaxClassification;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -114,10 +115,12 @@ class TaxReport extends Component
         $this->authorizePermission();
         [$startDate, $endDate] = $this->selectedDateRange();
         $summary = app(RecordedVatSummary::class)->forDateRange($startDate, $endDate);
+        $monthlyBreakdown = app(RecordedVatSummary::class)->monthlyBreakdown($startDate, $endDate);
+        $quarterlyBreakdown = app(RecordedVatSummary::class)->quarterlyBreakdown($startDate, $endDate);
         $generatedAt = CarbonImmutable::now('Asia/Manila');
         $fileName = 'vat-report-'.$startDate.'-to-'.$endDate.'.csv';
 
-        return response()->streamDownload(function () use ($startDate, $endDate, $summary, $generatedAt): void {
+        return response()->streamDownload(function () use ($startDate, $endDate, $summary, $monthlyBreakdown, $quarterlyBreakdown, $generatedAt): void {
             $output = fopen('php://output', 'w');
             fputcsv($output, ['Company', 'Fabellion Construction and Development Corp.']);
             fputcsv($output, ['Reporting period', $this->periodLabel($startDate, $endDate)]);
@@ -126,16 +129,24 @@ class TaxReport extends Component
             fputcsv($output, ['Generated at', $generatedAt->format('Y-m-d H:i:s P')]);
             fputcsv($output, ['Coverage', 'Recorded POS VAT only']);
             fputcsv($output, ['Taxable sales', $summary['taxable_sales']]);
+            fputcsv($output, ['Zero-rated sales', $summary['zero_rated_sales']]);
+            fputcsv($output, ['VAT-exempt sales', $summary['exempt_sales']]);
+            fputcsv($output, ['Non-VAT / outside scope sales', $summary['non_vat_sales']]);
             fputcsv($output, ['Output VAT', $summary['output_vat']]);
             fputcsv($output, ['VAT-inclusive total sales', $summary['total_sales']]);
             fputcsv($output, ['Reworking cost total (reworking cost records)', $summary['input_vat_reworking_cost']]);
             fputcsv($output, ['Input VAT (reworking cost records)', $summary['input_vat']]);
             fputcsv($output, ['Net VAT payable estimate', $summary['vat_payable_estimate']]);
             fputcsv($output, []);
+            $this->writeBreakdownCsv($output, 'Monthly sales summary', $monthlyBreakdown);
+            fputcsv($output, []);
+            $this->writeBreakdownCsv($output, 'Quarterly sales summary', $quarterlyBreakdown);
+            fputcsv($output, []);
             fputcsv($output, [
                 'Transaction number',
                 'Completion date/time (Asia/Manila)',
                 'Customer',
+                'Tax classification',
                 'Saved item lines',
                 'Taxable sales',
                 'Output VAT',
@@ -150,8 +161,9 @@ class TaxReport extends Component
                     foreach ($records as $record) {
                         $sale = $record->posTransaction;
                         $items = $sale->lines->map(fn ($line) => sprintf(
-                            '%s (%.2f %s; unit ₱%.2f; line taxable ₱%.2f; VAT ₱%.2f; total ₱%.2f)',
+                            '%s (%s; %.2f %s; unit ₱%.2f; line taxable ₱%.2f; VAT ₱%.2f; total ₱%.2f)',
                             $line->item_name,
+                            TaxClassification::label($line->tax_classification),
                             (float) $line->quantity,
                             $line->unit,
                             (float) $line->selling_price,
@@ -164,6 +176,7 @@ class TaxReport extends Component
                             $sale->transaction_number,
                             $record->completed_at->copy()->timezone('Asia/Manila')->format('Y-m-d H:i:s'),
                             $sale->customer_name ?: 'Walk-in customer',
+                            TaxClassification::label($record->tax_classification),
                             $items,
                             $record->taxable_sales,
                             $record->output_vat,
@@ -209,6 +222,8 @@ class TaxReport extends Component
         $this->authorizePermission();
         [$startDate, $endDate] = $this->selectedDateRange();
         $summary = app(RecordedVatSummary::class)->forDateRange($startDate, $endDate);
+        $monthlyBreakdown = app(RecordedVatSummary::class)->monthlyBreakdown($startDate, $endDate);
+        $quarterlyBreakdown = app(RecordedVatSummary::class)->quarterlyBreakdown($startDate, $endDate);
         $records = $this->reportQuery()
             ->with('posTransaction')
             ->orderByDesc('completed_at')
@@ -239,11 +254,52 @@ class TaxReport extends Component
             'periodLabel' => $this->periodLabel($startDate, $endDate),
             'generatedAt' => $generatedAt,
             'summary' => $summary,
+            'monthlyBreakdown' => $monthlyBreakdown,
+            'quarterlyBreakdown' => $quarterlyBreakdown,
             'records' => $records,
             'printRecords' => $printRecords,
             'selectedRecord' => $selectedRecord,
             'inputVatRecords' => $inputVatRecords,
         ])->layout('layouts.app', ['title' => 'Tax Report']);
+    }
+
+    /**
+     * @param  resource  $output
+     * @param  array<int, array{label: string, start_date: string, end_date: string, summary: array}>  $rows
+     */
+    private function writeBreakdownCsv($output, string $heading, array $rows): void
+    {
+        fputcsv($output, [$heading]);
+        fputcsv($output, [
+            'Period',
+            'Date range',
+            'Transactions',
+            'VATable sales',
+            'Zero-rated sales',
+            'VAT-exempt sales',
+            'Non-VAT / outside scope',
+            'Output VAT',
+            'Input VAT',
+            'Estimated VAT payable',
+            'VAT-inclusive total',
+        ]);
+
+        foreach ($rows as $row) {
+            $summary = $row['summary'];
+            fputcsv($output, [
+                $row['label'],
+                $row['start_date'].' through '.$row['end_date'],
+                $summary['record_count'],
+                $summary['taxable_sales'],
+                $summary['zero_rated_sales'],
+                $summary['exempt_sales'],
+                $summary['non_vat_sales'],
+                $summary['output_vat'],
+                $summary['input_vat'],
+                $summary['vat_payable_estimate'],
+                $summary['total_sales'],
+            ]);
+        }
     }
 
     private function reportQuery(): Builder

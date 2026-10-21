@@ -9,20 +9,48 @@
         <span class="vat-rate-badge">POS output VAT · recorded input VAT</span>
     </header>
 
-    <div class="vat-record-filters" aria-label="Filter recorded VAT records">
-        <label>
-            <span>Search transaction, batch, or project</span>
-            <input type="search" wire:model.live.debounce.250ms="search" placeholder="Search transaction or batch">
-        </label>
-        <label>
-            <span>From (Manila date)</span>
-            <input type="date" wire:model.live="startDate">
-        </label>
-        <label>
-            <span>Through (Manila date)</span>
-            <input type="date" wire:model.live="endDate">
-        </label>
-    </div>
+    <section class="vat-filter-panel" aria-label="Filter recorded VAT records">
+        <div class="vat-filter-grid vat-filter-grid-wide">
+            <label class="vat-filter-search">
+                <span>Search</span>
+                <input type="search" wire:model.live.debounce.250ms="search" placeholder="Transaction, customer, batch, or project">
+            </label>
+            <label>
+                <span>Transaction no.</span>
+                <input type="search" wire:model.live.debounce.250ms="transactionNumber" placeholder="e.g. POS-20261015">
+            </label>
+            <label>
+                <span>From (Manila date)</span>
+                <input type="date" wire:model.live="startDate">
+            </label>
+            <label>
+                <span>Through (Manila date)</span>
+                <input type="date" wire:model.live="endDate">
+            </label>
+            <label>
+                <span>Tax classification</span>
+                <select wire:model.live="taxClassification">
+                    <option value="">All classifications</option>
+                    @foreach ($taxClassifications as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label>
+                <span>Transaction status</span>
+                <select wire:model.live="transactionStatus">
+                    <option value="">All statuses</option>
+                    @foreach ($transactionStatuses as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </label>
+        </div>
+        <div class="vat-filter-footer">
+            <p class="vat-filter-count">{{ $recordCount }} recorded POS sale(s) · {{ $inputVatSummary['record_count'] }} input VAT record(s)</p>
+            <button class="vat-secondary-button" type="button" wire:click="clearFilters">Clear filters</button>
+        </div>
+    </section>
 
     <section class="vat-record-card" aria-labelledby="vat-record-table-heading">
         <header>
@@ -38,6 +66,7 @@
                     <tr>
                         <th>Transaction no.</th>
                         <th>Manila completion</th>
+                        <th>Tax classification</th>
                         <th class="numeric">Taxable sales</th>
                         <th>VAT rate</th>
                         <th class="numeric">Output VAT</th>
@@ -50,6 +79,7 @@
                         <tr wire:key="vat-record-{{ $record->id }}">
                             <td><strong>{{ $record->posTransaction->transaction_number }}</strong></td>
                             <td>{{ $manilaDate($record->completed_at)->format('Y-m-d H:i') }}</td>
+                            <td>{{ \App\Support\TaxClassification::label($record->tax_classification) }}</td>
                             <td class="numeric">{{ $money($record->taxable_sales) }}</td>
                             <td>{{ number_format((float) $record->vat_rate * 100, 2) }}%</td>
                             <td class="numeric">{{ $money($record->output_vat) }}</td>
@@ -57,7 +87,7 @@
                             <td><button class="vat-detail-button" type="button" wire:click="viewRecord({{ $record->id }})">View details</button></td>
                         </tr>
                     @empty
-                        <tr><td class="vat-empty" colspan="7">No recorded POS sales.</td></tr>
+                        <tr><td class="vat-empty" colspan="8">No recorded POS sales.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -122,7 +152,11 @@
                     <div><dt>Transaction no.</dt><dd>{{ $sale->transaction_number }}</dd></div>
                     <div><dt>Completed (Asia/Manila)</dt><dd>{{ $manilaDate($selectedRecord->completed_at)->format('F j, Y') }} · {{ $manilaDate($selectedRecord->completed_at)->format('g:i A') }}</dd></div>
                     <div><dt>Customer</dt><dd>{{ $sale->customer_name ?: 'Walk-in customer' }}</dd></div>
-                    <div><dt>Taxable sales</dt><dd>{{ $money($selectedRecord->taxable_sales) }}</dd></div>
+                    <div><dt>Tax classification</dt><dd>{{ \App\Support\TaxClassification::label($selectedRecord->tax_classification) }}</dd></div>
+                    <div><dt>VATable sales</dt><dd>{{ $money($selectedRecord->taxable_sales) }}</dd></div>
+                    <div><dt>Zero-rated sales</dt><dd>{{ $money($selectedRecord->zero_rated_sales) }}</dd></div>
+                    <div><dt>VAT-exempt sales</dt><dd>{{ $money($selectedRecord->exempt_sales) }}</dd></div>
+                    <div><dt>Non-VAT / outside scope</dt><dd>{{ $money($selectedRecord->non_vat_sales) }}</dd></div>
                     <div><dt>VAT rate</dt><dd>{{ number_format((float) $selectedRecord->vat_rate * 100, 2) }}%</dd></div>
                     <div><dt>Output VAT</dt><dd>{{ $money($selectedRecord->output_vat) }}</dd></div>
                     <div><dt>VAT-inclusive total</dt><dd>{{ $money($selectedRecord->total) }}</dd></div>
@@ -130,11 +164,12 @@
                 <h3>Saved sale items</h3>
                 <div class="vat-table-wrap">
                     <table>
-                        <thead><tr><th>Item</th><th>Quantity</th><th class="numeric">Selling price</th><th class="numeric">Line taxable amount</th></tr></thead>
+                        <thead><tr><th>Item</th><th>Tax classification</th><th>Quantity</th><th class="numeric">Selling price</th><th class="numeric">Line taxable amount</th></tr></thead>
                         <tbody>
                             @foreach ($sale->lines as $line)
                                 <tr wire:key="vat-line-{{ $line->id }}">
                                     <td>{{ $line->item_name }}</td>
+                                    <td>{{ \App\Support\TaxClassification::label($line->tax_classification) }}</td>
                                     <td>{{ number_format((float) $line->quantity, 2) }} {{ $line->unit }}</td>
                                     <td class="numeric">{{ $money($line->selling_price) }}</td>
                                     <td class="numeric">{{ $money($line->line_subtotal) }}</td>

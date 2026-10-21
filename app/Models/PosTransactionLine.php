@@ -14,6 +14,7 @@ class PosTransactionLine extends Model
         'inventory_code',
         'item_name',
         'category',
+        'tax_classification',
         'unit',
         'quantity',
         'selling_price',

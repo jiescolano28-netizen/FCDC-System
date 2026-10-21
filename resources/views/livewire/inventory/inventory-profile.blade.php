@@ -24,6 +24,8 @@
             <div><dt>Unit label</dt><dd>{{ filled($item->unit) ? $item->unit : '—' }}</dd></div>
             <div><dt>Unit cost (PHP)</dt><dd>{{ number_format((float) $item->unit_cost, 2) }}</dd></div>
             <div><dt>Selling price (PHP)</dt><dd>{{ $item->selling_price === null ? '—' : number_format((float) $item->selling_price, 2) }}</dd></div>
+            <div><dt>Tax classification</dt><dd>{{ $item->taxClassificationLabel() }}</dd></div>
+            <div><dt>VAT rate</dt><dd>{{ \App\Support\TaxClassification::rateLabel($item->taxClassification()) }}</dd></div>
             <div><dt>Low stock level</dt><dd>{{ number_format((float) $item->reorder_level, 0) }}</dd></div>
             <div><dt>Status</dt><dd>{{ ucfirst($item->status) }}</dd></div>
             <div><dt>Description</dt><dd>{{ $item->description ?: '—' }}</dd></div>

@@ -9,6 +9,7 @@ use App\Models\AccountingPostingPeriod;
 use App\Models\CashDisbursement;
 use App\Models\Employee;
 use App\Models\PosTransaction;
+use App\Models\PosVatRecord;
 use App\Models\StockMovement;
 use App\Models\SupplierPurchaseInvoice;
 use Carbon\CarbonImmutable;
@@ -83,7 +84,7 @@ class InterveningSourceReconciliation
             $vat = $this->cents((string) $sale->vat_amount);
             $total = $this->cents((string) $sale->total);
             if ($subtotal <= 0 || $vat < 0 || $total !== $subtotal + $vat
-                || $this->cents((string) $sale->vatRecord->taxable_sales) !== $subtotal
+                || $this->classifiedSalesCents($sale->vatRecord) !== $subtotal
                 || $this->cents((string) $sale->vatRecord->output_vat) !== $vat
                 || $this->cents((string) $sale->vatRecord->total) !== $total) {
                 throw ValidationException::withMessages(['source' => 'The saved POS and VAT amounts do not reconcile.']);
@@ -330,7 +331,7 @@ class InterveningSourceReconciliation
         $vat = $this->cents((string) $sale->vat_amount);
         $total = $this->cents((string) $sale->total);
         if ($subtotal <= 0 || $vat < 0 || $total !== $subtotal + $vat
-            || $this->cents((string) $sale->vatRecord->taxable_sales) !== $subtotal
+            || $this->classifiedSalesCents($sale->vatRecord) !== $subtotal
             || $this->cents((string) $sale->vatRecord->output_vat) !== $vat
             || $this->cents((string) $sale->vatRecord->total) !== $total
             || $sale->lines->contains(fn ($line) => $line->line_cost_cents === null || (int) $line->line_cost_cents <= 0)) {
@@ -574,6 +575,14 @@ class InterveningSourceReconciliation
         }
 
         return $mapping->account;
+    }
+
+    private function classifiedSalesCents(PosVatRecord $record): int
+    {
+        return $this->cents((string) $record->taxable_sales)
+            + $this->cents((string) $record->zero_rated_sales)
+            + $this->cents((string) $record->exempt_sales)
+            + $this->cents((string) $record->non_vat_sales);
     }
 
     private function cents(string $amount): int

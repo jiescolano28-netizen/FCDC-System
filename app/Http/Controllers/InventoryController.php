@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Inventory;
 use App\Support\AdministratorAccess;
+use App\Support\TaxClassification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -52,10 +53,13 @@ class InventoryController extends Controller
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
+            'tax_classification' => ['nullable', Rule::in(TaxClassification::all())],
             'reorder_level' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        $validated['tax_classification'] = $validated['tax_classification'] ?? TaxClassification::VATABLE;
 
         $imagePath = null;
         if ($request->hasFile('image')) {
@@ -102,6 +106,7 @@ class InventoryController extends Controller
             'unit' => 'required|string|max:50',
             'unit_cost' => 'required|numeric|min:0',
             'selling_price' => 'nullable|numeric|min:0',
+            'tax_classification' => ['nullable', Rule::in(TaxClassification::all())],
             'reorder_level' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
@@ -119,6 +124,7 @@ class InventoryController extends Controller
                 : $inventory->inventory_batch_category_id,
             'unit_cost' => $validated['unit_cost'],
             'selling_price' => $validated['selling_price'] ?? null,
+            'tax_classification' => $validated['tax_classification'] ?? $inventory->taxClassification(),
             'reorder_level' => $validated['reorder_level'] ?? 10,
             'description' => $validated['description'] ?? null,
         ]);

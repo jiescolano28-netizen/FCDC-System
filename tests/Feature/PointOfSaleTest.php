@@ -282,6 +282,38 @@ test('a checkout failure leaves transaction records and stock untouched', functi
         ->and($board->stockMovements()->where('type', 'stock_out')->count())->toBe(0);
 });
 
+test('checkout drops cart lines whose inventory item was deleted or deactivated', function () {
+    $this->actingAs(createPosEmployee());
+    $kept = createPosInventory(['name' => 'Pine board']);
+    $deleted = createPosInventory(['name' => 'Deleted board']);
+    $deactivated = createPosInventory(['name' => 'Deactivated board']);
+    setupPosAccountingBooks([$kept, $deleted, $deactivated]);
+
+    Livewire::test(PointOfSale::class)
+        ->call('addToCart', $kept->id)
+        ->call('addToCart', $deleted->id)
+        ->call('addToCart', $deactivated->id);
+
+    $deleted->delete();
+    $deactivated->update(['status' => Inventory::STATUS_INACTIVE]);
+
+    Livewire::test(PointOfSale::class)
+        ->assertSee('Pine board')
+        ->assertDontSee('Deleted board')
+        ->assertDontSee('Deactivated board')
+        ->set('amountReceived', '22.40')
+        ->call('checkout')
+        ->assertHasNoErrors();
+
+    $transaction = PosTransaction::query()->with('lines')->sole();
+    $cart = session('pos.employee.'.auth()->id().'.cart');
+
+    expect($transaction->lines)->toHaveCount(1)
+        ->and($transaction->lines[0]->item_name)->toBe('Pine board')
+        ->and($kept->fresh()->qty)->toBe('9.00')
+        ->and($cart)->toBe([]);
+});
+
 test('POS offers only active priced items with positive stock', function () {
     $this->actingAs(createPosEmployee());
     $activeItem = createPosInventory(['name' => 'Active boards']);

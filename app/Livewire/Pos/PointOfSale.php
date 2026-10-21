@@ -7,8 +7,10 @@ use App\Models\PosTransaction;
 use App\Models\PosTransactionLine;
 use App\Models\PosVatRecord;
 use App\Services\Accounting\PosSalePostingService;
+use App\Support\TaxClassification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -18,11 +20,15 @@ class PointOfSale extends Component
 {
     use WithPagination;
 
-    private const VAT_RATE = 0.12;
-
     public string $search = '';
 
     public string $category = '';
+
+    /** Product-list filter only; the sale classification is selected in the cart. */
+    public string $taxClassification = '';
+
+    /** Single tax classification applied to every line in the current sale. */
+    public string $saleTaxClassification = '';
 
     public string $customerName = '';
 
@@ -35,6 +41,11 @@ class PointOfSale extends Component
     #[Locked]
     public ?int $receiptId = null;
 
+    public function mount(): void
+    {
+        $this->saleTaxClassification = $this->classificationForCart($this->cart()) ?? '';
+    }
+
     public function addToCart(int $inventoryId): void
     {
         $this->authorizePermission('pos.checkout');
@@ -44,10 +55,36 @@ class PointOfSale extends Component
         $available = (int) floor((float) $item->qty);
         $next = $current === 0.0 ? min(1, $available) : min($current + 1, $available);
 
-        if ($next > $current) {
-            $cart[$item->id] = ['quantity' => $next];
-            $this->saveCart($cart);
+        if ($next <= $current) {
+            return;
         }
+
+        $saleClassification = $this->saleTaxClassification !== ''
+            ? $this->saleTaxClassification
+            : ($this->classificationForCart($cart) ?? $item->taxClassification());
+
+        $this->saleTaxClassification = $saleClassification;
+        $cart[$item->id] = ['quantity' => $next];
+        $this->saveCart($cart);
+    }
+
+    public function setSaleTaxClassification(string $classification): void
+    {
+        $this->authorizePermission('pos.checkout');
+
+        if ($classification === '' && $this->cart() === []) {
+            $this->saleTaxClassification = '';
+
+            return;
+        }
+
+        if (! TaxClassification::isValid($classification)) {
+            throw ValidationException::withMessages([
+                'saleTaxClassification' => 'Select a valid tax classification for this sale.',
+            ]);
+        }
+
+        $this->saleTaxClassification = $classification;
     }
 
     public function changeQuantity(int $inventoryId, int $delta): void
@@ -71,24 +108,36 @@ class PointOfSale extends Component
         $cart = $this->cart();
         unset($cart[$inventoryId]);
         $this->saveCart($cart);
+
+        if ($cart === []) {
+            $this->saleTaxClassification = '';
+        }
     }
 
     public function checkout(): void
     {
         $this->authorizePermission('pos.checkout');
         $this->resetValidation();
-        $cart = $this->cart();
+        $cart = $this->pruneUnavailableCart();
 
         if ($cart === []) {
             throw ValidationException::withMessages(['cart' => 'Add at least one item before checkout.']);
         }
         ksort($cart);
 
+        if ($this->saleTaxClassification === '') {
+            $this->saleTaxClassification = $this->classificationForCart($cart) ?? '';
+        }
+
         $this->validate([
+            'saleTaxClassification' => ['required', Rule::in(TaxClassification::all())],
             'customerName' => ['nullable', 'string', 'max:255'],
             'paymentMethod' => ['required', 'in:cash,card,bank_transfer'],
             'amountReceived' => ['required', 'numeric', 'min:0', 'regex:/^\d+(\.\d{1,2})?$/'],
             'paymentReference' => ['nullable', 'string', 'max:255'],
+        ], [
+            'saleTaxClassification.required' => 'Select the tax classification for this sale.',
+            'saleTaxClassification.in' => 'Select a valid tax classification for this sale.',
         ]);
 
         if ($this->paymentMethod !== 'cash' && trim($this->paymentReference) === '') {
@@ -96,6 +145,7 @@ class PointOfSale extends Component
         }
 
         $transaction = DB::transaction(function () use ($cart): PosTransaction {
+            $classification = $this->saleTaxClassification;
             $items = [];
 
             foreach ($cart as $inventoryId => $line) {
@@ -112,12 +162,13 @@ class PointOfSale extends Component
                 $items[] = [
                     'inventory' => $item,
                     'quantity' => $quantity,
+                    'tax_classification' => $classification,
                     'lineSubtotalCents' => (int) round($quantityCents * $priceCents / 100),
                 ];
             }
 
             $subtotalCents = array_sum(array_column($items, 'lineSubtotalCents'));
-            $vatCents = $this->vatCents($subtotalCents);
+            $vatCents = $this->vatCents($subtotalCents, $classification);
             $totalCents = $subtotalCents + $vatCents;
             $receivedCents = (int) round((float) $this->amountReceived * 100);
 
@@ -135,7 +186,8 @@ class PointOfSale extends Component
                 'employee_id' => auth()->id(),
                 'customer_name' => trim($this->customerName) ?: null,
                 'subtotal' => $subtotalCents / 100,
-                'vat_rate' => self::VAT_RATE,
+                'tax_classification' => $classification,
+                'vat_rate' => TaxClassification::rate($classification),
                 'vat_amount' => $vatCents / 100,
                 'total' => $totalCents / 100,
                 'payment_method' => $this->paymentMethod,
@@ -151,7 +203,11 @@ class PointOfSale extends Component
 
             PosVatRecord::create([
                 'pos_transaction_id' => $transaction->id,
-                'taxable_sales' => $transaction->subtotal,
+                'tax_classification' => $classification,
+                'taxable_sales' => $this->salesCentsFor($classification, $subtotalCents, TaxClassification::VATABLE) / 100,
+                'zero_rated_sales' => $this->salesCentsFor($classification, $subtotalCents, TaxClassification::ZERO_RATED) / 100,
+                'exempt_sales' => $this->salesCentsFor($classification, $subtotalCents, TaxClassification::VAT_EXEMPT) / 100,
+                'non_vat_sales' => $this->salesCentsFor($classification, $subtotalCents, TaxClassification::NON_VAT) / 100,
                 'vat_rate' => $transaction->vat_rate,
                 'output_vat' => $transaction->vat_amount,
                 'total' => $transaction->total,
@@ -161,14 +217,18 @@ class PointOfSale extends Component
                 ->post($transaction, $items, auth()->id());
 
             $vatRemaining = $vatCents;
+            $lastIndex = array_key_last($items);
+
             foreach ($items as $index => $line) {
                 /** @var Inventory $item */
                 $item = $line['inventory'];
                 $quantity = $line['quantity'];
                 $lineSubtotalCents = $line['lineSubtotalCents'];
-                $lineVatCents = $index === array_key_last($items)
-                    ? $vatRemaining
-                    : min($vatRemaining, (int) round($lineSubtotalCents * 0.12));
+                $lineVatCents = TaxClassification::isVatable($classification)
+                    ? ($index === $lastIndex
+                        ? $vatRemaining
+                        : min($vatRemaining, (int) round($lineSubtotalCents * TaxClassification::rate($classification))))
+                    : 0;
                 $vatRemaining -= $lineVatCents;
 
                 PosTransactionLine::create([
@@ -177,6 +237,7 @@ class PointOfSale extends Component
                     'inventory_code' => $item->code,
                     'item_name' => $item->name,
                     'category' => $item->category,
+                    'tax_classification' => $classification,
                     'unit' => $item->unit,
                     'quantity' => $quantity,
                     'selling_price' => $item->selling_price,
@@ -194,6 +255,7 @@ class PointOfSale extends Component
         $this->saveCart([]);
         $this->resetPage();
         $this->receiptId = $transaction->id;
+        $this->saleTaxClassification = '';
         $this->amountReceived = '';
         $this->paymentReference = '';
         $this->customerName = '';
@@ -228,10 +290,14 @@ class PointOfSale extends Component
                 $query->where('name', 'like', '%'.$this->search.'%')
                     ->orWhere('category', 'like', '%'.$this->search.'%');
             }))
-            ->when($this->category !== '', fn ($query) => $query->where('category', $this->category));
+            ->when($this->category !== '', fn ($query) => $query->where('category', $this->category))
+            ->when(
+                in_array($this->taxClassification, TaxClassification::all(), true),
+                fn ($query) => $query->where('tax_classification', $this->taxClassification),
+            );
         $items = $itemsQuery->get();
         $categories = Inventory::availableForSale()->where('qty', '>', 0)->distinct()->orderBy('category')->pluck('category');
-        $cart = $this->cart();
+        $cart = $this->pruneUnavailableCart();
         $cartItems = Inventory::query()->whereKey(array_keys($cart))->get()->keyBy('id');
         $lines = collect($cart)->map(function (array $line, int|string $id) use ($cartItems) {
             $item = $cartItems->get((int) $id);
@@ -244,29 +310,45 @@ class PointOfSale extends Component
 
             return $item;
         })->filter()->values();
-        $subtotalCents = $lines->sum(fn (Inventory $item) => (int) round(
+
+        $selectedClassification = TaxClassification::isValid($this->saleTaxClassification)
+            ? $this->saleTaxClassification
+            : $lines->first()?->taxClassification();
+        $lineSubtotalCents = fn (Inventory $item): int => (int) round(
             (int) round($item->cart_quantity * 100) * (int) round((float) $item->selling_price * 100) / 100,
-        ));
-        $subtotal = $subtotalCents / 100;
-        $history = PosTransaction::query()->with('lines')->where('status', 'completed')->latest('completed_at')->paginate(20);
+        );
+        $subtotalCents = $lines->sum($lineSubtotalCents);
+        $vatCents = $selectedClassification === null
+            ? 0
+            : $this->vatCents($subtotalCents, $selectedClassification);
+        $history = PosTransaction::query()->with(['lines', 'vatRecord'])->where('status', 'completed')->latest('completed_at')->paginate(20);
         $receipt = $this->receiptId
-            ? PosTransaction::query()->with('lines')->where('status', 'completed')->find($this->receiptId)
+            ? PosTransaction::query()->with(['lines', 'vatRecord'])->where('status', 'completed')->find($this->receiptId)
             : null;
 
         return view('livewire.pos.point-of-sale', [
             'items' => $items,
             'categories' => $categories,
+            'taxClassifications' => TaxClassification::options(),
             'lines' => $lines,
-            'subtotal' => $subtotal,
-            'vat' => $this->vatCents($subtotalCents) / 100,
+            'subtotal' => $subtotalCents / 100,
+            'cartTaxClassification' => $selectedClassification,
+            'vatRate' => $selectedClassification === null ? 0.0 : TaxClassification::rate($selectedClassification),
+            'vat' => $vatCents / 100,
+            'total' => ($subtotalCents + $vatCents) / 100,
             'history' => $history,
             'receipt' => $receipt,
         ])->layout('layouts.app', ['title' => 'Point of sale']);
     }
 
-    private function vatCents(int $subtotalCents): int
+    private function vatCents(int $subtotalCents, string $classification): int
     {
-        return (int) round($subtotalCents * self::VAT_RATE);
+        return (int) round($subtotalCents * TaxClassification::rate($classification));
+    }
+
+    private function salesCentsFor(string $saleClassification, int $subtotalCents, string $classification): int
+    {
+        return $saleClassification === $classification ? $subtotalCents : 0;
     }
 
     private function cart(): array
@@ -277,6 +359,42 @@ class PointOfSale extends Component
     private function saveCart(array $cart): void
     {
         session()->put($this->sessionKey(), $cart);
+    }
+
+    /**
+     * Drop cart lines whose inventory item was deleted, deactivated, or no longer has a selling price.
+     * Those lines cannot be shown or edited in the cart, so keeping them would block every checkout.
+     */
+    private function pruneUnavailableCart(): array
+    {
+        $cart = $this->cart();
+
+        if ($cart === []) {
+            return $cart;
+        }
+
+        $items = Inventory::query()
+            ->whereKey(array_keys($cart))
+            ->get()
+            ->keyBy('id');
+
+        $pruned = array_filter($cart, function ($line, $id) use ($items): bool {
+            $item = $items->get((int) $id);
+
+            return $item !== null
+                && $item->status === Inventory::STATUS_ACTIVE
+                && $item->selling_price !== null;
+        }, ARRAY_FILTER_USE_BOTH);
+
+        if (count($pruned) !== count($cart)) {
+            $this->saveCart($pruned);
+
+            if ($pruned === []) {
+                $this->saleTaxClassification = '';
+            }
+        }
+
+        return $pruned;
     }
 
     private function sessionKey(): string
@@ -297,6 +415,21 @@ class PointOfSale extends Component
         }
 
         $this->saveCart($cart);
+
+        if ($cart === []) {
+            $this->saleTaxClassification = '';
+        }
+    }
+
+    private function classificationForCart(array $cart): ?string
+    {
+        if ($cart === []) {
+            return null;
+        }
+
+        $item = Inventory::query()->find(array_key_first($cart));
+
+        return $item?->taxClassification();
     }
 
     private function authorizePermission(string $permission): void

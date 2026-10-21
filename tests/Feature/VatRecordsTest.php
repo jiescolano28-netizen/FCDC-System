@@ -30,6 +30,7 @@ function createRecordedVatSale(
     string $completedAt,
     bool $includeVatRecord = true,
     ?int $inventoryId = null,
+    string $taxClassification = 'vatable',
 ): PosTransaction {
     $transaction = PosTransaction::create([
         'transaction_number' => $number,
@@ -42,6 +43,7 @@ function createRecordedVatSale(
         'change_due' => 0,
         'status' => 'completed',
         'customer_name' => 'Test Customer',
+        'tax_classification' => $taxClassification,
         'completed_at' => $completedAt,
     ]);
     PosTransactionLine::create([
@@ -50,6 +52,7 @@ function createRecordedVatSale(
         'inventory_code' => 'BRD-001',
         'item_name' => 'Pine board',
         'category' => 'Lumber',
+        'tax_classification' => $taxClassification,
         'unit' => 'piece',
         'quantity' => 2,
         'selling_price' => 90,
@@ -62,9 +65,11 @@ function createRecordedVatSale(
     if ($includeVatRecord) {
         PosVatRecord::create([
             'pos_transaction_id' => $transaction->id,
-            'taxable_sales' => $transaction->subtotal,
+            'tax_classification' => $taxClassification,
+            'taxable_sales' => $taxClassification === 'vatable' ? $transaction->subtotal : 0,
+            'zero_rated_sales' => $taxClassification === 'zero_rated' ? $transaction->subtotal : 0,
             'vat_rate' => $transaction->vat_rate,
-            'output_vat' => $transaction->vat_amount,
+            'output_vat' => $taxClassification === 'vatable' ? $transaction->vat_amount : 0,
             'total' => $transaction->total,
             'completed_at' => $transaction->completed_at,
         ]);
@@ -389,4 +394,58 @@ test('tax route and detail actions remain inaccessible without tax permission', 
     $sale = createRecordedVatSale('POS-AUTH-001', '2026-10-15 04:30:00');
     expect(fn () => (new VatRecords)->viewRecord($sale->vatRecord->id))
         ->toThrow(HttpException::class);
+});
+
+test('VAT records combine transaction number, tax classification, and status filters', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    createRecordedVatSale('POS-FILTER-VAT', '2026-10-05 04:00:00', true, null, 'vatable');
+    createRecordedVatSale('POS-FILTER-ZERO', '2026-10-06 04:00:00', true, null, 'zero_rated');
+    createRecordedVatSale('POS-FILTER-EXEMPT', '2026-10-07 04:00:00', true, null, 'vat_exempt');
+    $this->actingAs(createVatRecordsEmployee());
+
+    Livewire::test(VatRecords::class)
+        ->assertSee('POS-FILTER-VAT')
+        ->set('transactionNumber', 'filter-zero')
+        ->assertSee('POS-FILTER-ZERO')
+        ->assertDontSee('POS-FILTER-VAT')
+        ->set('transactionNumber', '')
+        ->set('taxClassification', 'vat_exempt')
+        ->assertSee('POS-FILTER-EXEMPT')
+        ->assertDontSee('POS-FILTER-ZERO')
+        ->set('taxClassification', '')
+        ->set('transactionStatus', 'completed')
+        ->assertSee('POS-FILTER-VAT')
+        ->assertSee('POS-FILTER-ZERO')
+        ->set('transactionStatus', 'voided')
+        ->assertSee('No recorded POS sales.')
+        ->assertDontSee('POS-FILTER-VAT')
+        ->call('clearFilters')
+        ->assertSet('transactionNumber', '')
+        ->assertSet('taxClassification', '')
+        ->assertSet('transactionStatus', '')
+        ->assertSee('POS-FILTER-VAT');
+
+    Carbon::setTestNow();
+});
+
+test('VAT report presents monthly and quarterly summaries with CSV and PDF export controls', function () {
+    Carbon::setTestNow('2026-10-15 12:00:00 UTC');
+    createVatReportSale('REPORT-SUMMARY-001', '2026-10-15 08:00:00');
+    $this->actingAs(createVatRecordsEmployee());
+
+    $report = Livewire::test(TaxReport::class)
+        ->assertSee('Monthly sales summary')
+        ->assertSee('Quarterly sales summary')
+        ->assertSee('Export CSV')
+        ->assertSee('Export PDF')
+        ->assertSee('October 2026')
+        ->assertSee('Q4 2026')
+        ->call('exportCsv')
+        ->assertFileDownloaded('vat-report-2026-10-01-to-2026-10-31.csv');
+    $csv = base64_decode($report->effects['download']['content']);
+
+    expect($csv)
+        ->toContain('Monthly sales summary', 'Quarterly sales summary', 'REPORT-SUMMARY-001', 'Q4 2026');
+
+    Carbon::setTestNow();
 });

@@ -14,6 +14,7 @@ class PosTransaction extends Model
         'employee_id',
         'customer_name',
         'subtotal',
+        'tax_classification',
         'vat_rate',
         'vat_amount',
         'total',
