@@ -14,13 +14,18 @@ class AccountingJournal extends Model
     public const ENTRY_TYPE_ADJUSTING = 'adjusting';
 
     protected $fillable = [
-        'book_key', 'reference', 'source_type', 'entry_type', 'source_id', 'accounting_date', 'posting_period_id',
+        'book_key', 'reference', 'source_type', 'entry_type', 'manual_input', 'source_id', 'accounting_date', 'posting_period_id',
         'description', 'external_reference', 'correction_of_id', 'correction_reason', 'status', 'prepared_by',
     ];
 
     protected function casts(): array
     {
-        return ['accounting_date' => 'date:Y-m-d', 'posted_at' => 'datetime', 'approved_at' => 'datetime'];
+        return [
+            'accounting_date' => 'date:Y-m-d',
+            'posted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'manual_input' => 'boolean',
+        ];
     }
 
     protected static function booted(): void

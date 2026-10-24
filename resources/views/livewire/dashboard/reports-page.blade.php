@@ -140,7 +140,7 @@
                 <tbody>
                     @forelse ($sales as $sale)
                         <tr wire:key="reports-transaction-{{ $sale->id }}">
-                            <td>{{ $sale->transaction_number }}</td><td>{{ $sale->completed_at->format('Y-m-d') }}</td><td class="numeric">{{ number_format((float) $sale->lines->sum('quantity'), 2) }}</td><td class="numeric">₱{{ number_format((float) $sale->total, 2) }}</td><td>{{ str_replace('_', ' ', ucfirst($sale->payment_method)) }}</td><td>{{ ucfirst($sale->status) }}</td>
+                            <td>{{ $sale->transaction_number }}</td><td>{{ \App\Support\PhilippineTime::format($sale->completed_at, 'Y-m-d') }}</td><td class="numeric">{{ number_format((float) $sale->lines->sum('quantity'), 2) }}</td><td class="numeric">₱{{ number_format((float) $sale->total, 2) }}</td><td>{{ str_replace('_', ' ', ucfirst($sale->payment_method)) }}</td><td>{{ ucfirst($sale->status) }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="reports-empty">No completed transactions.</td></tr>

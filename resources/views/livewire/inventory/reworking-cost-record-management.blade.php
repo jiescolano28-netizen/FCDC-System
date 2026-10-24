@@ -3,7 +3,7 @@
         <div>
             <h1 id="reworking-cost-heading">Reworking Cost Record</h1>
             <p class="muted">Track cleaning, repair, and preparation costs for each demolition material batch.</p>
-            <p class="muted">These records support cost monitoring only; they do not change inventory valuation or post accounting entries.</p>
+            <p class="muted">These records support cost monitoring and VAT input; accounting journals are generated from approved source records in Journal Entry.</p>
         </div>
         <div class="actions">
             <span class="muted">{{ $summary['count'] }} record(s)</span>
@@ -105,6 +105,19 @@
                         @error('inputVat') <span class="error">{{ $message }}</span> @enderror
                     </div>
 
+                    <div class="inventory-form-field">
+                        <label for="reworking-payment-method">Payment method</label>
+                        <select id="reworking-payment-method" wire:model="paymentMethod">
+                            <option value="">Not recorded</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Bank Transfer">Bank transfer</option>
+                            <option value="Card">Card</option>
+                            <option value="Accounts Payable">Accounts payable</option>
+                        </select>
+                        <span class="reworking-cost-hint">Required before Accounting can generate the credit side of the journal.</span>
+                        @error('paymentMethod') <span class="error">{{ $message }}</span> @enderror
+                    </div>
+
                     <div class="inventory-form-field reworking-cost-field-wide">
                         <label for="reworking-description">Description</label>
                         <textarea id="reworking-description" wire:model="description" maxlength="2000" placeholder="e.g. Cleaning, sorting, and minor repair of recovered steel bars"></textarea>
@@ -180,6 +193,7 @@
                     <th scope="col">Description</th>
                     <th scope="col" class="numeric">Total reworking cost</th>
                     <th scope="col" class="numeric">Input VAT</th>
+                    <th scope="col">Payment method</th>
                     <th scope="col">Supporting document</th>
                     @if ($hasActions)
                         <th scope="col">Actions</th>
@@ -195,6 +209,7 @@
                         <td><span class="reworking-cost-description" title="{{ $record['description'] }}">{{ $record['description'] }}</span></td>
                         <td class="numeric">₱{{ number_format((float) $record['total_reworking_cost'], 2) }}</td>
                         <td class="numeric">₱{{ number_format((float) $record['input_vat'], 2) }}</td>
+                        <td>{{ $record['payment_method'] ?: 'Not recorded' }}</td>
                         <td>
                             @if ($record['attachment'] ?? null)
                                 <div class="reworking-cost-attachment">
@@ -227,7 +242,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $hasActions ? 8 : 7 }}">
+                        <td colspan="{{ $hasActions ? 9 : 8 }}">
                             <div class="reworking-cost-empty">
                                 <strong>No reworking cost records found.</strong>
                                 <span>Record cleaning, repair, or preparation costs to monitor each batch's actual material cost.</span>

@@ -5,6 +5,7 @@ namespace App\Livewire\Accounting;
 use App\Models\AccountingAccount;
 use App\Models\AccountingPostingMapping;
 use App\Support\DemoDatabaseIsolation;
+use App\Support\RolePermissionCatalog;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -13,7 +14,7 @@ class ChartOfAccounts extends Component
     private const MAPPING_SOURCES = [
         'cash' => 'Cash',
         'bank' => 'Bank',
-        'card_clearing' => 'Card clearing',
+        'card_clearing' => 'Card settlement (bank)',
         'sales' => 'Sales',
         'output_vat' => 'Output VAT',
         'cogs' => 'COGS',
@@ -27,7 +28,7 @@ class ChartOfAccounts extends Component
     private const POS_MAPPING_SOURCES = [
         'cash' => 'Cash',
         'bank' => 'Bank',
-        'card_clearing' => 'Card clearing',
+        'card_clearing' => 'Card settlement (bank)',
         'sales' => 'Sales',
         'output_vat' => 'Output VAT',
         'cogs' => 'COGS',
@@ -43,7 +44,7 @@ class ChartOfAccounts extends Component
 
     public function newAccount(): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         $this->resetAccountForm();
     }
 
@@ -51,7 +52,7 @@ class ChartOfAccounts extends Component
 
     public string $accountType = 'All';
 
-    public string $status = 'All';
+    public string $status = 'Active';
 
     public ?int $editingId = null;
 
@@ -88,7 +89,7 @@ class ChartOfAccounts extends Component
 
     public function editAccount(int $id): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         $account = AccountingAccount::findOrFail($id);
         $this->editingId = $account->id;
         $this->accountCode = $account->code;
@@ -103,7 +104,7 @@ class ChartOfAccounts extends Component
 
     public function saveAccount(): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         $validated = $this->validate([
             'accountCode' => ['required', 'string', 'max:30', Rule::unique('accounting_accounts', 'code')->ignore($this->editingId)],
             'accountName' => ['required', 'string', 'max:150'],
@@ -180,16 +181,16 @@ class ChartOfAccounts extends Component
 
     public function approveAccount(int $id): void
     {
-        $this->authorizePermission('accounting.approve-accounts');
+        $this->authorizeAdministrator('accounting.approve-accounts');
         $account = AccountingAccount::findOrFail($id);
         abort_unless($account->is_active, 422, 'Inactive accounts cannot be approved for posting.');
         abort_unless(! $account->hasPendingPostingPolicy(), 422, 'Pending accounting policy prevents approval for posting.');
-        $account->forceFill(['approved_at' => now(), 'approved_by' => auth()->id()])->save();
+        $account->forceFill(['approved_at' => now('UTC'), 'approved_by' => auth()->id()])->save();
     }
 
     public function toggleActive(int $id): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         $account = AccountingAccount::findOrFail($id);
         $account->is_active = ! $account->is_active;
         if ($account->is_active) {
@@ -201,7 +202,7 @@ class ChartOfAccounts extends Component
 
     public function deleteAccount(int $id): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         $account = AccountingAccount::findOrFail($id);
         abort_if($account->used_at !== null, 403, 'Used accounts cannot be deleted.');
         $account->delete();
@@ -209,13 +210,13 @@ class ChartOfAccounts extends Component
 
     public function saveMapping(string $source): void
     {
-        $this->authorizePermission('accounting.maintain-accounts');
+        $this->authorizeAdministrator('accounting.maintain-accounts');
         abort_unless(isset(self::MAPPING_SOURCES[$source]), 404);
         $accountRule = Rule::exists('accounting_accounts', 'id')->where('is_active', true);
         if ($source === 'disbursement_method:Other') {
             $accountRule->whereIn('classification', ['cash', 'bank']);
         } elseif (isset(AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source])) {
-            $accountRule->where('classification', AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source]);
+            $accountRule->whereIn('classification', (array) AccountingPostingMapping::REQUIRED_CLASSIFICATIONS[$source]);
         }
         $validated = $this->validate([
             "mappingAccounts.$source" => ['required', 'integer', $accountRule],
@@ -232,11 +233,11 @@ class ChartOfAccounts extends Component
 
     public function approveMapping(string $source): void
     {
-        $this->authorizePermission('accounting.approve-accounts');
+        $this->authorizeAdministrator('accounting.approve-accounts');
         abort_unless(isset(self::MAPPING_SOURCES[$source]), 404);
         $mapping = AccountingPostingMapping::where('source', $source)->with('account')->firstOrFail();
         abort_unless($mapping->account?->isApprovedForPosting(), 422, 'Approve an active account before approving its mapping.');
-        $mapping->forceFill(['approved_at' => now(), 'approved_by' => auth()->id()])->save();
+        $mapping->forceFill(['approved_at' => now('UTC'), 'approved_by' => auth()->id()])->save();
     }
 
     public function render()
@@ -288,7 +289,9 @@ class ChartOfAccounts extends Component
 
         return view('livewire.accounting.chart-of-accounts', [
             'accounts' => $accounts,
-            'accountCount' => AccountingAccount::count(),
+            'accountCount' => AccountingAccount::query()
+                ->when($this->status !== 'All', fn ($query) => $query->where('is_active', $this->status === 'Active'))
+                ->count(),
             'accountTypes' => AccountingAccount::types(),
             'classifications' => collect(AccountingAccount::classifications())->map(fn ($entry, $key) => ['value' => $key, 'label' => $entry[0], 'type' => $entry[1]]),
             'mappingSources' => self::MAPPING_SOURCES,
@@ -309,8 +312,14 @@ class ChartOfAccounts extends Component
         $this->resetValidation();
     }
 
-    private function authorizePermission(string $permission): void
+    private function authorizeAdministrator(string $permission): void
     {
-        abort_unless(auth()->user()?->can($permission), 403);
+        $user = auth()->user();
+
+        abort_unless(
+            $user?->hasRole(RolePermissionCatalog::ADMIN_ROLE)
+                && $user->can($permission),
+            403,
+        );
     }
 }

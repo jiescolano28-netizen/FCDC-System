@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Accounting\FinancialStatements;
 use App\Models\AccountingJournal;
 use App\Models\Employee;
 use App\Models\Inventory;
@@ -12,6 +13,7 @@ use Database\Seeders\FullDemoSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Livewire\Livewire;
 
 beforeEach(function () {
     config([
@@ -29,6 +31,18 @@ test('full demo workflows reconcile stock payables and posted books and preserve
     Artisan::call('db:seed', ['--class' => FullDemoSeeder::class, '--force' => true]);
     expect(Artisan::output())->toContain('Initial password for these demo users:');
     expect(app(OpeningBooksService::class)->readiness()['production_activated'])->toBeTrue();
+
+    // A midyear cutover carries pre-cutover profit inside the opening assets. The
+    // synthetic opening must not also book that profit to retained earnings, or the
+    // balance sheet double counts it against the approved YTD earnings.
+    $accountant = Employee::where('username', 'demo.accountant')->firstOrFail();
+    $position = Livewire::actingAs($accountant)->test(FinancialStatements::class)
+        ->set('statementType', 'balance-sheet')
+        ->set('toDate', now('Asia/Manila')->toDateString())
+        ->assertSee('Accounting equation balances')
+        ->viewData('report');
+    expect($position['balanced'])->toBeTrue()
+        ->and($position['assets'])->toBe($position['liabilitiesAndEquity']);
 
     foreach (AccountingJournal::where('status', 'posted')->with('lines')->get() as $journal) {
         expect($journal->lines->sum('debit_cents'))->toBe($journal->lines->sum('credit_cents'));
@@ -84,7 +98,7 @@ test('a failed full setup rolls back employees and accounting work', function ()
         'code' => '1010', 'name' => 'Conflicting existing cash', 'type' => 'Asset', 'classification' => 'cash', 'normal_balance' => 'debit',
         'is_active' => false, 'created_at' => now(), 'updated_at' => now(),
     ]);
-    expect(fn () => app(FullDemoSeeder::class)->run(app(DemoDatabaseIsolation::class)))->toThrow(RuntimeException::class, 'conflicts');
+    expect(fn () => app(FullDemoSeeder::class)->run(app(DemoDatabaseIsolation::class)))->toThrow(RuntimeException::class, 'empty business database');
     expect(Employee::count())->toBe(0);
     expect(DB::table('accounting_accounts')->pluck('name')->all())->toBe(['Conflicting existing cash']);
     expect(DB::table('roles')->count())->toBe(0);

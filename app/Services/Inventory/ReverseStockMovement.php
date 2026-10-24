@@ -43,8 +43,8 @@ class ReverseStockMovement
                 'reason_category' => $movement->reason_category,
                 'reference' => $movement->reference,
                 'notes' => 'Reversal of stock movement #'.$movement->id.'. Post the corrected stock transaction separately.',
-                'effective_date' => now()->toDateString(),
-                'posted_at' => now(),
+                'effective_date' => now('Asia/Manila')->toDateString(),
+                'posted_at' => now('UTC'),
                 'reverses_movement_id' => $movement->id,
             ]);
 

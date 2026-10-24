@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AccountingPostingMapping extends Model
 {
     public const REQUIRED_CLASSIFICATIONS = [
-        'cash' => 'cash',
-        'bank' => 'bank',
-        'card_clearing' => 'card_clearing',
-        'sales' => 'sales',
-        'output_vat' => 'output_vat',
-        'cogs' => 'cost_of_goods_sold',
-        'inventory' => 'inventory',
-        'accounts_payable' => 'accounts_payable',
+        'cash' => ['cash'],
+        'bank' => ['bank'],
+        'card_clearing' => ['card_clearing', 'bank'],
+        'sales' => ['sales'],
+        'output_vat' => ['output_vat'],
+        'cogs' => ['cost_of_goods_sold'],
+        'inventory' => ['inventory'],
+        'accounts_payable' => ['accounts_payable'],
     ];
 
     protected static function booted(): void
@@ -51,7 +51,13 @@ class AccountingPostingMapping extends Model
 
         return $this->approved_at !== null
             && $account?->isApprovedForPosting() === true
-            && (! array_key_exists($this->source, self::REQUIRED_CLASSIFICATIONS)
-                || $account->classification === self::REQUIRED_CLASSIFICATIONS[$this->source]);
+            && self::acceptsClassification($this->source, $account->classification);
+    }
+
+    public static function acceptsClassification(string $source, string $classification): bool
+    {
+        $expected = self::REQUIRED_CLASSIFICATIONS[$source] ?? null;
+
+        return $expected === null || in_array($classification, (array) $expected, true);
     }
 }

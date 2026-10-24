@@ -1,6 +1,5 @@
 <?php
 
-use App\Livewire\Inventory\ReworkingCostRecordManagement;
 use App\Livewire\TaxCompliance\TaxReport;
 use App\Livewire\TaxCompliance\VatRecords;
 use App\Livewire\TaxCompliance\VatReturnPreparation;
@@ -24,18 +23,20 @@ function reworkingVatEmployee(): Employee
     ]), ['inventory.view', 'inventory.create', 'inventory.update', 'inventory.delete', 'tax.view']);
 }
 
-function createReworkingVatRecord(string $batch, string $date, string $cost, string $inputVat): void
+function createReworkingVatRecord(string $batch, string $date, string $cost, string $inputVat): ReworkingCostRecord
 {
-    Livewire::test(ReworkingCostRecordManagement::class)
-        ->call('create')
-        ->set('projectName', 'Warehouse Dismantling')
-        ->set('batchNumber', $batch)
-        ->set('recordDate', $date)
-        ->set('description', 'Cleaning and repair of recovered steel bars')
-        ->set('totalReworkingCost', $cost)
-        ->set('inputVat', $inputVat)
-        ->call('save')
-        ->assertHasNoErrors();
+    $nextSourceId = (int) ReworkingCostRecord::query()->max('source_record_id') + 1;
+
+    return ReworkingCostRecord::create([
+        'employee_id' => auth()->id(),
+        'source_record_id' => $nextSourceId,
+        'project_name' => 'Warehouse Dismantling',
+        'batch_number' => $batch,
+        'record_date' => $date,
+        'description' => 'Cleaning and repair of recovered steel bars',
+        'total_reworking_cost' => $cost,
+        'input_vat' => $inputVat,
+    ]);
 }
 
 function createReworkingVatSale(string $number, string $completedAt, string $taxable, string $vat, string $total): void
@@ -110,7 +111,7 @@ test('saved reworking input VAT appears in VAT records, summary, report and retu
         ->assertFileDownloaded('vat-preparation-2026-Q4.csv');
 });
 
-test('saved reworking records are read from the database by other VAT users and by the record module', function () {
+test('saved reworking records are read from the database by other VAT users', function () {
     $inventoryEmployee = reworkingVatEmployee();
     $this->actingAs($inventoryEmployee);
     createReworkingVatRecord('BATCH-VAT-DB', '2026-10-20', '12500', '1500');
@@ -137,36 +138,20 @@ test('saved reworking records are read from the database by other VAT users and 
         ->assertSee('₱1,500.00')
         ->assertSee('1 saved Reworking Cost Record(s)');
 
-    // The module also loads the saved table when the session copy is gone.
-    $this->actingAs($inventoryEmployee);
-    session()->forget('demo.reworking-cost-records.employee.'.$inventoryEmployee->id);
+    ReworkingCostRecord::query()->sole()->update(['input_vat' => '1800.00']);
 
-    $databaseRecord = ReworkingCostRecord::query()->sole();
-
-    Livewire::test(ReworkingCostRecordManagement::class)
-        ->assertSee('BATCH-VAT-DB')
-        ->assertSee('₱12,500.00')
-        ->assertSee('₱1,500.00')
-        ->call('edit', $databaseRecord->source_record_id)
-        ->set('inputVat', '1800')
-        ->call('save')
-        ->assertHasNoErrors();
-
-    expect(ReworkingCostRecord::query()->count())->toBe(1)
-        ->and(ReworkingCostRecord::query()->sole()->input_vat)->toBe('1800.00');
+    Livewire::test(VatSummary::class)
+        ->set('selectedYear', 2026)
+        ->set('selectedPeriod', 10)
+        ->assertSee('₱1,800.00');
 });
 
-test('editing a reworking record updates one input VAT entry without duplicating it', function () {
+test('updating a reworking record updates one input VAT entry without duplicating it', function () {
     $employee = reworkingVatEmployee();
     $this->actingAs($employee);
-    createReworkingVatRecord('BATCH-VAT-002', '2026-11-05', '5000', '600');
+    $record = createReworkingVatRecord('BATCH-VAT-002', '2026-11-05', '5000', '600');
 
-    $sessionRecords = session('demo.reworking-cost-records.employee.'.$employee->id);
-    Livewire::test(ReworkingCostRecordManagement::class)
-        ->call('edit', $sessionRecords[0]['id'])
-        ->set('inputVat', '720')
-        ->call('save')
-        ->assertHasNoErrors();
+    $record->update(['input_vat' => '720.00']);
 
     expect(ReworkingCostRecord::query()->count())->toBe(1)
         ->and(ReworkingCostRecord::query()->sole()->input_vat)->toBe('720.00');

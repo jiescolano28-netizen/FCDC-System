@@ -85,7 +85,7 @@
                             <span>{{ $subject }}</span>
                         @endif
                     </div>
-                    <time datetime="{{ $activity->created_at?->toISOString() }}">{{ $activity->created_at?->format('M d, Y · H:i') }}</time>
+                    <time datetime="{{ \App\Support\PhilippineTime::iso($activity->created_at) }}">{{ \App\Support\PhilippineTime::format($activity->created_at, 'M d, Y · H:i') }} PHT</time>
                 </article>
             @empty
                 <p class="profile-activity-empty">No activity has been recorded for your account yet.</p>

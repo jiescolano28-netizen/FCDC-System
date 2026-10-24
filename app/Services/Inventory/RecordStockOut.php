@@ -41,7 +41,7 @@ class RecordStockOut
                 'notes' => $notes,
                 'reference' => $reference,
                 'effective_date' => $effectiveDate,
-                'posted_at' => now(),
+                'posted_at' => now('UTC'),
             ]);
 
             $this->timeline->assertNonNegative($item, 'issueQuantity');

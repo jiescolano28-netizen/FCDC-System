@@ -18,7 +18,8 @@ use Throwable;
  * Records and attachment references are held in the signed-in employee's
  * session and mirrored to a source-keyed table so the VAT compliance screens
  * can reconcile the saved input VAT without duplicate entries. This module
- * does not perform inventory revaluation or accounting postings.
+ * does not perform inventory revaluation or post journals itself; approved
+ * source journals are generated from Journal Entry.
  */
 class ReworkingCostRecordManagement extends Component
 {
@@ -42,6 +43,8 @@ class ReworkingCostRecordManagement extends Component
 
     public string $inputVat = '0.00';
 
+    public string $paymentMethod = '';
+
     /**
      * New supporting document staged for the record being created or edited.
      */
@@ -60,7 +63,7 @@ class ReworkingCostRecordManagement extends Component
 
     public function mount(): void
     {
-        $this->recordDate = now()->toDateString();
+        $this->recordDate = now('Asia/Manila')->toDateString();
     }
 
     public function create(): void
@@ -89,6 +92,7 @@ class ReworkingCostRecordManagement extends Component
         $this->description = $record['description'];
         $this->totalReworkingCost = $record['total_reworking_cost'];
         $this->inputVat = $record['input_vat'];
+        $this->paymentMethod = $record['payment_method'] ?? '';
         $this->existingAttachment = $record['attachment'] ?? null;
         $this->removeExistingAttachment = false;
         $this->attachmentFile = null;
@@ -138,8 +142,9 @@ class ReworkingCostRecordManagement extends Component
             'description' => trim($validated['description']),
             'total_reworking_cost' => number_format((float) $validated['totalReworkingCost'], 2, '.', ''),
             'input_vat' => number_format((float) ($validated['inputVat'] ?? 0), 2, '.', ''),
+            'payment_method' => trim((string) ($validated['paymentMethod'] ?? '')) ?: null,
             'attachment' => $attachment,
-            'updated_at' => now()->toDateTimeString(),
+            'updated_at' => now('UTC')->toDateTimeString(),
         ];
 
         if ($wasEditing) {
@@ -192,12 +197,13 @@ class ReworkingCostRecordManagement extends Component
             'batchNumber',
             'description',
             'totalReworkingCost',
+            'paymentMethod',
             'attachmentFile',
             'existingAttachment',
             'removeExistingAttachment',
         ]);
 
-        $this->recordDate = now()->toDateString();
+        $this->recordDate = now('Asia/Manila')->toDateString();
         $this->inputVat = '0.00';
         $this->resetValidation();
     }
@@ -248,6 +254,7 @@ class ReworkingCostRecordManagement extends Component
             'description' => ['required', 'string', 'max:2000'],
             'totalReworkingCost' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'inputVat' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
+            'paymentMethod' => ['nullable', 'string', 'max:100'],
             'attachmentFile' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
         ];
 
@@ -321,6 +328,7 @@ class ReworkingCostRecordManagement extends Component
                     'description' => $record->description,
                     'total_reworking_cost' => (string) $record->total_reworking_cost,
                     'input_vat' => (string) $record->input_vat,
+                    'payment_method' => $record->payment_method,
                     'attachment' => $record->attachment,
                     'updated_at' => $record->updated_at?->toDateTimeString(),
                 ]);
@@ -410,6 +418,7 @@ class ReworkingCostRecordManagement extends Component
                     'description' => $record['description'],
                     'total_reworking_cost' => $record['total_reworking_cost'],
                     'input_vat' => $record['input_vat'],
+                    'payment_method' => $record['payment_method'] ?? null,
                     'attachment' => $record['attachment'] ?? null,
                 ],
             );

@@ -1,0 +1,43 @@
+{
+  "banner": "SYNTHETIC DEMO DATA Generated sample records for capstone testing only. These are not FCDC official financial balances, records, or approvals. Do not file, audit, or use them in production.",
+  "openingBooks": {
+    "production": "Production activated on October 24, 2026",
+    "supplier": "Opening supplier schedule reconciled",
+    "inventory": "Opening stock schedule reconciled",
+    "cutover": "Approved cutover: October 24, 2026"
+  },
+  "posReceipt": "Receipt · Completed transaction Fabellion Construction and Development Corp. POS-20261023-C8MJACLQ 2026-10-23 17:37 Customer: DEMO Browser E2E Customer Tax classification VATable Sales DEMO Ceramic Tiles 1.00 piece × ₱90.00 ₱90.00 Subtotal ₱90.00 VAT rate 12.00% Output VAT ₱10.80 Total ₱100.80 Cash received ₱100,000.00 Change ₱99,899.20 Close Print receipt",
+  "journalEntry": {
+    "transactionNumber": "POS-20261023-C8MJACLQ",
+    "journalRef": "POS-GL-4",
+    "openingVisible": true,
+    "postedVisible": true
+  },
+  "generalLedger": {
+    "inventoryHeading": "1040 — Recovered Materials Inventory ledger activity",
+    "hasSale": true,
+    "balances": "Opening balance 64,000.00 Debit Total debits 3,800.00 Total credits 2,450.00 Ending balance 65,350.00 Debit"
+  },
+  "trialBalance": {
+    "balanced": true,
+    "totals": "Unadjusted debits ₱821,268.80 Unadjusted credits ₱821,268.80",
+    "apReconciliation": "Accounts Payable: book 32,000.00; supplier and invoice schedule 32,000.00.",
+    "inventoryReconciliation": "Inventory: book 65,350.00; valued-item schedule 65,350.00.",
+    "posJournalPresent": false
+  },
+  "incomeStatement": {
+    "sales": "Sales PHP 3,990.00",
+    "cogs": "Cost of Goods Sold (PHP 2,450.00)",
+    "grossProfit": "Gross Profit PHP 1,540.00",
+    "netIncome": "Net Income PHP 590.00"
+  },
+  "balanceSheet": {
+    "equationBalanced": true,
+    "summary": "Total assets PHP 817,068.80 = Liabilities PHP 32,478.80 + Equity PHP 784,590.00"
+  },
+  "accountingOverview": {
+    "available": true,
+    "hasRevenue": true
+  },
+  "errors": []
+}

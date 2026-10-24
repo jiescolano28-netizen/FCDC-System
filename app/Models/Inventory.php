@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PhilippineTime;
 use App\Support\TaxClassification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -75,8 +76,8 @@ class Inventory extends Model
                     'type' => 'opening_balance',
                     'quantity' => $inventory->qty,
                     'reason_category' => 'opening_balance',
-                    'effective_date' => $inventory->created_at->toDateString(),
-                    'posted_at' => now(),
+                    'effective_date' => PhilippineTime::at($inventory->created_at)?->toDateString(),
+                    'posted_at' => now('UTC'),
                 ]);
             }
         });

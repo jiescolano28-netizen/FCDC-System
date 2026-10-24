@@ -17,6 +17,7 @@ class ReworkingCostRecord extends Model
         'description',
         'total_reworking_cost',
         'input_vat',
+        'payment_method',
         'attachment',
     ];
 

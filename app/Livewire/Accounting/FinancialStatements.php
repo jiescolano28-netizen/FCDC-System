@@ -88,6 +88,7 @@ class FinancialStatements extends Component
             'report' => $report,
             'fiscalClosings' => $fiscalClosings,
             'generatedAt' => CarbonImmutable::now('Asia/Manila')->format('F j, Y g:i:s A').' Asia/Manila',
+            'productionActivated' => (bool) $readiness['production_activated'],
         ])->layout('layouts.app', ['title' => 'Financial Statements']);
     }
 

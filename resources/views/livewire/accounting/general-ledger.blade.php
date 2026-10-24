@@ -2,13 +2,29 @@
     <header class="page-heading general-ledger-heading">
         <div>
             <h1 id="general-ledger-heading">General Ledger</h1>
-            <p class="page-subtitle">Posted account activity from approved accounting cutover, with opening and running balances.</p>
+            <p class="page-subtitle">Posted account activity from the selected accounting book and cut-off date, with opening, movement and ending balances.</p>
         </div>
     </header>
 
+    @if (! $productionActivated && $cutoverDate)
+        <p class="report-pre-activation-notice" role="status" data-testid="pre-activation-notice">
+            <strong>Pre-activation preview.</strong>
+            Opening balances are posted, but production accounting has not been activated. This ledger is provisional and may be replaced by final cutover activity.
+            Trial Balance and Accounting Overview remain unavailable until an authorized reviewer activates production accounting.
+        </p>
+    @endif
+
     <div class="general-ledger-filters" role="group" aria-label="General ledger selectors">
         <label>
-            <span>Account</span>
+            <span>Book</span>
+            <select wire:model.live="bookKey">
+                @foreach ($books as $book)
+                    <option value="{{ $book }}">{{ $this->bookLabel($book) }}</option>
+                @endforeach
+            </select>
+        </label>
+        <label>
+            <span>Ledger view</span>
             <select wire:model.live="accountId">
                 <option value="">All accounts</option>
                 @foreach ($accounts as $account)
@@ -17,8 +33,8 @@
             </select>
         </label>
         <label>
-            <span>From date <small>(optional — defaults to cutover)</small></span>
-            <input type="date" wire:model.live="fromDate">
+            <span>Cut-off date <small>(optional — defaults to cutover)</small></span>
+            <input type="date" wire:model.live="cutoffDate">
         </label>
         <label>
             <span>To date</span>
@@ -27,7 +43,18 @@
     </div>
 
     @if ($cutoverDate)
-        <p class="general-ledger-coverage">Supported transaction-level coverage begins {{ $cutoverDate }} (Manila).</p>
+        <p class="general-ledger-coverage">
+            {{ $bookLabel }} · supported transaction-level coverage begins {{ $cutoverDate }} (Manila).
+            @if ($reportStartDate)
+                Reporting period: {{ $reportStartDate }} through {{ $toDate }} (inclusive).
+            @endif
+        </p>
+        @if ($cutoverJournal)
+            <p class="general-ledger-coverage">
+                Opening position: <a href="{{ $this->journalUrl($cutoverJournal) }}">{{ $cutoverJournal->reference }}</a>
+                approved opening balances dated {{ $cutoverJournal->accounting_date->format('Y-m-d') }}@if ($cutoverJournal->approver) · approved by {{ $cutoverJournal->approver->username }}@endif.
+            </p>
+        @endif
     @endif
 
     @if ($dateError)
@@ -37,22 +64,25 @@
             <header>
                 <div>
                     <h2 id="general-ledger-activity-heading">{{ $selectedAccount->code }} — {{ $selectedAccount->name }} ledger activity</h2>
-                    <p>{{ $fromDate !== '' ? $fromDate : $cutoverDate }} through {{ $toDate }} (inclusive, Manila dates){{ $selectedAccount->is_active ? '' : ' · Inactive account with posted history' }}</p>
+                    <p>{{ $reportStartDate }} through {{ $toDate }} (inclusive, Manila dates){{ $selectedAccount->is_active ? '' : ' · Inactive account with posted history' }}</p>
                 </div>
             </header>
             <dl class="general-ledger-balances">
                 <div><dt>Opening balance</dt><dd>{{ number_format(abs($openingBalanceCents) / 100, 2) }} {{ $openingBalanceCents < 0 ? 'Credit' : 'Debit' }}</dd></div>
-                <div><dt>Closing balance</dt><dd>{{ number_format(abs($closingBalanceCents) / 100, 2) }} {{ $closingBalanceCents < 0 ? 'Credit' : 'Debit' }}</dd></div>
+                <div><dt>Total debits</dt><dd>{{ number_format($totalDebitCents / 100, 2) }}</dd></div>
+                <div><dt>Total credits</dt><dd>{{ number_format($totalCreditCents / 100, 2) }}</dd></div>
+                <div><dt>Ending balance</dt><dd>{{ number_format(abs($closingBalanceCents) / 100, 2) }} {{ $closingBalanceCents < 0 ? 'Credit' : 'Debit' }}</dd></div>
             </dl>
             @if ($lines->isEmpty())
                 <div class="general-ledger-empty" role="status">
                     <p>No posted activity in this period.</p>
-                    <span>The opening balance remains the closing balance.</span>
+                    <span>The opening balance remains the ending balance.</span>
                 </div>
             @else
                 <div class="general-ledger-table-wrap">
                     <table class="general-ledger-table">
-                        <thead><tr><th scope="col">Date</th><th scope="col">Journal / source reference</th><th scope="col">Description</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Running balance</th></tr></thead>
+                        <caption class="general-ledger-table-caption">Account {{ $selectedAccount->code }} — {{ $selectedAccount->name }}</caption>
+                        <thead><tr><th scope="col">Transaction date</th><th scope="col">Reference number</th><th scope="col">Description</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Running balance</th></tr></thead>
                         <tbody>
                             @foreach ($lines as $line)
                                 <tr wire:key="general-ledger-line-{{ $line['journal']->id }}-{{ $loop->index }}">
@@ -80,23 +110,43 @@
         </section>
     @else
         <section class="chart-account-card" aria-labelledby="general-ledger-activity-heading">
-            <header><div><h2 id="general-ledger-activity-heading">All account activity</h2><p>{{ $fromDate !== '' ? $fromDate : $cutoverDate }} through {{ $toDate }} · inclusive Manila dates · {{ $allAccountRows->count() }} accounts with posted history</p></div></header>
+            <header><div><h2 id="general-ledger-activity-heading">All account activity</h2><p>{{ $reportStartDate }} through {{ $toDate }} · inclusive Manila dates · {{ $bookLabel }} · {{ $allAccountRows->count() }} accounts with posted history</p></div></header>
+            <dl class="general-ledger-report-totals" aria-label="General ledger period totals">
+                <div><dt>Opening balance</dt><dd>{{ number_format(abs($reportOpeningCents) / 100, 2) }} {{ $reportOpeningCents < 0 ? 'Credit' : 'Debit' }}</dd></div>
+                <div><dt>Total debits</dt><dd>{{ number_format($reportDebitCents / 100, 2) }}</dd></div>
+                <div><dt>Total credits</dt><dd>{{ number_format($reportCreditCents / 100, 2) }}</dd></div>
+                <div><dt>Ending balance</dt><dd>{{ number_format(abs($reportClosingCents) / 100, 2) }} {{ $reportClosingCents < 0 ? 'Credit' : 'Debit' }}</dd></div>
+            </dl>
+            @if ($trialBalanceUrl)
+                <p class="general-ledger-reconciliation">
+                    Ending balances use the same posted journals and inclusive date coverage as the Trial Balance.
+                    <a href="{{ $trialBalanceUrl }}">Reconcile with Trial Balance</a>
+                </p>
+            @elseif (! $dateError)
+                <p class="general-ledger-reconciliation">The Trial Balance currently reports the FCDC book. Select FCDC to compare ending balances.</p>
+            @endif
             @if ($allAccountRows->isEmpty())
-                <div class="general-ledger-empty" role="status"><p>No posted account activity for this date range.</p><span>Adjust the dates or choose a different account filter.</span></div>
+                <div class="general-ledger-empty" role="status"><p>No posted account activity for this date range.</p><span>Adjust the cut-off or end date, or choose a different ledger view.</span></div>
             @else
                 <div class="general-ledger-account-list">
                     @foreach ($allAccountRows as $accountRow)
                         <article class="general-ledger-account-group" wire:key="general-ledger-account-{{ $accountRow['account']->id }}">
                             <header class="general-ledger-account-group-heading">
                                 <div><h3>{{ $accountRow['account']->code }} <span>{{ $accountRow['account']->name }}</span>@if (! $accountRow['account']->is_active)<small>Inactive</small>@endif</h3><p>{{ $accountRow['lines']->count() }} posted {{ $accountRow['lines']->count() === 1 ? 'entry' : 'entries' }} in selected period</p></div>
-                                <dl>@if ($accountRow['opening'] !== 0)<div><dt>Opening balance</dt><dd>{{ number_format(abs($accountRow['opening']) / 100, 2) }} {{ $accountRow['opening'] < 0 ? 'Credit' : 'Debit' }}</dd></div>@endif<div><dt>Closing balance</dt><dd>{{ number_format(abs($accountRow['closing']) / 100, 2) }} {{ $accountRow['closing'] < 0 ? 'Credit' : 'Debit' }}</dd></div></dl>
+                                <dl>
+                                    <div><dt>Opening balance</dt><dd>{{ number_format(abs($accountRow['opening']) / 100, 2) }} {{ $accountRow['opening'] < 0 ? 'Credit' : 'Debit' }}</dd></div>
+                                    <div><dt>Total debits</dt><dd>{{ number_format($accountRow['total_debit_cents'] / 100, 2) }}</dd></div>
+                                    <div><dt>Total credits</dt><dd>{{ number_format($accountRow['total_credit_cents'] / 100, 2) }}</dd></div>
+                                    <div><dt>Ending balance</dt><dd>{{ number_format(abs($accountRow['closing']) / 100, 2) }} {{ $accountRow['closing'] < 0 ? 'Credit' : 'Debit' }}</dd></div>
+                                </dl>
                             </header>
                             @if ($accountRow['lines']->isEmpty())
                                 <p class="general-ledger-account-no-activity">No posted entries in this period; the opening balance carries forward.</p>
                             @else
                                 <div class="general-ledger-table-wrap">
                                     <table class="general-ledger-table general-ledger-account-table">
-                                        <thead><tr><th scope="col">Date</th><th scope="col">Journal reference</th><th scope="col">Description</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Running balance</th></tr></thead>
+                                        <caption class="general-ledger-table-caption">Account {{ $accountRow['account']->code }} — {{ $accountRow['account']->name }}</caption>
+                                        <thead><tr><th scope="col">Transaction date</th><th scope="col">Reference number</th><th scope="col">Description</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Running balance</th></tr></thead>
                                         <tbody>
                                             @foreach ($accountRow['lines'] as $line)
                                                 <tr wire:key="general-ledger-all-{{ $line['journal']->id }}-{{ $loop->index }}">

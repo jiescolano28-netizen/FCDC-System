@@ -58,7 +58,7 @@
                         <td>
                             <span class="{{ $item->stockStatusBadgeClass() }}">{{ $item->stockStatusLabel() }}</span>
                         </td>
-                        <td>{{ $item->updated_at->format('M j, Y') }}</td>
+                        <td>{{ \App\Support\PhilippineTime::format($item->updated_at, 'M j, Y') }}</td>
                     </tr>
                 @empty
                     <tr><td colspan="9" class="muted">No inventory items match these filters.</td></tr>

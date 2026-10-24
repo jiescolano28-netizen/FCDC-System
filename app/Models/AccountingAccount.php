@@ -46,10 +46,10 @@ class AccountingAccount extends Model
         'Expense' => 'debit',
     ];
 
-    private const CONTRA_ACCOUNT_BALANCES = [
-        '1510' => ['contra_asset', 'credit'],
-        '3050' => ['contra_equity', 'debit'],
-        '4090' => ['contra_revenue', 'debit'],
+    private const CONTRA_NORMAL_BALANCES = [
+        'contra_asset' => 'credit',
+        'contra_equity' => 'debit',
+        'contra_revenue' => 'debit',
     ];
 
     public static function classifications(): array
@@ -77,7 +77,7 @@ class AccountingAccount extends Model
             return true;
         }
 
-        return (self::CONTRA_ACCOUNT_BALANCES[$code] ?? null) === [$classification, $normalBalance];
+        return (self::CONTRA_NORMAL_BALANCES[$classification] ?? null) === $normalBalance;
     }
 
     protected static function booted(): void
@@ -132,12 +132,24 @@ class AccountingAccount extends Model
 
     public function markUsed(): void
     {
-        $this->forceFill(['used_at' => $this->used_at ?? now()])->save();
+        $this->forceFill(['used_at' => $this->used_at ?? now('UTC')])->save();
     }
 
     public function hasPendingPostingPolicy(): bool
     {
         return in_array($this->code, self::POSTING_POLICY_HELD_CODES, true);
+    }
+
+    public function displayType(): string
+    {
+        return match (true) {
+            $this->classification === 'contra_revenue' => 'Contra-Revenue',
+            $this->classification === 'cost_of_goods_sold' => 'Cost of Sales',
+            $this->classification === 'operating_expense' => $this->code === '6010'
+                ? 'Cost of Sales / Expense'
+                : 'Operating Expense',
+            default => $this->type,
+        };
     }
 
     public function isApprovedForPosting(): bool

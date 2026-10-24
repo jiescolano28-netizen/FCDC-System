@@ -25,8 +25,8 @@
                             @else<ul>@foreach ($readiness['blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul>@endif
                         </td>
                         <td>
-                            @if ($period->closed_at)Closed {{ $period->closed_at->timezone('UTC')->format('Y-m-d H:i:s') }} UTC by {{ $period->closer?->username ?? 'Unavailable' }} — {{ $period->close_reason }}@endif
-                            @if ($period->reopened_at)<br>Reopened {{ $period->reopened_at->timezone('UTC')->format('Y-m-d H:i:s') }} UTC by {{ $period->reopener?->username ?? 'Unavailable' }} — {{ $period->reopen_reason }}@endif
+                            @if ($period->closed_at)Closed {{ \App\Support\PhilippineTime::format($period->closed_at, 'Y-m-d H:i:s') }} PHT by {{ $period->closer?->username ?? 'Unavailable' }} — {{ $period->close_reason }}@endif
+                            @if ($period->reopened_at)<br>Reopened {{ \App\Support\PhilippineTime::format($period->reopened_at, 'Y-m-d H:i:s') }} PHT by {{ $period->reopener?->username ?? 'Unavailable' }} — {{ $period->reopen_reason }}@endif
                         </td>
                         <td>
                             @if ($period->status === 'open')

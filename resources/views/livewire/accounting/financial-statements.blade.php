@@ -28,6 +28,13 @@
         </label>
     </div>
 
+    @if (! $productionActivated && $report['available'])
+        <p class="report-pre-activation-notice" role="status" data-testid="pre-activation-notice">
+            <strong>Pre-activation preview.</strong>
+            Opening balances are posted, but production accounting has not been activated. This statement is provisional; Trial Balance and Accounting Overview remain unavailable until an authorized reviewer activates production accounting.
+        </p>
+    @endif
+
     <article id="financial-statement-document" class="financial-statement-document" aria-label="Selected financial statement">
         <header class="financial-statement-document-heading">
             <div class="financial-statement-title-row"><div><p class="financial-statement-eyebrow">FCDC accounting report · PHP</p>

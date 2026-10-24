@@ -14,8 +14,10 @@ use App\Models\StockMovement;
 use App\Services\Accounting\CashDisbursementService;
 use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -127,9 +129,9 @@ test('direct disbursement rejects an ordinarily approved Miscellaneous Expense w
     $actor = disbursementEmployee();
     $service = app(CashDisbursementService::class);
     $draft = $service->saveDraft(disbursementInput($bank, $miscellaneous), $actor->id);
-    $activityCount = \Illuminate\Support\Facades\DB::table('activity_log')->count();
+    $activityCount = DB::table('activity_log')->count();
 
-    expect(fn () => $service->post($draft->id, $actor->id))->toThrow(\Illuminate\Validation\ValidationException::class);
+    expect(fn () => $service->post($draft->id, $actor->id))->toThrow(ValidationException::class);
 
     expect($draft->fresh()->status)->toBe('draft')
         ->and($draft->fresh()->amount_cents)->toBe(200_000)
@@ -138,8 +140,8 @@ test('direct disbursement rejects an ordinarily approved Miscellaneous Expense w
         ->and(AccountingJournal::where('source_type', 'cash_disbursement')->count())->toBe(0)
         ->and($miscellaneous->fresh()->used_at)->toBeNull()
         ->and($cash->fresh()->used_at)->toBeNull()
-        ->and(\Illuminate\Support\Facades\DB::table('cash_disbursement_lines')->where('cash_disbursement_id', $draft->id)->count())->toBe(1)
-        ->and(\Illuminate\Support\Facades\DB::table('activity_log')->count())->toBe($activityCount);
+        ->and(DB::table('cash_disbursement_lines')->where('cash_disbursement_id', $draft->id)->count())->toBe(1)
+        ->and(DB::table('activity_log')->count())->toBe($activityCount);
 });
 
 test('direct payment drafts can be edited and deleted without creating a journal', function () {
@@ -230,7 +232,11 @@ test('allocation inequality, missing evidence and references, and unauthorized a
 
 test('only an approved additional payment method is accepted and its mapping does not select the credited account', function () {
     [$cash, $bank, $utilities] = prepareDisbursementBooks();
-    $this->actingAs(disbursementEmployee(['accounting.view', 'accounting.maintain-accounts']));
+    $this->actingAs(grantEmployeeAdministratorRole(Employee::create([
+        'username' => 'cash.mapping.admin',
+        'email' => 'cash-mapping-admin@example.com',
+        'password' => Hash::make('cash-password'),
+    ])));
     Livewire::test(ChartOfAccounts::class)
         ->set('mappingAccounts.disbursement_method:Other', (string) $bank->id)
         ->call('saveMapping', 'disbursement_method:Other')
@@ -243,7 +249,11 @@ test('only an approved additional payment method is accepted and its mapping doe
     }
     $component->call('saveDraft')->assertHasErrors('method');
 
-    $this->actingAs(disbursementEmployee(['accounting.view', 'accounting.approve-accounts']));
+    $this->actingAs(grantEmployeeAdministratorRole(Employee::create([
+        'username' => 'cash.mapping.approver',
+        'email' => 'cash-mapping-approver@example.com',
+        'password' => Hash::make('cash-password'),
+    ])));
     Livewire::test(ChartOfAccounts::class)
         ->call('approveMapping', 'disbursement_method:Other')
         ->assertHasNoErrors();

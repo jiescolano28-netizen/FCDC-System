@@ -107,7 +107,7 @@
                                         <td>{{ $attachment->mime_type ?: '—' }}</td>
                                         <td class="numeric">{{ $attachment->human_size }}</td>
                                         <td>{{ $attachment->uploader?->username ?? '—' }}</td>
-                                        <td>{{ $attachment->created_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                                        <td>{{ \App\Support\PhilippineTime::format($attachment->created_at, 'Y-m-d H:i') ?? '—' }} PHT</td>
                                         <td>
                                             <button type="button" class="secondary" wire:click="previewAttachment({{ $attachment->id }})">View</button>
                                             <a class="secondary" href="{{ route('inventory.batch-categories.attachments.download', $attachment) }}">Download</a>
@@ -145,7 +145,7 @@
                                 <div><dt>Type</dt><dd>{{ $previewAttachment->mime_type ?: '—' }}</dd></div>
                                 <div><dt>Size</dt><dd>{{ $previewAttachment->human_size }}</dd></div>
                                 <div><dt>Uploaded by</dt><dd>{{ $previewAttachment->uploader?->username ?? '—' }}</dd></div>
-                                <div><dt>Uploaded</dt><dd>{{ $previewAttachment->created_at?->format('Y-m-d H:i') ?? '—' }}</dd></div>
+                                <div><dt>Uploaded</dt><dd>{{ \App\Support\PhilippineTime::format($previewAttachment->created_at, 'Y-m-d H:i') ?? '—' }} PHT</dd></div>
                             </dl>
                             <footer>
                                 <a class="secondary" href="{{ route('inventory.batch-categories.attachments.download', $previewAttachment) }}">Download</a>

@@ -223,7 +223,7 @@ class SupplierPurchaseCorrectionService
             foreach ($reviewedAdjustments as $adjustment) {
                 $adjustment['supplier_purchase_correction_id'] = $correction->id;
                 DB::table('supplier_purchase_correction_lines')->insert($adjustment + [
-                    'created_at' => now(), 'updated_at' => now(),
+                    'created_at' => now('UTC'), 'updated_at' => now('UTC'),
                 ]);
             }
             foreach ($inventoryChanges as $inventoryId => $change) {
@@ -441,7 +441,7 @@ class SupplierPurchaseCorrectionService
             ]);
             foreach ($reviewed as $allocation) {
                 $allocation['supplier_purchase_correction_id'] = $correction->id;
-                DB::table('supplier_purchase_correction_lines')->insert($allocation + ['created_at' => now(), 'updated_at' => now()]);
+                DB::table('supplier_purchase_correction_lines')->insert($allocation + ['created_at' => now('UTC'), 'updated_at' => now('UTC')]);
             }
             foreach ($inventoryChanges as $inventoryId => $change) {
                 if ($change === 0) {

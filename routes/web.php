@@ -16,6 +16,7 @@ use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Accounting\NotesToFinancialStatements;
 use App\Livewire\Accounting\OpeningBooks;
+use App\Livewire\Accounting\SalesInventoryProfitability;
 use App\Livewire\Accounting\SupplierPurchases;
 use App\Livewire\Accounting\TrialBalance;
 use App\Livewire\ActivityLog\ActivityLogPage;
@@ -28,6 +29,7 @@ use App\Livewire\Inventory\BatchCategoryManagement;
 use App\Livewire\Inventory\InventoryManagement;
 use App\Livewire\Inventory\InventoryOverview;
 use App\Livewire\Inventory\InventoryProfile;
+use App\Livewire\Inventory\OperatingCostRecordManagement;
 use App\Livewire\Inventory\ReworkingCostRecordManagement;
 use App\Livewire\Pos\PointOfSale;
 use App\Livewire\Profile\ProfilePage;
@@ -81,6 +83,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/accounting/financial-statements', FinancialStatements::class)->middleware('permission:accounting.view')->name('accounting.financial-statements');
     Route::get('/accounting/notes-to-financial-statements', NotesToFinancialStatements::class)->middleware('permission:accounting.view')->name('accounting.notes-to-financial-statements');
     Route::get('/accounting/general-ledger', GeneralLedger::class)->middleware('permission:accounting.view')->name('accounting.general-ledger');
+    Route::get('/accounting/sales-inventory-profitability', SalesInventoryProfitability::class)->middleware('permission:accounting.view')->name('accounting.sales-inventory-profitability');
     Route::get('/accounting/trial-balance', TrialBalance::class)->middleware('permission:accounting.view')->name('accounting.trial-balance');
     Route::get('/settings', SettingsPage::class)->middleware('permission:settings.view')->name('settings');
     Route::get('/pos', PointOfSale::class)->middleware('permission:pos.view')->name('pos');
@@ -100,6 +103,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:inventory.view')->name('inventory.batch-categories');
     Route::get('/inventory/reworking-cost-records', ReworkingCostRecordManagement::class)
         ->middleware('permission:inventory.view')->name('inventory.reworking-cost-records');
+    Route::get('/inventory/operating-cost-records', OperatingCostRecordManagement::class)
+        ->middleware('permission:inventory.view')->name('inventory.operating-cost-records');
 
     // Inventory batch category attachments (dedicated controller/service surface)
     Route::get('/inventory/batch-categories/{batchCategory}/attachments', [InventoryBatchCategoryAttachmentController::class, 'index'])

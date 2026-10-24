@@ -105,14 +105,14 @@ test('financial statements is authenticated and accounting.view protects report 
         ->assertSee('Income Statement')
         ->assertSee('Balance Sheet')
         ->assertSee('Accounting')
-        ->assertSee(route('accounting.financial-statements'), false);
+        ->assertDontSee(route('accounting.financial-statements'), false);
 
     $this->actingAs(createFinancialStatementsEmployee([]))
         ->get(route('accounting.financial-statements'))
         ->assertForbidden();
 });
 
-test('accounting sidebar shows only the six scoped submodules and preserves related module routes', function () {
+test('accounting sidebar shows only the five scoped submodules and preserves related module routes', function () {
     $viewer = createFinancialStatementsEmployee();
     $response = $this->actingAs($viewer)->get(route('accounting.notes-to-financial-statements'));
 
@@ -124,8 +124,7 @@ test('accounting sidebar shows only the six scoped submodules and preserves rela
             'Journal Entry',
             'General Ledger',
             'Trial Balance',
-            'Financial Statements',
-            'Notes to Financial Statements / Disclosure',
+            'Sales and Inventory Profitability Report',
         ])
         ->assertDontSee('Accounting Overview')
         ->assertDontSee('Opening Books &amp; Cutover')
@@ -135,7 +134,9 @@ test('accounting sidebar shows only the six scoped submodules and preserves rela
         ->assertDontSee('Cash Disbursements');
 
     expect(route('accounting.accounts-payable'))->toContain('/accounting/accounts-payable')
-        ->and(route('accounting.cash-disbursements'))->toContain('/accounting/cash-disbursements');
+        ->and(route('accounting.cash-disbursements'))->toContain('/accounting/cash-disbursements')
+        ->and(route('accounting.financial-statements'))->toContain('/accounting/financial-statements')
+        ->and(route('accounting.notes-to-financial-statements'))->toContain('/accounting/notes-to-financial-statements');
 });
 
 test('income statement classifies posted activity and excludes drafts, tax and fiscal closing entries', function () {

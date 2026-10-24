@@ -43,7 +43,7 @@
         <h2 id="opening-journal-heading">Opening journal</h2>
         @if ($journal?->status === 'posted')
             <p>Approved cutover: {{ \Carbon\CarbonImmutable::parse($journal->accounting_date, 'Asia/Manila')->format('F j, Y') }}</p>
-            <p>Journal {{ $journal->reference }} · approved by {{ $journal->approver?->username ?? 'Unavailable' }} · {{ $journal->approved_at?->timezone('UTC')->format('Y-m-d H:i:s') }} UTC</p>
+            <p>Journal {{ $journal->reference }} · approved by {{ $journal->approver?->username ?? 'Unavailable' }} · {{ \App\Support\PhilippineTime::format($journal->approved_at, 'Y-m-d H:i:s') }} PHT</p>
             <table><thead><tr><th>Account</th><th>Debit (PHP)</th><th>Credit (PHP)</th></tr></thead><tbody>
                 @foreach ($journal->lines as $line)
                     <tr><td>{{ $line->account->code }} — {{ $line->account->name }}</td><td>{{ number_format($line->debit_cents / 100, 2) }}</td><td>{{ number_format($line->credit_cents / 100, 2) }}</td></tr>

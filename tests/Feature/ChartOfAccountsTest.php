@@ -32,12 +32,78 @@ test('accounting viewers see only persisted production accounts and cannot maint
         ->assertDontSee('Add Account');
 });
 
-test('authorized staff create accounts which require separate approval before use', function () {
+test('only the system administrator sees account management controls', function () {
+    AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Cash on Hand',
+        'description' => 'Cash received from completed POS sales paid in cash.',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs(createChartOfAccountsEmployee());
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertSee('View-only access')
+        ->assertSee('Cash received from completed POS sales paid in cash.')
+        ->assertSee('View')
+        ->assertDontSee('Add an account')
+        ->assertDontSee('Save account')
+        ->assertDontSee('Delete');
+
+    $administrator = grantEmployeeAdministratorRole(Employee::create([
+        'username' => 'account.administrator',
+        'email' => 'administrator@example.com',
+        'password' => Hash::make('account-password'),
+    ]));
+    $this->actingAs($administrator);
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertSee('Administrator access')
+        ->assertSee('Add an account')
+        ->assertSee('Save account')
+        ->assertSee('Edit')
+        ->assertSee('Delete');
+});
+
+test('non-administrators remain view-only even when they hold accounting permissions', function () {
     $employee = grantEmployeeTestPermissions(Employee::create([
+        'username' => 'account.non.admin',
+        'email' => 'non-admin@example.com',
+        'password' => Hash::make('account-password'),
+    ]), ['accounting.view', 'accounting.maintain-accounts', 'accounting.approve-accounts']);
+
+    $account = AccountingAccount::create([
+        'code' => '1010',
+        'name' => 'Cash on Hand',
+        'type' => 'Asset',
+        'classification' => 'cash',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($employee);
+
+    Livewire::test(ChartOfAccounts::class)->call('newAccount')->assertForbidden();
+    Livewire::test(ChartOfAccounts::class)
+        ->set('accountCode', '1020')
+        ->set('accountName', 'Cash in Bank')
+        ->set('type', 'Asset')
+        ->set('classification', 'bank')
+        ->set('normalBalance', 'debit')
+        ->call('saveAccount')
+        ->assertForbidden();
+    Livewire::test(ChartOfAccounts::class)->call('approveAccount', $account->id)->assertForbidden();
+});
+
+test('authorized staff create accounts which require separate approval before use', function () {
+    $employee = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'account.maintainer',
         'email' => 'maintainer@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
 
     $this->actingAs($employee);
 
@@ -59,11 +125,11 @@ test('authorized staff create accounts which require separate approval before us
         ->and($account->approved_by)->toBeNull()
         ->and($account->isApprovedForPosting())->toBeFalse();
 
-    $reviewer = grantEmployeeTestPermissions(Employee::create([
+    $reviewer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'account.reviewer',
         'email' => 'reviewer@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.approve-accounts']);
+    ]));
 
     $this->actingAs($reviewer);
     Livewire::test(ChartOfAccounts::class)
@@ -88,11 +154,11 @@ test('authorized staff create accounts which require separate approval before us
 });
 
 test('statement classifications follow account type and keep COGS within Expense', function () {
-    $employee = grantEmployeeTestPermissions(Employee::create([
+    $employee = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'classification.maintainer',
         'email' => 'classification@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
     $this->actingAs($employee);
 
     Livewire::test(ChartOfAccounts::class)
@@ -103,11 +169,11 @@ test('statement classifications follow account type and keep COGS within Expense
 });
 
 test('account maintenance enforces unique codes and ordinary or contra normal balances', function () {
-    $maintainer = grantEmployeeTestPermissions(Employee::create([
+    $maintainer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'account.policy.maintainer',
         'email' => 'account.policy@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
     $this->actingAs($maintainer);
 
     AccountingAccount::create([
@@ -223,7 +289,7 @@ test('account search and type and status filters read persisted records', functi
         ->assertDontSee('Structural steel');
 });
 
-test('default account listing separates inactive status, approval, and posting eligibility', function () {
+test('default account listing hides retired accounts and separates approval and posting eligibility', function () {
     $this->actingAs(createChartOfAccountsEmployee());
 
     $inactiveApproved = AccountingAccount::create([
@@ -245,6 +311,12 @@ test('default account listing separates inactive status, approval, and posting e
     ]);
 
     Livewire::test(ChartOfAccounts::class)
+        ->assertSet('status', 'Active')
+        ->assertDontSee('Inactive approved cash')
+        ->assertSee('Active pending bank')
+        ->assertSee('Pending approval')
+        ->assertDontSee('Eligible')
+        ->set('status', 'All')
         ->assertSee('Inactive approved cash')
         ->assertSee('Active pending bank')
         ->assertSee('Inactive')
@@ -256,12 +328,35 @@ test('default account listing separates inactive status, approval, and posting e
     expect($inactiveApproved->isApprovedForPosting())->toBeFalse();
 });
 
+test('retired and legacy accounts are hidden from the default chart while remaining available for audit', function () {
+    $this->actingAs(createChartOfAccountsEmployee());
+
+    $legacy = AccountingAccount::create([
+        'code' => 'LEGACY-1050',
+        'name' => 'Inventory (Legacy)',
+        'type' => 'Asset',
+        'classification' => 'inventory',
+        'normal_balance' => 'debit',
+        'is_active' => false,
+    ]);
+    $legacy->markUsed();
+
+    Livewire::test(ChartOfAccounts::class)
+        ->assertDontSee('LEGACY-1050')
+        ->assertDontSee('Inventory (Legacy)')
+        ->set('status', 'Inactive')
+        ->assertSee('LEGACY-1050')
+        ->assertSee('Inventory (Legacy)');
+
+    expect($legacy->fresh()->used_at)->not->toBeNull();
+});
+
 test('deactivation preserves a used account identity and reactivation requires renewed approval', function () {
-    $maintainer = grantEmployeeTestPermissions(Employee::create([
+    $maintainer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'account.maintainer3',
         'email' => 'maintainer3@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
     $account = AccountingAccount::create([
         'code' => '1010',
         'name' => 'Cash',
@@ -290,11 +385,11 @@ test('deactivation preserves a used account identity and reactivation requires r
 });
 
 test('changing a posting mapping clears its approval', function () {
-    $maintainer = grantEmployeeTestPermissions(Employee::create([
+    $maintainer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'mapping.maintainer',
         'email' => 'mapping-maintainer@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
     $first = AccountingAccount::create([
         'code' => '1010', 'name' => 'Cash', 'type' => 'Asset', 'classification' => 'cash',
         'normal_balance' => 'debit', 'is_active' => true, 'approved_at' => now(),
@@ -313,11 +408,11 @@ test('changing a posting mapping clears its approval', function () {
     $mapping = AccountingPostingMapping::create([
         'source' => 'cash', 'accounting_account_id' => $first->id, 'approved_at' => now(),
     ]);
-    $reviewer = grantEmployeeTestPermissions(Employee::create([
+    $reviewer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'mapping.reviewer',
         'email' => 'mapping-reviewer@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.approve-accounts']);
+    ]));
     $this->actingAs($reviewer);
     Livewire::test(ChartOfAccounts::class)
         ->call('approveMapping', 'cash')
@@ -340,11 +435,11 @@ test('changing a posting mapping clears its approval', function () {
 });
 
 test('used account identity and normal balance are immutable and used accounts cannot be deleted', function () {
-    $employee = grantEmployeeTestPermissions(Employee::create([
+    $employee = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'account.maintainer2',
         'email' => 'maintainer2@example.com',
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.maintain-accounts']);
+    ]));
     $account = AccountingAccount::create([
         'code' => '1200',
         'name' => 'Inventory',
@@ -467,11 +562,11 @@ test('approved mappings cannot post through an account with a mismatched classif
     expect($mapping->fresh()->isApprovedForPosting())->toBeFalse();
 });
 test('pending policy accounts cannot be approved or made postable through ordinary account approval', function () {
-    $reviewer = grantEmployeeTestPermissions(Employee::create([
+    $reviewer = grantEmployeeAdministratorRole(Employee::create([
         'username' => 'policy.reviewer.'.fake()->unique()->numerify('####'),
         'email' => fake()->unique()->safeEmail(),
         'password' => Hash::make('account-password'),
-    ]), ['accounting.view', 'accounting.approve-accounts']);
+    ]));
     $this->actingAs($reviewer);
 
     foreach ([
@@ -527,8 +622,8 @@ test('demo notice requires a verified isolated database and shows proposal treat
 
         Livewire::test(ChartOfAccounts::class)
             ->assertDontSee('Illustrative / Sample Data — Not Actual FCDC Financial Records')
-            ->assertSee('Production accounts')
-            ->assertSee('Maintain approved production accounts and source-account mappings.');
+            ->assertSee('Official accounts')
+            ->assertSee('Maintain the official chart of accounts and source-account mappings.');
 
         config([
             'database.connections.demo' => config('database.connections.sqlite'),
@@ -553,7 +648,7 @@ test('demo notice requires a verified isolated database and shows proposal treat
 
         Livewire::test(ChartOfAccounts::class)
             ->assertSee('Illustrative / Sample Data — Not Actual FCDC Financial Records')
-            ->assertSee('Proposed accounts')
+            ->assertSee('Official accounts (demo database)')
             ->assertSee('Contra-asset; credit balance reduces total assets')
             ->assertSee('Not eligible');
     } finally {

@@ -42,7 +42,7 @@ class FullDemoSeeder extends Seeder
                 if (AccountingJournal::where('reference', 'DEMO-SETUP-COMPLETE')->where('status', 'posted')->exists()) {
                     return false;
                 }
-                foreach (['employees', 'inventories', 'inventory_batch_categories', 'suppliers', 'demolition_projects',
+                foreach (['employees', 'accounting_accounts', 'inventories', 'inventory_batch_categories', 'suppliers', 'demolition_projects',
                     'accounting_journals', 'accounting_posting_mappings', 'accounting_posting_periods',
                     'accounting_ytd_summaries', 'opening_inventory_valuations', 'pos_transactions',
                     'cash_disbursements', 'supplier_purchase_invoices'] as $table) {
@@ -121,27 +121,22 @@ class FullDemoSeeder extends Seeder
     {
         $result = app(ProposedChartOfAccountsSeeder::class)->seed($isolation);
         if ($result['conflicts'] !== []) {
-            throw new RuntimeException('The proposed chart conflicts with existing definitions. No demo data was committed.');
+            throw new RuntimeException('The official chart conflicts with existing definitions. No demo data was committed.');
         }
-        $codes = ['1010', '1020', '1040', '1050', '2010', '2030', '3010', '3030', '4010', '5010', '5090', '6030', '7010'];
+        $codes = ['1010', '1020', '1040', '1050', '2010', '2020', '3010', '3020', '4010', '5010', '6010', '6130', '6170', '6180'];
         foreach ($codes as $code) {
             $account = AccountingAccount::where('code', $code)->firstOrFail();
             $account->update(['is_active' => true]);
             $account->update(['approved_at' => now(), 'approved_by' => $reviewerId]);
         }
-        $card = AccountingAccount::create([
-            'code' => '1090', 'name' => 'DEMO Card Clearing', 'type' => 'Asset', 'classification' => 'card_clearing',
-            'normal_balance' => 'debit', 'is_active' => true, 'approved_at' => now(), 'approved_by' => $reviewerId,
-            'description' => 'Synthetic demo card settlement account; not a production policy.',
-        ]);
-        $accounts = AccountingAccount::all()->keyBy('code')->all();
-        $accounts['1090'] = $card;
-        foreach (['cash' => '1010', 'bank' => '1020', 'card_clearing' => '1090', 'sales' => '4010',
-            'output_vat' => '2030', 'cogs' => '5010', 'inventory' => '1050', 'accounts_payable' => '2010',
-            'recovery_offset' => '7010', 'adjustment' => '5090'] as $source => $code) {
-            AccountingPostingMapping::create([
-                'source' => $source, 'accounting_account_id' => $accounts[$code]->id,
-                'approved_at' => now(), 'approved_by' => $reviewerId,
+        $accounts = AccountingAccount::whereIn('code', $codes)->get()->keyBy('code')->all();
+        foreach (['cash' => '1010', 'bank' => '1020', 'card_clearing' => '1020', 'sales' => '4010',
+            'output_vat' => '2020', 'cogs' => '5010', 'inventory' => '1040', 'accounts_payable' => '2010',
+            'recovery_offset' => '6010', 'adjustment' => '6180'] as $source => $code) {
+            AccountingPostingMapping::updateOrCreate(['source' => $source], [
+                'accounting_account_id' => $accounts[$code]->id,
+                'approved_at' => now(),
+                'approved_by' => $reviewerId,
             ]);
         }
 
@@ -209,16 +204,21 @@ class FullDemoSeeder extends Seeder
         $books->saveOpening($date, [
             ['accountId' => $accounts['1010']->id, 'debit' => '250000.00', 'credit' => ''],
             ['accountId' => $accounts['1020']->id, 'debit' => '500000.00', 'credit' => ''],
-            ['accountId' => $accounts['1050']->id, 'debit' => '64000.00', 'credit' => ''],
+            ['accountId' => $accounts['1040']->id, 'debit' => '64000.00', 'credit' => ''],
             ['accountId' => $accounts['2010']->id, 'debit' => '', 'credit' => '30000.00'],
             ['accountId' => $accounts['3010']->id, 'debit' => '', 'credit' => $midyear ? '764000.00' : '784000.00'],
-            ...($midyear ? [['accountId' => $accounts['3030']->id, 'debit' => '', 'credit' => '20000.00']] : []),
+            // The 20,000.00 midyear profit is already embedded in the opening assets.
+            // It must not also sit in 3020 Retained Earnings because the balance sheet
+            // adds the approved pre-cutover YTD result separately. An opening-source
+            // income line is the established balancing plug and is excluded from the
+            // income statement and unclosed earnings, so it is counted exactly once.
+            ...($midyear ? [['accountId' => $accounts['4010']->id, 'debit' => '', 'credit' => '20000.00']] : []),
         ], $preparerId);
         $books->approveOpening($reviewerId);
         if ($midyear) {
             $books->saveYtdSummary($today->year, $today->subDay()->toDateString(), 'DEMO ONLY: synthetic pre-cutover income and expenses', [
                 ['accountId' => $accounts['4010']->id, 'amount' => '100000.00'],
-                ['accountId' => $accounts['6030']->id, 'amount' => '80000.00'],
+                ['accountId' => $accounts['6130']->id, 'amount' => '80000.00'],
             ], $preparerId);
             $books->approveYtdSummary($reviewerId);
         }
@@ -255,7 +255,7 @@ class FullDemoSeeder extends Seeder
             'payee' => 'DEMO Utilities Provider', 'paymentDate' => $date, 'method' => 'Cash',
             'moneyAccountId' => (string) $accounts['1010']->id, 'reference' => 'DEMO-EXP-001', 'checkNumber' => '',
             'description' => 'DEMO utility expense', 'evidenceReference' => 'DEMO ONLY utility bill', 'amount' => '1500.00',
-            'allocations' => [['accounting_account_id' => (string) $accounts['6030']->id, 'description' => 'Demo utility service', 'amount' => '1500.00']],
+            'allocations' => [['accounting_account_id' => (string) $accounts['6130']->id, 'description' => 'Demo utility service', 'amount' => '1500.00']],
         ];
         $disbursement = $payments->saveDraft($expense, $preparerId);
         $payments->post($disbursement->id, $reviewerId);
@@ -304,7 +304,7 @@ class FullDemoSeeder extends Seeder
             'accountingDate' => $date, 'reference' => 'DEMO-JV-DRAFT', 'externalReference' => 'DEMO ONLY',
             'description' => 'DEMO balanced manual journal awaiting posting',
             'lines' => [
-                ['accountId' => (string) $accounts['6030']->id, 'debit' => '250.00', 'credit' => ''],
+                ['accountId' => (string) $accounts['6130']->id, 'debit' => '250.00', 'credit' => ''],
                 ['accountId' => (string) $accounts['1020']->id, 'debit' => '', 'credit' => '250.00'],
             ],
         ];
