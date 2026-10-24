@@ -141,10 +141,26 @@ class RecordedInputVat
 
     private function sessionRecords(): Collection
     {
-        $sessionRecords = collect(session()->all())
-            ->filter(fn ($records, $key): bool => is_string($key) && str_starts_with($key, self::SESSION_KEY_PREFIX) && is_array($records))
-            ->flatMap(function (array $records, $key): array {
-                $employeeId = (int) substr($key, strlen(self::SESSION_KEY_PREFIX));
+        // Laravel's session store expands dotted keys into nested arrays, so
+        // the canonical path must be read with data_get(). Older payloads may
+        // still contain a literal top-level key, so support both shapes.
+        $stored = session()->all();
+        $employees = data_get($stored, rtrim(self::SESSION_KEY_PREFIX, '.'), []);
+
+        if (! is_array($employees)) {
+            $employees = [];
+        }
+
+        foreach ($stored as $key => $records) {
+            if (is_string($key) && str_starts_with($key, self::SESSION_KEY_PREFIX) && is_array($records)) {
+                $employees[(int) substr($key, strlen(self::SESSION_KEY_PREFIX))] = $records;
+            }
+        }
+
+        $sessionRecords = collect($employees)
+            ->filter(fn ($records, $employeeId): bool => is_numeric($employeeId) && is_array($records))
+            ->flatMap(function (array $records, $employeeId): array {
+                $employeeId = (int) $employeeId;
 
                 return collect($records)
                     ->filter(fn ($record): bool => is_array($record) && isset($record['id'], $record['date']))

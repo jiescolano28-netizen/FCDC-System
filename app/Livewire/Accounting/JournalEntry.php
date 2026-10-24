@@ -4,7 +4,10 @@ namespace App\Livewire\Accounting;
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
+use App\Services\Accounting\JournalSourcePostingService;
 use App\Services\Accounting\ManualJournalService;
+use App\Services\Accounting\OpeningBooksService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -12,6 +15,10 @@ use Livewire\Component;
 class JournalEntry extends Component
 {
     public string $accountingDate = '';
+
+    public string $cutoverDate = '';
+
+    public array $openingLines = [];
 
     public string $reference = '';
 
@@ -38,7 +45,11 @@ class JournalEntry extends Component
 
     public string $sourceFilter = '';
 
+    public string $statusFilter = '';
+
     public string $entryTypeFilter = '';
+
+    public string $accountTypeFilter = '';
 
     public string $correctionReason = '';
 
@@ -48,10 +59,64 @@ class JournalEntry extends Component
 
     public ?int $correctingJournalId = null;
 
+    public bool $openingAttempted = false;
+
     public function mount(): void
     {
         $this->accountingDate = now('Asia/Manila')->toDateString();
+        $this->cutoverDate = now('Asia/Manila')->toDateString();
         $this->lines = [$this->emptyLine(), $this->emptyLine()];
+        $this->openingLines = [$this->emptyOpeningLine(), $this->emptyOpeningLine()];
+
+        $openingJournal = AccountingJournal::query()
+            ->where('source_type', 'opening')
+            ->where('source_id', 'FCDC')
+            ->with('lines')
+            ->first();
+        if ($openingJournal) {
+            $this->cutoverDate = $openingJournal->accounting_date->format('Y-m-d');
+            if ($openingJournal->status === 'draft') {
+                $this->openingLines = $openingJournal->lines->map(fn ($line) => [
+                    'accountId' => (string) $line->accounting_account_id,
+                    'debit' => $line->debit_cents ? number_format($line->debit_cents / 100, 2, '.', '') : '',
+                    'credit' => $line->credit_cents ? number_format($line->credit_cents / 100, 2, '.', '') : '',
+                ])->all();
+            }
+        }
+    }
+
+    public function addOpeningLine(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        if (count($this->openingLines) < 100) {
+            $this->openingLines[] = $this->emptyOpeningLine();
+        }
+    }
+
+    public function removeOpeningLine(int $index): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        if (count($this->openingLines) > 2 && array_key_exists($index, $this->openingLines)) {
+            array_splice($this->openingLines, $index, 1);
+        }
+    }
+
+    public function saveOpening(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        $this->openingAttempted = true;
+        app(OpeningBooksService::class)->saveOpening($this->cutoverDate, $this->openingLines, (int) auth()->id());
+        $this->openingAttempted = false;
+        session()->flash('journal-entry-message', 'Opening balance journal saved. Review the balanced cutover lines, then approve them.');
+    }
+
+    public function approveOpening(): void
+    {
+        $this->authorizePermission('accounting.approve-opening-books');
+        $this->openingAttempted = true;
+        app(OpeningBooksService::class)->approveOpening((int) auth()->id());
+        $this->openingAttempted = false;
+        session()->flash('journal-entry-message', 'Opening balance journal approved and posted. The General Ledger now uses these balances.');
     }
 
     public function addLine(): void
@@ -65,6 +130,7 @@ class JournalEntry extends Component
     public function openNewDraft(): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
+        $this->openingAttempted = false;
         $this->resetForm();
         $this->showEntryModal = true;
     }
@@ -85,6 +151,7 @@ class JournalEntry extends Component
     public function saveDraft(): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
+        $this->openingAttempted = false;
         $journal = app(ManualJournalService::class)->saveDraft($this->formData(), auth()->id(), $this->editingDraftId);
         $this->editingDraftId = $journal->id;
         $this->showEntryModal = true;
@@ -112,6 +179,7 @@ class JournalEntry extends Component
     public function editDraft(int $journalId): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
+        $this->openingAttempted = false;
         $journal = AccountingJournal::where('source_type', 'manual')->where('status', 'draft')
             ->with('lines')->findOrFail($journalId);
         $this->editingDraftId = $journal->id;
@@ -148,9 +216,35 @@ class JournalEntry extends Component
         $this->selectedJournalId = AccountingJournal::findOrFail($journalId)->id;
     }
 
+    public function generateSourceJournal(string $sourceType, int $sourceId): void
+    {
+        $this->authorizePermission('accounting.post-journal-entry');
+        $journal = app(JournalSourcePostingService::class)->generate($sourceType, $sourceId, (int) auth()->id());
+        $this->selectedJournalId = $journal->id;
+        session()->flash(
+            'journal-entry-message',
+            'Source journal '.$journal->reference.' is posted to the accounting books.',
+        );
+    }
+
+    public function sourceLabel(string $sourceType): string
+    {
+        return match ($sourceType) {
+            'pos_sale' => 'POS sale',
+            'reworking_cost' => 'Reworking cost',
+            'operating_cost' => 'Operating cost',
+            'manual' => 'Manual input',
+            'reversal' => 'Correction reversal',
+            'replacement' => 'Correction replacement',
+            'opening' => 'Opening balances',
+            default => ucwords(str_replace('_', ' ', $sourceType)),
+        };
+    }
+
     public function beginCorrection(int $journalId): void
     {
         $this->authorizePermission('accounting.create-journal-entry');
+        $this->openingAttempted = false;
         $journal = AccountingJournal::where('status', 'posted')
             ->whereIn('source_type', ['manual', 'replacement'])
             ->whereDoesntHave('corrections')->with('lines')->findOrFail($journalId);
@@ -200,20 +294,66 @@ class JournalEntry extends Component
             ->when($this->dateFrom !== '', fn ($query) => $query->whereDate('accounting_date', '>=', $this->dateFrom))
             ->when($this->dateTo !== '', fn ($query) => $query->whereDate('accounting_date', '<=', $this->dateTo))
             ->when($this->sourceFilter !== '', fn ($query) => $query->where('source_type', $this->sourceFilter))
+            ->when($this->statusFilter !== '', fn ($query) => $query->where('status', $this->statusFilter))
             ->when($this->entryTypeFilter !== '', fn ($query) => $query->where('entry_type', $this->entryTypeFilter))
+            ->when($this->accountTypeFilter !== '', fn ($query) => $this->applyAccountTypeFilter($query))
             ->orderByDesc('accounting_date')->orderByDesc('id')->get();
 
         [$debitTotal, $creditTotal, $isBalanced] = $this->previewTotals();
+        [$openingDebitTotal, $openingCreditTotal, $isOpeningBalanced] = $this->openingTotals();
+
+        $accounts = AccountingAccount::where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get();
+        $openingJournal = AccountingJournal::query()
+            ->where('source_type', 'opening')
+            ->where('source_id', 'FCDC')
+            ->with(['lines.account', 'preparer', 'approver'])
+            ->first();
 
         return view('livewire.accounting.journal-entry', [
             'journals' => $journals,
-            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'approver', 'correctionOf'])->find($this->selectedJournalId) : null,
-            'accounts' => AccountingAccount::where('is_active', true)->whereNotNull('approved_at')->orderBy('code')->get(),
+            'selectedJournal' => $this->selectedJournalId ? AccountingJournal::with(['lines.account', 'poster', 'preparer', 'approver', 'correctionOf', 'corrections'])->find($this->selectedJournalId) : null,
+            'accounts' => $accounts,
+            'accountsByType' => $accounts->groupBy(fn (AccountingAccount $account): string => $account->displayType()),
             'isCorrecting' => $this->correctingJournalId !== null,
             'debitTotal' => $debitTotal,
             'creditTotal' => $creditTotal,
             'isBalanced' => $isBalanced,
+            'openingJournal' => $openingJournal,
+            'openingDebitTotal' => $openingDebitTotal,
+            'openingCreditTotal' => $openingCreditTotal,
+            'isOpeningBalanced' => $isOpeningBalanced,
+            'sourceCandidates' => app(JournalSourcePostingService::class)->pendingCandidates(),
+            'sourceLabels' => $this->sourceLabels(),
         ])->layout('layouts.app', ['title' => 'Journal Entry']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function sourceLabels(): array
+    {
+        return [
+            'manual' => 'Manual input',
+            'pos_sale' => 'POS sale',
+            'reworking_cost' => 'Reworking cost',
+            'operating_cost' => 'Operating cost',
+            'reversal' => 'Correction reversal',
+            'replacement' => 'Correction replacement',
+            'opening' => 'Opening balances',
+        ];
+    }
+
+    private function applyAccountTypeFilter(Builder $query): void
+    {
+        $query->whereHas('lines.account', function (Builder $accounts): void {
+            match ($this->accountTypeFilter) {
+                'Asset', 'Liability', 'Equity', 'Revenue' => $accounts->where('type', $this->accountTypeFilter),
+                'contra_revenue' => $accounts->where('classification', 'contra_revenue'),
+                'cost_of_sales' => $accounts->where('classification', 'cost_of_goods_sold'),
+                'operating_expense' => $accounts->where('classification', 'operating_expense'),
+                default => $accounts->whereRaw('1 = 0'),
+            };
+        });
     }
 
     private function formData(): array
@@ -245,10 +385,20 @@ class JournalEntry extends Component
 
     private function previewTotals(): array
     {
+        return $this->totalsFor($this->lines);
+    }
+
+    private function openingTotals(): array
+    {
+        return $this->totalsFor($this->openingLines);
+    }
+
+    private function totalsFor(array $lines): array
+    {
         $totals = ['debit' => 0.0, 'credit' => 0.0];
         $valid = true;
 
-        foreach ($this->lines as $line) {
+        foreach ($lines as $line) {
             foreach (array_keys($totals) as $side) {
                 $amount = trim((string) ($line[$side] ?? ''));
                 if ($amount === '') {
@@ -284,6 +434,11 @@ class JournalEntry extends Component
     private function emptyLine(): array
     {
         return ['accountId' => '', 'description' => '', 'debit' => '', 'credit' => ''];
+    }
+
+    private function emptyOpeningLine(): array
+    {
+        return ['accountId' => '', 'debit' => '', 'credit' => ''];
     }
 
     private function authorizePermission(string $permission): void

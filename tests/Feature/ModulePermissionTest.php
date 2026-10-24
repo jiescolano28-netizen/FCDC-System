@@ -58,6 +58,7 @@ test('application modules deny routes unless the employee has the module view pe
         ['accounting.financial-statements', 'accounting.view'],
         ['accounting.notes-to-financial-statements', 'accounting.view'],
         ['accounting.general-ledger', 'accounting.view'],
+        ['accounting.sales-inventory-profitability', 'accounting.view'],
         ['accounting.trial-balance', 'accounting.view'],
         ['settings', 'settings.view'],
     ];

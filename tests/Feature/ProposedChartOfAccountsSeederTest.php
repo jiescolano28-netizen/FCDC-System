@@ -2,162 +2,188 @@
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingPostingMapping;
-use App\Models\Employee;
 use App\Support\DemoDatabaseIsolation;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\OfficialChartOfAccountsSeeder;
 use Database\Seeders\ProposedChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-test('explicit chart seeding creates the complete inactive proposal without business activity', function () {
-    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
-    $isolation->shouldReceive('verify')->once();
-    $result = app(ProposedChartOfAccountsSeeder::class)->seed($isolation);
+test('official chart seeding creates the complete approved chart and posting mappings', function () {
+    $result = app(OfficialChartOfAccountsSeeder::class)->seed();
 
-    expect($result['created'])->toHaveCount(54)
+    expect($result['created'])->toHaveCount(21)
+        ->and($result['updated'])->toBe([])
         ->and($result['exact_matches'])->toBe([])
         ->and($result['conflicts'])->toBe([])
+        ->and($result['preserved_unrelated'])->toBe([])
+        ->and(AccountingAccount::query()->where('is_active', true)->count())->toBe(21)
         ->and(AccountingAccount::query()->whereIn('code', [
-            '1010', '1020', '1030', '1040', '1050', '1060', '1070', '1080', '1500', '1510',
-            '2010', '2020', '2030', '2040', '2050', '2060', '2070', '2080',
-            '3010', '3020', '3030', '3040', '3050', '4010', '4020', '4030', '4040', '4090',
-            '5010', '5020', '5030', '5090', '6010', '6020', '6030', '6040', '6050', '6060', '6070',
-            '6080', '6090', '6100', '6110', '6120', '6130', '6140', '6150', '6160', '6190',
-            '7010', '7020', '7030', '7040', '7090',
-        ])->count())->toBe(54)
-        ->and(AccountingAccount::query()->whereIn('code', ['1510', '2040', '3040', '6190'])->pluck('description', 'code')->all())
-        ->toHaveKeys(['1510', '2040', '3040', '6190'])
-        ->and(AccountingAccount::query()->where('is_active', true)->count())->toBe(0)
-        ->and(AccountingAccount::query()->whereNotNull('approved_at')->count())->toBe(0)
-        ->and(AccountingAccount::query()->whereNotNull('approved_by')->count())->toBe(0)
+            '1010', '1020', '1030', '1040', '1050', '2010', '2020',
+            '3010', '3020', '4010', '4020', '4030', '5010', '6010',
+            '6120', '6130', '6140', '6150', '6160', '6170', '6180',
+        ])->count())->toBe(21)
+        ->and(AccountingAccount::query()->whereNotNull('approved_at')->count())->toBe(21)
         ->and(AccountingAccount::query()->whereNotNull('used_at')->count())->toBe(0)
-        ->and(AccountingPostingMapping::query()->count())->toBe(0)
-        ->and(DB::table('accounting_journals')->count())->toBe(0)
-        ->and(DB::table('accounting_journal_lines')->count())->toBe(0)
-        ->and(DB::table('accounting_ytd_summaries')->count())->toBe(0);
+        ->and(AccountingAccount::query()->pluck('code')->duplicates()->isEmpty())->toBeTrue()
+        ->and(AccountingAccount::query()->pluck('name')->duplicates()->isEmpty())->toBeTrue()
+        ->and(AccountingPostingMapping::query()->count())->toBe(10)
+        ->and(AccountingPostingMapping::query()->whereNull('approved_at')->count())->toBe(0)
+        ->and(AccountingPostingMapping::query()->where('source', 'card_clearing')->firstOrFail()->account->code)->toBe('1020');
 });
 
-test('rerun reports exact definitions and preserves approved operational state and history', function () {
-    $seeder = app(ProposedChartOfAccountsSeeder::class);
-    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
-    $isolation->shouldReceive('verify')->twice();
-    $seeder->seed($isolation);
+test('official descriptions and normal balances match the supplied account table', function () {
+    app(OfficialChartOfAccountsSeeder::class)->seed();
 
-    $employee = Employee::create([
-        'username' => 'chart-seeder-reviewer',
-        'email' => 'chart-seeder-reviewer@example.com',
-        'password' => 'test-password',
-    ]);
-    $now = now();
-    $periodId = DB::table('accounting_posting_periods')->insertGetId([
-        'book_key' => 'FCDC', 'fiscal_year' => 2026, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31',
-        'status' => 'open', 'created_at' => $now, 'updated_at' => $now,
-    ]);
-    $journalId = DB::table('accounting_journals')->insertGetId([
-        'book_key' => 'FCDC', 'reference' => 'SEEDER-HISTORY-001', 'source_type' => 'manual', 'source_id' => 'seed-test',
-        'accounting_date' => '2026-10-15', 'posting_period_id' => $periodId, 'description' => 'Existing posted history',
-        'status' => 'posted', 'prepared_by' => $employee->id, 'posted_at' => $now, 'posted_by' => $employee->id,
-        'approved_at' => $now, 'approved_by' => $employee->id, 'created_at' => $now, 'updated_at' => $now,
-    ]);
-    $lineId = DB::table('accounting_journal_lines')->insertGetId([
-        'accounting_journal_id' => $journalId, 'accounting_account_id' => AccountingAccount::query()->where('code', '1010')->value('id'),
-        'debit_cents' => 10000, 'credit_cents' => 0, 'created_at' => $now, 'updated_at' => $now,
-    ]);
-    $journalBefore = (array) DB::table('accounting_journals')->where('id', $journalId)->first();
-    $lineBefore = (array) DB::table('accounting_journal_lines')->where('id', $lineId)->first();
-    ksort($journalBefore);
-    ksort($lineBefore);
+    $cash = AccountingAccount::query()->where('code', '1010')->firstOrFail();
+    $returns = AccountingAccount::query()->where('code', '4020')->firstOrFail();
+    $cogs = AccountingAccount::query()->where('code', '5010')->firstOrFail();
+    $reworking = AccountingAccount::query()->where('code', '6010')->firstOrFail();
+    $utilities = AccountingAccount::query()->where('code', '6130')->firstOrFail();
+
+    $expectedNames = [
+        '1010' => 'Cash on Hand',
+        '1020' => 'Cash in Bank',
+        '1030' => 'Input VAT',
+        '1040' => 'Recovered Materials Inventory',
+        '1050' => 'Cleaning and Reworking Supplies Inventory',
+        '2010' => 'Accounts Payable',
+        '2020' => 'Output VAT Payable',
+        '3010' => 'Share Capital',
+        '3020' => 'Retained Earnings',
+        '4010' => 'Recovered Materials Sales Revenue',
+        '4020' => 'Sales Returns and Allowances',
+        '4030' => 'Sales Discounts',
+        '5010' => 'Cost of Recovered Materials Sold',
+        '6010' => 'Reworking Costs',
+        '6120' => 'Rent Expense',
+        '6130' => 'Utilities Expense',
+        '6140' => 'Repairs and Maintenance Expense',
+        '6150' => 'Office Supplies Expense',
+        '6160' => 'Cleaning Supplies Expense',
+        '6170' => 'Transportation and Delivery Expense',
+        '6180' => 'Other Operating Expenses',
+    ];
+
+    expect(AccountingAccount::query()->pluck('name', 'code')->all())->toBe($expectedNames)
+        ->and($cash->name)->toBe('Cash on Hand')
+        ->and($cash->type)->toBe('Asset')
+        ->and($cash->classification)->toBe('cash')
+        ->and($cash->normal_balance)->toBe('debit')
+        ->and($cash->description)->toBe('Cash received from completed POS sales paid in cash.')
+        ->and($returns->name)->toBe('Sales Returns and Allowances')
+        ->and($returns->classification)->toBe('contra_revenue')
+        ->and($returns->normal_balance)->toBe('debit')
+        ->and($returns->displayType())->toBe('Contra-Revenue')
+        ->and($cogs->displayType())->toBe('Cost of Sales')
+        ->and($reworking->displayType())->toBe('Cost of Sales / Expense')
+        ->and($utilities->displayType())->toBe('Operating Expense')
+        ->and($returns->isApprovedForPosting())->toBeTrue();
+});
+
+test('rerunning the official chart preserves accounts, mappings, and history', function () {
+    $seeder = app(OfficialChartOfAccountsSeeder::class);
+    $seeder->seed();
 
     $account = AccountingAccount::query()->where('code', '1010')->firstOrFail();
     $account->forceFill([
         'is_active' => true,
         'approved_at' => now()->subDay(),
-        'approved_by' => $employee->id,
         'used_at' => now()->subHour(),
     ])->saveQuietly();
     $before = $account->fresh()->getAttributes();
-    $createdAt = $before['created_at'];
-    $updatedAt = $before['updated_at'];
-    $mapping = AccountingPostingMapping::create([
-        'source' => 'cash',
-        'accounting_account_id' => $account->id,
-        'approved_at' => now()->subDay(),
-        'approved_by' => $employee->id,
-    ]);
-    $mappingBefore = (array) DB::table('accounting_posting_mappings')->where('id', $mapping->id)->first();
-    ksort($mappingBefore);
+    $mapping = AccountingPostingMapping::query()->where('source', 'cash')->firstOrFail();
+    $mappingBefore = $mapping->getAttributes();
 
-    $result = $seeder->seed($isolation);
-    $mappingAfter = (array) DB::table('accounting_posting_mappings')->where('id', $mapping->id)->first();
-    $journalAfter = (array) DB::table('accounting_journals')->where('id', $journalId)->first();
-    $lineAfter = (array) DB::table('accounting_journal_lines')->where('id', $lineId)->first();
-    ksort($mappingAfter);
-    ksort($journalAfter);
-    ksort($lineAfter);
+    $result = $seeder->seed();
 
     expect($result['created'])->toBe([])
-        ->and($result['exact_matches'])->toContain('1010')
-        ->and($result['conflicts'])->toBe([])
-        ->and($account->fresh()->getAttributes())->toBe($before)
-        ->and($account->fresh()->created_at->toDateTimeString())->toBe($createdAt)
-        ->and($account->fresh()->updated_at->toDateTimeString())->toBe($updatedAt)
-        ->and($mappingAfter)->toBe($mappingBefore)
-        ->and($journalAfter)->toBe($journalBefore)
-        ->and($lineAfter)->toBe($lineBefore);
-});
-test('a held account with unsafe operational state is reported as a conflict without reset', function () {
-    $seeder = app(ProposedChartOfAccountsSeeder::class);
-    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
-    $isolation->shouldReceive('verify')->twice();
-    $seeder->seed($isolation);
-
-    $account = AccountingAccount::query()->where('code', '6190')->firstOrFail();
-    $account->forceFill(['is_active' => true, 'approved_at' => now()])->saveQuietly();
-    $before = $account->fresh()->getAttributes();
-
-    $result = $seeder->seed($isolation);
-
-    expect($result['created'])->toBe([])
-        ->and($result['exact_matches'])->not->toContain('6190')
-        ->and($result['conflicts']['6190'])->toHaveKey('operational_state')
-        ->and(AccountingAccount::query()->count())->toBe(54)
-        ->and($account->fresh()->getAttributes())->toBe($before);
+        ->and($result['updated'])->toBe([])
+        ->and($result['exact_matches'])->toHaveCount(21)
+        ->and($result['legacy_accounts'])->toBe([])
+        ->and($account->fresh()->name)->toBe($before['name'])
+        ->and($mapping->fresh()->getAttributes())->toBe($mappingBefore);
 });
 
-test('a conflicting definition leaves missing proposal accounts uncreated', function () {
-    $seeder = app(ProposedChartOfAccountsSeeder::class);
-    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
-    $isolation->shouldReceive('verify')->once();
-    AccountingAccount::create([
-        'code' => '1010', 'name' => 'Different Cash Name', 'description' => 'Existing definition',
-        'type' => 'Asset', 'classification' => 'cash', 'normal_balance' => 'debit', 'is_active' => true,
+test('extra and outdated accounts are retired without deleting their history', function () {
+    $extra = AccountingAccount::create([
+        'code' => '1090',
+        'name' => 'Card Settlement Clearing',
+        'type' => 'Asset',
+        'classification' => 'card_clearing',
+        'normal_balance' => 'debit',
+        'is_active' => true,
+        'approved_at' => now(),
     ]);
-    AccountingAccount::create([
-        'code' => '1020', 'name' => 'Cash in Bank', 'description' => 'Proposed category: Assets — 1000. Pending treatment: Ordinary proposed account.',
-        'type' => 'Asset', 'classification' => 'bank', 'normal_balance' => 'debit', 'is_active' => false,
+    $outdated = AccountingAccount::create([
+        'code' => '2030',
+        'name' => 'Output VAT',
+        'type' => 'Liability',
+        'classification' => 'output_vat',
+        'normal_balance' => 'credit',
+        'is_active' => true,
+        'approved_at' => now(),
     ]);
-    AccountingAccount::create([
-        'code' => '9999', 'name' => 'Supporting Account', 'description' => null,
-        'type' => 'Asset', 'classification' => 'other_current_asset', 'normal_balance' => 'debit', 'is_active' => false,
-    ]);
+    $outdated->markUsed();
 
-    $result = $seeder->seed($isolation);
+    $result = app(OfficialChartOfAccountsSeeder::class)->seed();
 
-    expect($result['created'])->toBe([])
-        ->and($result['exact_matches'])->toContain('1020')
-        ->and($result['conflicts'])->toHaveKey('1010')
-        ->and(AccountingAccount::query()->count())->toBe(3)
-        ->and(AccountingAccount::query()->where('code', '1020')->exists())->toBeTrue()
-        ->and(AccountingAccount::query()->where('code', '1030')->exists())->toBeFalse()
-        ->and($result['preserved_unrelated'])->toContain(['code' => '9999', 'name' => 'Supporting Account']);
-
+    expect($result['preserved_unrelated'])->toContain(['code' => '1090', 'name' => 'Card Settlement Clearing'])
+        ->and($result['preserved_unrelated'])->toContain(['code' => '2030', 'name' => 'Output VAT'])
+        ->and($extra->fresh()->is_active)->toBeFalse()
+        ->and($outdated->fresh()->is_active)->toBeFalse()
+        ->and($outdated->fresh()->used_at)->not->toBeNull()
+        ->and(AccountingAccount::query()->where('code', '1090')->exists())->toBeTrue()
+        ->and(AccountingAccount::query()->where('code', '2030')->exists())->toBeTrue()
+        ->and(AccountingAccount::query()->where('is_active', true)->count())->toBe(21);
 });
-test('the ordinary application seeder does not invoke the proposed chart seeder', function () {
+
+test('a used conflicting account is preserved under a legacy code before the official account is created', function () {
+    $seeder = app(OfficialChartOfAccountsSeeder::class);
+    $seeder->seed();
+
+    $old = AccountingAccount::query()->where('code', '1050')->firstOrFail();
+    $old->forceFill([
+        'name' => 'Old recovered stock',
+        'classification' => 'inventory',
+        'normal_balance' => 'debit',
+        'used_at' => now(),
+    ])->saveQuietly();
+    $oldId = $old->id;
+
+    $result = $seeder->seed();
+
+    $official = AccountingAccount::query()->where('code', '1050')->firstOrFail();
+    $legacy = AccountingAccount::query()->where('id', $oldId)->firstOrFail();
+
+    expect($result['created'])->toContain('1050')
+        ->and($result['legacy_accounts'])->toContain(['original' => '1050', 'legacy' => 'LEGACY-1050'])
+        ->and($official->id)->not->toBe($oldId)
+        ->and($official->name)->toBe('Cleaning and Reworking Supplies Inventory')
+        ->and($official->is_active)->toBeTrue()
+        ->and($legacy->code)->toBe('LEGACY-1050')
+        ->and($legacy->name)->toBe('Old recovered stock (Legacy)')
+        ->and($legacy->is_active)->toBeFalse()
+        ->and($legacy->used_at)->not->toBeNull();
+});
+
+test('the ordinary application seeder installs the official chart', function () {
     app(DatabaseSeeder::class)->run();
 
-    expect(AccountingAccount::query()->count())->toBe(0);
+    expect(AccountingAccount::query()->count())->toBe(21)
+        ->and(AccountingAccount::query()->where('is_active', true)->count())->toBe(21)
+        ->and(AccountingPostingMapping::query()->count())->toBe(10);
+});
+
+test('the legacy proposed-chart wrapper applies the official chart on a verified demo database', function () {
+    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
+    $isolation->shouldReceive('verify')->once();
+
+    $result = app(ProposedChartOfAccountsSeeder::class)->seed($isolation);
+
+    expect($result['created'])->toHaveCount(21)
+        ->and(AccountingAccount::query()->count())->toBe(21);
 });
 
 test('the explicit command refuses the unverified test environment before writing', function () {
@@ -167,6 +193,7 @@ test('the explicit command refuses the unverified test environment before writin
 
     expect(AccountingAccount::query()->count())->toBe(0);
 });
+
 test('the explicit command reports results after the isolation gate succeeds', function () {
     $isolation = Mockery::mock(DemoDatabaseIsolation::class);
     $isolation->shouldReceive('verify')->once();
@@ -174,9 +201,8 @@ test('the explicit command reports results after the isolation gate succeeds', f
 
     $this->artisan('demo:seed-proposed-chart')
         ->assertSuccessful()
-        ->expectsOutputToContain('Created: 54')
-        ->expectsOutputToContain('Exact matches: 0')
-        ->expectsOutputToContain('Preserved unrelated/supporting accounts: 0');
+        ->expectsOutputToContain('Created: 21')
+        ->expectsOutputToContain('Exact matches: 0');
 
-    expect(AccountingAccount::query()->count())->toBe(54);
+    expect(AccountingAccount::query()->count())->toBe(21);
 });

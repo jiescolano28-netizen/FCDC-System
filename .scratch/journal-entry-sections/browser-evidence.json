@@ -1,0 +1,243 @@
+{
+  "stamp": "639197",
+  "balancedRef": "QA-BAL-639197",
+  "unbalancedRef": "QA-UNBAL-639197",
+  "expectedOrder": [
+    "Regular Journal Entries",
+    "Opening Balance / Cutover Journal",
+    "Source-Generated Journals"
+  ],
+  "errors": [],
+  "steps": [
+    {
+      "step": "accountant-sections",
+      "order": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover Journal",
+        "Source-Generated Journals"
+      ],
+      "matches": true
+    },
+    {
+      "step": "drafts-vs-posted",
+      "baseline": {
+        "balanced": true,
+        "totals": "Unadjusted debits ₱821,379.60 Unadjusted credits ₱821,379.60",
+        "debit": 821379.6,
+        "credit": 821379.6
+      },
+      "afterDrafts": {
+        "balanced": true,
+        "totals": "Unadjusted debits ₱821,379.60 Unadjusted credits ₱821,379.60",
+        "debit": 821379.6,
+        "credit": 821379.6
+      },
+      "unaffected": true
+    },
+    {
+      "step": "unbalanced-submit-blocked",
+      "stillDraft": true
+    },
+    {
+      "step": "balanced-submit",
+      "status": "Pending Review"
+    },
+    {
+      "step": "admin-approve-post",
+      "approve": "Approved",
+      "post": "Posted"
+    },
+    {
+      "step": "posting-vs-balanced",
+      "baseline": 821379.6,
+      "afterPost": 821389.6,
+      "delta": 10
+    },
+    {
+      "step": "financial-statements",
+      "equationBalanced": true,
+      "summary": "Total assets PHP 817,139.60 = Liabilities PHP 32,489.60 + Equity PHP 784,650.00",
+      "netIncome": "Net Income PHP 650.00"
+    },
+    {
+      "step": "cutover",
+      "approvedCutover": "Approved cutover: October 24, 2026",
+      "supplierReconciled": true,
+      "inventoryReconciled": true,
+      "productionActivated": "Production activated on October 24, 2026"
+    },
+    {
+      "step": "pos-source-journal",
+      "newRef": "POS-GL-6"
+    },
+    {
+      "step": "viewer-sections",
+      "order": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover Journal",
+        "Source-Generated Journals"
+      ],
+      "notices": [
+        "View-only access. You need opening-book prepare or approve permission to change the cutover journal.",
+        "View-only access. You need post-journal-entry permission to generate a source journal."
+      ]
+    }
+  ],
+  "accountant": {
+    "sections": {
+      "order": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover Journal",
+        "Source-Generated Journals"
+      ],
+      "boxes": [
+        {
+          "id": "#regular-journal-entries",
+          "present": true,
+          "top": 201,
+          "height": 1677
+        },
+        {
+          "id": "#opening-balance-cutover",
+          "present": true,
+          "top": 1902,
+          "height": 549
+        },
+        {
+          "id": "#source-generated-journals",
+          "present": true,
+          "top": 2466,
+          "height": 703
+        }
+      ],
+      "nav": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover",
+        "Source-Generated Journals"
+      ],
+      "viewOnlyNotices": [],
+      "manualHeading": "New Manual Journal Draft",
+      "hasManualButton": true,
+      "scrollHeight": 3210
+    },
+    "orderMatches": true,
+    "boxesAscending": true
+  },
+  "tbBaseline": {
+    "balanced": true,
+    "totals": "Unadjusted debits ₱821,379.60 Unadjusted credits ₱821,379.60",
+    "debit": 821379.6,
+    "credit": 821379.6
+  },
+  "balancedModalTotals": "Debit total ₱10.00 Credit total ₱10.00 Balanced",
+  "balancedModalIsBalanced": true,
+  "balancedSaved": true,
+  "unbalancedModalTotals": "Debit total ₱10.00 Credit total ₱9.99 Not balanced Debits and credits must match before this entry can be submitted.",
+  "unbalancedModalIsBalanced": false,
+  "unbalancedSaved": true,
+  "tbAfterDrafts": {
+    "balanced": true,
+    "totals": "Unadjusted debits ₱821,379.60 Unadjusted credits ₱821,379.60",
+    "debit": 821379.6,
+    "credit": 821379.6
+  },
+  "draftsUnaffected": true,
+  "unbalancedStillDraft": true,
+  "unbalancedHasSubmit": 1,
+  "unbalancedBlockedReason": "Debits and credits must match exactly.",
+  "balancedAfterSubmit": "Pending Review",
+  "balancedAfterApprove": "Approved",
+  "balancedAfterPost": "Posted",
+  "generalLedger": {
+    "heading": "1010 — Cash on Hand ledger activity",
+    "hasPostedReference": true,
+    "hasOpeningPosition": true,
+    "snippet": "SYNTHETIC DEMO DATA Generated sample records for capstone testing only. These are not FCDC official financial balances, records, or approvals. Do not file, audit, or use them in production. ❮ Fabellon Construction and Development Corp. ▦ Dashboard Update ▤ Reports ▣ Point of sale ▧ Inventory ▾ ▤ VAT Compliance ▾ ▤ Acco"
+  },
+  "tbAfterPost": {
+    "balanced": true,
+    "totals": "Unadjusted debits ₱821,389.60 Unadjusted credits ₱821,389.60",
+    "debit": 821389.6,
+    "credit": 821389.6
+  },
+  "tbDeltaDebit": 10,
+  "postingMovedBalances": true,
+  "financialStatements": {
+    "equationBalanced": true,
+    "summary": "Total assets PHP 817,139.60 = Liabilities PHP 32,489.60 + Equity PHP 784,650.00",
+    "netIncome": "Net Income PHP 650.00"
+  },
+  "cutover": {
+    "approvedCutover": "Approved cutover: October 24, 2026",
+    "supplierReconciled": true,
+    "inventoryReconciled": true,
+    "productionActivated": "Production activated on October 24, 2026"
+  },
+  "posSale": {
+    "transaction": "POS-20261024-B4FLT9TP",
+    "receipt": "Receipt · Completed transaction Fabellion Construction and Development Corp. POS-20261024-B4FLT9TP 2026-10-24 06:34 Customer: QA Sections Verification Customer Tax classification VATable Sales DEMO Ceramic Tiles 1.00 piece × ₱90.00 ₱90.00 S"
+  },
+  "sourceGenerated": {
+    "heading": "Source-Generated Journals",
+    "posRefsBefore": [
+      "POS-GL-5",
+      "POS-GL-4",
+      "POS-GL-3",
+      "POS-GL-2",
+      "POS-GL-1"
+    ],
+    "posRefsAfter": [
+      "POS-GL-6",
+      "POS-GL-5",
+      "POS-GL-4",
+      "POS-GL-3",
+      "POS-GL-2"
+    ],
+    "newRef": "POS-GL-6",
+    "excerpt": "Source-Generated Journals POS sales post automatically at checkout. Recorded reworking and operating costs can be posted here from their saved source records. One journal per source record POS sales The five most recent matching POS sale journals. Completed sales post automatically at checkout. 6 records REFERENCE DATE DESCRIPTION AMOUNT (PHP) STATUS ACTION POS-GL-6 2026-10-24 POS sale POS-20261024-B4FLT9TP ₱150.80 Posted View POS-GL-5 2026-10-24 POS sale POS-20261024-TUM1QBL6 ₱150.80 Posted View POS-GL-4 2026-10-24 POS sale POS-20261023-C8MJACLQ ₱150.80 Posted View POS-GL-3 2026-10-24 POS sal"
+  },
+  "viewer": {
+    "sections": {
+      "order": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover Journal",
+        "Source-Generated Journals"
+      ],
+      "boxes": [
+        {
+          "id": "#regular-journal-entries",
+          "present": true,
+          "top": 201,
+          "height": 1818
+        },
+        {
+          "id": "#opening-balance-cutover",
+          "present": true,
+          "top": 2043,
+          "height": 597
+        },
+        {
+          "id": "#source-generated-journals",
+          "present": true,
+          "top": 2655,
+          "height": 739
+        }
+      ],
+      "nav": [
+        "Regular Journal Entries",
+        "Opening Balance / Cutover",
+        "Source-Generated Journals"
+      ],
+      "viewOnlyNotices": [
+        "View-only access. You need opening-book prepare or approve permission to change the cutover journal.",
+        "View-only access. You need post-journal-entry permission to generate a source journal."
+      ],
+      "manualHeading": "Manual journal drafts (read-only)",
+      "hasManualButton": false,
+      "scrollHeight": 3435
+    },
+    "orderMatches": true,
+    "allSectionsPresent": true,
+    "noticeCount": 2
+  }
+}

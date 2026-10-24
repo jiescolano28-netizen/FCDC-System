@@ -26,7 +26,7 @@ class ReportsPage extends Component
 
     public function mount(): void
     {
-        $this->reportDate = now()->toDateString();
+        $this->reportDate = now('Asia/Manila')->toDateString();
     }
 
     public function updatedReportPeriod(string $period): void
@@ -82,19 +82,23 @@ class ReportsPage extends Component
             ->get();
 
         try {
-            $selectedDate = CarbonImmutable::createFromFormat('!Y-m-d', $this->reportDate, config('app.timezone'));
+            $selectedDate = CarbonImmutable::createFromFormat('!Y-m-d', $this->reportDate, 'Asia/Manila');
         } catch (InvalidFormatException) {
-            $selectedDate = CarbonImmutable::now(config('app.timezone'));
+            $selectedDate = CarbonImmutable::now('Asia/Manila');
         }
 
         if ($selectedDate->format('Y-m-d') !== $this->reportDate) {
-            $selectedDate = CarbonImmutable::now(config('app.timezone'));
+            $selectedDate = CarbonImmutable::now('Asia/Manila');
         }
         $start = $this->reportPeriod === 'monthly' ? $selectedDate->startOfMonth() : $selectedDate->startOfDay();
-        $end = $this->reportPeriod === 'monthly' ? $selectedDate->endOfMonth() : $selectedDate->endOfDay();
+        // Query persisted UTC timestamps with a half-open Manila-day/month window.
+        $endExclusive = $this->reportPeriod === 'monthly'
+            ? $start->addMonth()
+            : $start->addDay();
         $transactions = PosTransaction::query()
             ->where('status', 'completed')
-            ->whereBetween('completed_at', [$start, $end]);
+            ->where('completed_at', '>=', $start->utc())
+            ->where('completed_at', '<', $endExclusive->utc());
         $transactionIds = (clone $transactions)->select('id');
         $posSales = [
             'total' => (float) (clone $transactions)->sum('total'),

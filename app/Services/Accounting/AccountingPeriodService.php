@@ -179,7 +179,7 @@ class AccountingPeriodService
             }
 
             $period->forceFill([
-                'status' => 'closed', 'closed_at' => now(), 'closed_by' => $actor->id,
+                'status' => 'closed', 'closed_at' => now('UTC'), 'closed_by' => $actor->id,
                 'close_reason' => $reason,
             ])->save();
             ActivityAudit::recordChange($period, 'Accounting month closed', [
@@ -218,7 +218,7 @@ class AccountingPeriodService
             foreach ($periods as $affected) {
                 $old = ['status' => $affected->status];
                 $affected->forceFill([
-                    'status' => 'open', 'reopened_at' => now(), 'reopened_by' => $actor->id,
+                    'status' => 'open', 'reopened_at' => now('UTC'), 'reopened_by' => $actor->id,
                     'reopen_reason' => trim($reason),
                 ])->save();
                 ActivityAudit::recordChange($affected, 'Accounting month reopened', [

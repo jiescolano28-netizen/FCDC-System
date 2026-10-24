@@ -142,7 +142,7 @@
                     @forelse ($history as $transaction)
                         <tr wire:key="pos-transaction-{{ $transaction->id }}">
                             <td>{{ $transaction->transaction_number }}</td>
-                            <td>{{ $transaction->completed_at->format('Y-m-d H:i') }}</td>
+                            <td>{{ \App\Support\PhilippineTime::format($transaction->completed_at, 'Y-m-d H:i') }}</td>
                             <td>{{ $transaction->customer_name ?: '—' }}</td>
                             <td>{{ $transaction->lines->map(fn ($line) => $line->item_name.' × '.number_format((float) $line->quantity, 2).' '.$line->unit)->implode(', ') }}</td>
                             <td>{{ \App\Support\TaxClassification::label($transaction->vatRecord?->tax_classification ?? $transaction->tax_classification) }}</td>
@@ -171,7 +171,7 @@
                     @if ($receipt->receipt_company_address)<span>{{ $receipt->receipt_company_address }}</span>@endif
                     @if ($receipt->receipt_company_phone)<span>{{ $receipt->receipt_company_phone }}</span>@endif
                 </header>
-                <p class="pos-receipt-meta"><span>{{ $receipt->transaction_number }}</span><span>{{ $receipt->completed_at->format('Y-m-d H:i') }}</span></p>
+                <p class="pos-receipt-meta"><span>{{ $receipt->transaction_number }}</span><span>{{ \App\Support\PhilippineTime::format($receipt->completed_at, 'Y-m-d H:i') }} PHT</span></p>
                 <p>Customer: {{ $receipt->customer_name ?: '—' }}</p>
                 @php($receiptClassification = $receipt->vatRecord?->tax_classification ?? $receipt->tax_classification)
                 <p class="pos-receipt-classification">

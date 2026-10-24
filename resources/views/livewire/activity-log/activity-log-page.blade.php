@@ -51,8 +51,8 @@
                         @endphp
                         <tr>
                             <td class="activity-log-date">
-                                <strong>{{ $activity->created_at?->format('M d, Y') }}</strong>
-                                <span>{{ $activity->created_at?->format('H:i:s') }}</span>
+                                <strong>{{ \App\Support\PhilippineTime::format($activity->created_at, 'M d, Y') }}</strong>
+                                <span>{{ \App\Support\PhilippineTime::format($activity->created_at, 'H:i:s') }} PHT</span>
                             </td>
                             <td>
                                 <div class="activity-log-person">

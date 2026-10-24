@@ -8,7 +8,13 @@
     @vite(['resources/css/shell.css', 'resources/js/shell.js'])
     @livewireStyles
 </head>
-<body @class(['app-body', 'tax-report-body' => request()->routeIs('tax.report'), 'financial-statements-body' => request()->routeIs('accounting.financial-statements'), 'trial-balance-body' => request()->routeIs('accounting.trial-balance'), 'disclosure-body' => request()->routeIs('accounting.notes-to-financial-statements')])>
+<body @class(['app-body', 'tax-report-body' => request()->routeIs('tax.report'), 'financial-statements-body' => request()->routeIs('accounting.financial-statements'), 'trial-balance-body' => request()->routeIs('accounting.trial-balance'), 'disclosure-body' => request()->routeIs('accounting.notes-to-financial-statements'), 'profitability-body' => request()->routeIs('accounting.sales-inventory-profitability')])>
+    @if (config('demo.enabled'))
+        <div class="synthetic-demo-banner" role="note" data-testid="synthetic-demo-banner">
+            <strong>SYNTHETIC DEMO DATA</strong>
+            <span>Generated sample records for capstone testing only. These are not FCDC official financial balances, records, or approvals. Do not file, audit, or use them in production.</span>
+        </div>
+    @endif
     <div class="app-shell">
         <aside class="sidebar" id="app-sidebar">
             <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" title="Collapse sidebar" aria-label="Collapse sidebar">&#10094;</button>
@@ -68,6 +74,9 @@
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.reworking-cost-records') ? 'active' : '' }}" href="{{ route('inventory.reworking-cost-records') }}" @if (request()->routeIs('inventory.reworking-cost-records')) aria-current="page" @endif>
                                 <span class="nav-label">Reworking Cost Record</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('inventory.operating-cost-records') ? 'active' : '' }}" href="{{ route('inventory.operating-cost-records') }}" @if (request()->routeIs('inventory.operating-cost-records')) aria-current="page" @endif>
+                                <span class="nav-label">Operating Cost Record</span>
+                            </a>
                         </div>
                     </div>
                 @endcan
@@ -101,22 +110,19 @@
                         </button>
                         <div class="nav-dropdown {{ $accountingNavigationActive ? 'open' : '' }}" id="accounting-menu">
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.chart-of-accounts') ? 'active' : '' }}" href="{{ route('accounting.chart-of-accounts') }}" @if (request()->routeIs('accounting.chart-of-accounts')) aria-current="page" @endif>
-                                <span class="nav-label">Chart of Accounts</span>
+                                <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Chart of Accounts</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.journal-entry') ? 'active' : '' }}" href="{{ route('accounting.journal-entry') }}" @if (request()->routeIs('accounting.journal-entry')) aria-current="page" @endif>
-                                <span class="nav-label">Journal Entry</span>
+                                <span class="nav-icon" aria-hidden="true">✎</span><span class="nav-label">Journal Entry</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.general-ledger') ? 'active' : '' }}" href="{{ route('accounting.general-ledger') }}" @if (request()->routeIs('accounting.general-ledger')) aria-current="page" @endif>
-                                <span class="nav-label">General Ledger</span>
+                                <span class="nav-icon" aria-hidden="true">☰</span><span class="nav-label">General Ledger</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.trial-balance') ? 'active' : '' }}" href="{{ route('accounting.trial-balance') }}" @if (request()->routeIs('accounting.trial-balance')) aria-current="page" @endif>
-                                <span class="nav-label">Trial Balance</span>
+                                <span class="nav-icon" aria-hidden="true">⚖</span><span class="nav-label">Trial Balance</span>
                             </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.financial-statements') ? 'active' : '' }}" href="{{ route('accounting.financial-statements') }}" @if (request()->routeIs('accounting.financial-statements')) aria-current="page" @endif>
-                                <span class="nav-label">Financial Statements</span>
-                            </a>
-                            <a class="nav-item nav-child {{ request()->routeIs('accounting.notes-to-financial-statements') ? 'active' : '' }}" href="{{ route('accounting.notes-to-financial-statements') }}" @if (request()->routeIs('accounting.notes-to-financial-statements')) aria-current="page" @endif>
-                                <span class="nav-label">Notes to Financial Statements / Disclosure</span>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.sales-inventory-profitability') ? 'active' : '' }}" href="{{ route('accounting.sales-inventory-profitability') }}" @if (request()->routeIs('accounting.sales-inventory-profitability')) aria-current="page" @endif>
+                                <span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">Sales and Inventory Profitability Report</span>
                             </a>
                         </div>
                     </div>

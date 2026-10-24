@@ -35,7 +35,7 @@ class RecordStockIn
                 'notes' => $notes,
                 'reference' => $reference,
                 'effective_date' => $effectiveDate,
-                'posted_at' => now(),
+                'posted_at' => now('UTC'),
             ]);
 
             Inventory::query()->whereKey($item->id)->update([

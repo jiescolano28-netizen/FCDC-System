@@ -14,7 +14,7 @@ class IncludeMissingPosVatRecords
             ->where('status', 'completed')
             ->orderBy('id')
             ->chunkById(500, function ($transactions) use (&$created): void {
-                $now = now();
+                $now = now('UTC');
                 $records = $transactions->map(fn (object $transaction): array => [
                     'pos_transaction_id' => $transaction->id,
                     'tax_classification' => $transaction->tax_classification ?? 'vatable',

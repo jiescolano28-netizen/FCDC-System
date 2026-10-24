@@ -7,6 +7,8 @@ use App\Models\Employee;
 use App\Models\PosTransaction;
 use App\Models\PosTransactionLine;
 use App\Models\PosVatRecord;
+use App\Models\ReworkingCostRecord;
+use App\Models\VatReturnAdjustment;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -60,6 +62,20 @@ function createVatPreparationRecord(string $number, string $completedAt, string 
         'output_vat' => $vat,
         'total' => $total,
         'completed_at' => $completedAt,
+    ]);
+}
+
+function createVatPreparationInputVatRecord(string $batch, string $date, string $cost, string $inputVat): ReworkingCostRecord
+{
+    return ReworkingCostRecord::create([
+        'employee_id' => null,
+        'source_record_id' => ReworkingCostRecord::query()->max('source_record_id') + 1,
+        'project_name' => 'Warehouse Dismantling',
+        'batch_number' => $batch,
+        'record_date' => $date,
+        'description' => 'Cleaning and repair of recovered steel bars',
+        'total_reworking_cost' => $cost,
+        'input_vat' => $inputVat,
     ]);
 }
 
@@ -221,4 +237,107 @@ test('worksheet is organized into preparation-only BIR 2550Q sections with CSV a
         ->assertSee('does not submit the return to the BIR')
         ->assertSee('Export CSV')
         ->assertSee('Save as PDF');
+});
+
+test('worksheet computes BIR 2550Q items 34, 37, 51, 60 and 61 from recorded sales, reworking input VAT and saved manual adjustments', function () {
+    Carbon::setTestNow('2026-10-10 12:00:00 UTC');
+    $this->actingAs(createVatReturnPreparationEmployee());
+    createVatPreparationRecord('BIR-2550Q-SALE', '2026-10-15 08:00:00', '1000.00', '120.00', '1120.00');
+    createVatPreparationInputVatRecord('BIR-2550Q-BATCH', '2026-10-20', '500.00', '60.00');
+
+    $worksheet = Livewire::test(VatReturnPreparation::class)
+        ->set('selectedYear', 2026)
+        ->set('selectedQuarter', 4)
+        ->assertSee('31A · ₱1,000.00')
+        ->assertSee('31B · ₱120.00')
+        ->assertSee('50A · ₱500.00')
+        ->assertSee('50B · ₱60.00')
+        ->set('outputVatUncollectedReceivables', '20.00')
+        ->set('outputVatRecoveredReceivables', '5.00')
+        ->set('inputTaxCarriedOver', '10.00')
+        ->set('deferredCapitalGoodsInputTaxPrior', '2.00')
+        ->set('transitionalInputTax', '1.00')
+        ->set('presumptiveInputTax', '3.00')
+        ->set('otherInputTax', '4.00')
+        ->set('otherInputTaxDescription', 'Manual input VAT from other purchases')
+        ->set('deferredCapitalGoodsInputTaxCurrent', '5.00')
+        ->set('inputTaxVatExemptSales', '6.00')
+        ->set('vatRefundTccClaimed', '7.00')
+        ->set('inputVatUnpaidPayables', '8.00')
+        ->set('otherInputTaxDeductions', '9.00')
+        ->set('otherInputTaxDeductionsDescription', 'Other allowable deduction')
+        ->set('inputVatSettledUnpaidPayables', '2.00')
+        ->call('saveAdjustments')
+        ->assertHasNoErrors()
+        ->assertSee('Manual adjustments saved for Q4 2026.')
+        ->assertSee('34A · ₱1,000.00')
+        ->assertSee('Item 37 — Total Adjusted Output Tax Due')
+        ->assertSee('₱105.00')
+        ->assertSee('Total Available Input Tax')
+        ->assertSee('₱80.00')
+        ->assertSee('Total Allowable Input Tax')
+        ->assertSee('₱43.00')
+        ->assertSee('₱62.00');
+
+    $saved = VatReturnAdjustment::query()->sole();
+    expect($saved->year)->toBe(2026)
+        ->and($saved->quarter)->toBe(4)
+        ->and($saved->output_vat_uncollected_receivables)->toBe('20.00')
+        ->and($saved->output_vat_recovered_receivables)->toBe('5.00')
+        ->and($saved->input_tax_carried_over)->toBe('10.00')
+        ->and($saved->other_input_tax)->toBe('4.00')
+        ->and($saved->other_input_tax_description)->toBe('Manual input VAT from other purchases')
+        ->and($saved->input_vat_settled_unpaid_payables)->toBe('2.00');
+
+    // Saved adjustments reload for the same quarter and do not leak into another period.
+    $worksheet->set('selectedQuarter', 3)
+        ->assertSet('outputVatUncollectedReceivables', '0.00')
+        ->assertSet('inputTaxCarriedOver', '0.00')
+        ->set('selectedQuarter', 4)
+        ->assertSet('outputVatUncollectedReceivables', '20.00')
+        ->assertSet('inputTaxCarriedOver', '10.00')
+        ->assertSee('BIR-2550Q-BATCH');
+
+    $worksheet->call('exportCsv')->assertFileDownloaded('vat-preparation-2026-Q4.csv');
+    $csv = base64_decode($worksheet->effects['download']['content']);
+    expect($csv)->toContain(
+        'Item 34B - Total sales and output tax due',
+        'Item 37 - Total adjusted output tax due',
+        'Item 51 - Total available input tax',
+        'Item 60 - Total allowable input tax',
+        'Item 61 - Net VAT payable',
+        '105.00',
+        '80.00',
+        '43.00',
+        '62.00',
+    );
+});
+
+test('worksheet shows excess input tax when allowable input tax exceeds adjusted output tax', function () {
+    Carbon::setTestNow('2026-10-10 12:00:00 UTC');
+    $this->actingAs(createVatReturnPreparationEmployee());
+    createVatPreparationRecord('BIR-EXCESS-SALE', '2026-10-15 08:00:00', '50.00', '6.00', '56.00');
+    createVatPreparationInputVatRecord('BIR-EXCESS-BATCH', '2026-10-20', '100.00', '100.00');
+
+    Livewire::test(VatReturnPreparation::class)
+        ->set('selectedYear', 2026)
+        ->set('selectedQuarter', 4)
+        ->assertSee('Excess Input Tax')
+        ->assertSee('₱94.00')
+        ->assertSee('Item 37B less Item 60B');
+});
+
+test('manual 2550Q adjustments reject negative or over-precision amounts', function () {
+    $this->actingAs(createVatReturnPreparationEmployee());
+
+    Livewire::test(VatReturnPreparation::class)
+        ->set('outputVatUncollectedReceivables', '-5')
+        ->set('inputTaxCarriedOver', '1.234')
+        ->call('saveAdjustments')
+        ->assertHasErrors([
+            'outputVatUncollectedReceivables' => 'min',
+            'inputTaxCarriedOver' => 'decimal',
+        ]);
+
+    expect(VatReturnAdjustment::query()->count())->toBe(0);
 });

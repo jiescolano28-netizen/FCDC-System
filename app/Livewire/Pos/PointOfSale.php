@@ -182,7 +182,7 @@ class PointOfSale extends Component
 
             $settings = session()->get('demo.settings.employee.'.auth()->id(), []);
             $transaction = PosTransaction::create([
-                'transaction_number' => 'POS-'.now()->format('Ymd').'-'.Str::upper(Str::random(8)),
+                'transaction_number' => 'POS-'.now('Asia/Manila')->format('Ymd').'-'.Str::upper(Str::random(8)),
                 'employee_id' => auth()->id(),
                 'customer_name' => trim($this->customerName) ?: null,
                 'subtotal' => $subtotalCents / 100,
@@ -195,7 +195,7 @@ class PointOfSale extends Component
                 'change_due' => max(0, $receivedCents - $totalCents) / 100,
                 'payment_reference' => trim($this->paymentReference) ?: null,
                 'status' => 'completed',
-                'completed_at' => now(),
+                'completed_at' => now('UTC'),
                 'receipt_company_name' => $settings['companyName'] ?? null,
                 'receipt_company_address' => $settings['address'] ?? null,
                 'receipt_company_phone' => $settings['phone'] ?? null,

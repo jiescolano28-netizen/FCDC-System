@@ -59,13 +59,28 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | Persisted timestamps use UTC. Keep this value at UTC unless a deliberate,
+    | reversible data migration converts every stored timestamp: changing it
+    | makes Eloquent re-interpret existing wall-clock values and would shift
+    | historical records by the UTC/Manila offset.
+    |
+    | Business dates and every user-facing date/time use display_timezone below.
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Philippine Standard Time is the single business/reporting timezone for
+    | POS receipts, VAT, accounting, inventory, operating costs and audit logs.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Manila'),
 
     /*
     |--------------------------------------------------------------------------

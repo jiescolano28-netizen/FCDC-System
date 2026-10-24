@@ -263,9 +263,9 @@ class OpeningBooksService
             DB::table('accounting_production_activations')->insertOrIgnore([
                 'book_key' => 'FCDC',
                 'activated_by' => $actorId,
-                'activated_at' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
+                'activated_at' => now('UTC'),
+                'created_at' => now('UTC'),
+                'updated_at' => now('UTC'),
             ]);
         });
     }
@@ -487,21 +487,26 @@ class OpeningBooksService
         if (! $journal) {
             return 'Approved item valuation pending opening Inventory reconciliation';
         }
-        try {
-            $this->assertInventoryOpeningMatches(
-                $journal->lines()->with('account')->get()->map(fn ($line) => [
-                    'accounting_account_id' => $line->accounting_account_id,
-                    'debit_cents' => $line->debit_cents,
-                    'credit_cents' => $line->credit_cents,
-                ])->all(),
-                $journal->accounting_date->toDateString(),
-                true,
-            );
-        } catch (ValidationException) {
+        if ($schedule->cutover_date->toDateString() !== $journal->accounting_date->toDateString()) {
             return 'Opening inventory schedule mismatch';
         }
 
-        return 'Opening stock schedule reconciled';
+        // The approved schedule was reconciled to the cutover stock timeline when it
+        // was approved. Later stock movements, including same-day post-cutover sales,
+        // must not retroactively invalidate that immutable opening evidence.
+        $inventoryLines = $journal->lines()->with('account')->get()->filter(
+            fn ($line) => $line->account?->classification === 'inventory',
+        );
+        $journalTotal = 0;
+        foreach ($inventoryLines as $line) {
+            if ((int) $line->credit_cents > 0) {
+                return 'Opening inventory schedule mismatch';
+            }
+            $journalTotal += (int) $line->debit_cents;
+        }
+        $scheduleTotal = (int) $schedule->lines->sum('carrying_value_cents');
+
+        return $journalTotal === $scheduleTotal ? 'Opening stock schedule reconciled' : 'Opening inventory schedule mismatch';
     }
 
     private function inventoryScheduleLines(OpeningInventoryValuation $schedule): array

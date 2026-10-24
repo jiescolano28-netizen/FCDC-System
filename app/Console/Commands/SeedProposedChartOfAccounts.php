@@ -11,7 +11,7 @@ class SeedProposedChartOfAccounts extends Command
 {
     protected $signature = 'demo:seed-proposed-chart';
 
-    protected $description = 'Seed the proposed chart on a verified isolated demo database.';
+    protected $description = 'Apply the official chart of accounts on a verified isolated demo database.';
 
     public function handle(ProposedChartOfAccountsSeeder $seeder, DemoDatabaseIsolation $isolation): int
     {

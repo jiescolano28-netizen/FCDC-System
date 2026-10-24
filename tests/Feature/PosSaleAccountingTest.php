@@ -10,8 +10,6 @@ use App\Models\PosTransaction;
 use App\Models\PosVatRecord;
 use App\Models\StockMovement;
 use App\Services\Accounting\PosSalePostingService;
-use App\Support\DemoDatabaseIsolation;
-use Database\Seeders\ProposedChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -73,8 +71,7 @@ test('a completed sale posts recorded cash, sales and VAT plus frozen moving-ave
         ->and($sale->lines->first()->unit_cost)->toBe('50.00');
 });
 
-
-test('proposed category accounts do not split POS routing or duplicate output VAT', function () {
+test('official category accounts do not split POS routing or duplicate output VAT', function () {
     $employee = posAccountingEmployee();
     $this->actingAs($employee);
     $recovered = Inventory::create([
@@ -89,9 +86,6 @@ test('proposed category accounts do not split POS routing or duplicate output VA
         $recovered->id => '500.00',
         $resale->id => '500.00',
     ]);
-    $isolation = Mockery::mock(DemoDatabaseIsolation::class);
-    $isolation->shouldReceive('verify')->once();
-    app(ProposedChartOfAccountsSeeder::class)->seed($isolation);
 
     Livewire::test(PointOfSale::class)
         ->call('addToCart', $recovered->id)
@@ -158,7 +152,7 @@ test('a POS sale is not blocked by the opening date cutover check', function () 
     ]);
     setupPosAccountingBooks([$item], [$item->id => '500.00']);
 
-    \Illuminate\Support\Facades\DB::table('accounting_journals')
+    Illuminate\Support\Facades\DB::table('accounting_journals')
         ->where('source_type', 'opening')->where('source_id', 'FCDC')
         ->update(['accounting_date' => now('Asia/Manila')->addDay()->toDateString()]);
 
