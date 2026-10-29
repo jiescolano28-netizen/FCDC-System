@@ -4,8 +4,10 @@ use App\Livewire\Accounting\AccountingOverview;
 use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\OpeningBooks;
 use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingPostingMapping;
+use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
@@ -210,6 +212,57 @@ test('opening balance CSV import maps approved chart codes into an unsaved draft
         ->call('importOpeningCsv')
         ->assertHasErrors('openingCsv')
         ->assertSee('not active and approved');
+});
+
+test('four-step scan and calculation preview use posted records without creating an opening journal', function () {
+    $viewer = openingBooksEmployee(['accounting.view']);
+    $cash = approvedOpeningAccount('1000', 'cash', 'Asset', 'debit');
+    $capital = approvedOpeningAccount('3000', 'capital', 'Equity', 'credit');
+    $period = AccountingPostingPeriod::firstOrCreateForDate('2026-06-30');
+    $journal = AccountingJournal::create([
+        'book_key' => 'FCDC',
+        'reference' => 'SCAN-EXISTING-001',
+        'source_type' => 'scan_fixture',
+        'source_id' => 'SCAN-EXISTING-001',
+        'accounting_date' => '2026-06-30',
+        'posting_period_id' => $period->id,
+        'description' => 'Existing posted accounting activity',
+        'status' => 'draft',
+        'prepared_by' => $viewer->id,
+    ]);
+    $journal->lines()->create(['accounting_account_id' => $cash->id, 'debit_cents' => 12500, 'credit_cents' => 0]);
+    $journal->lines()->create(['accounting_account_id' => $capital->id, 'debit_cents' => 0, 'credit_cents' => 12500]);
+    $journal->forceFill([
+        'status' => 'posted',
+        'posted_by' => $viewer->id,
+        'approved_by' => $viewer->id,
+        'posted_at' => now(),
+        'approved_at' => now(),
+    ])->save();
+
+    $this->actingAs($viewer);
+    $wizard = Livewire::test(OpeningBooks::class)
+        ->assertSee('Step 1. Scan Existing Records')
+        ->assertSee('Scan Records')
+        ->assertSee('Calculate Balances')
+        ->assertSee('Validate & Review')
+        ->assertSee('Approve & Post')
+        ->assertSee('2 accounts')
+        ->assertSee('1 posted journals')
+        ->call('goToStep', 2)
+        ->assertSee('Step 2. Calculate Balances')
+        ->assertSee('125.00')
+        ->call('goToStep', 3)
+        ->assertSee('Step 3. Validate and Review')
+        ->assertSee('Validation checklist')
+        ->call('goToStep', 4)
+        ->assertSee('Step 4. Approve and Post')
+        ->assertSee('Authorized review');
+
+    expect($wizard->viewData('previewDebitCents'))->toBe(12500)
+        ->and($wizard->viewData('previewCreditCents'))->toBe(12500)
+        ->and(AccountingJournal::where('source_type', 'opening')->count())->toBe(0)
+        ->and(AccountingJournal::where('reference', 'SCAN-EXISTING-001')->count())->toBe(1);
 });
 
 test('inventory and supplier CSV imports reuse existing records and save schedules only as drafts', function () {

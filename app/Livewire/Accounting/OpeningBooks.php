@@ -4,10 +4,13 @@ namespace App\Livewire\Accounting;
 
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
+use App\Models\AccountingJournalLine;
 use App\Models\AccountingYtdSummary;
 use App\Models\Inventory;
 use App\Models\OpeningInventoryValuation;
 use App\Models\Supplier;
+use App\Models\SupplierOpeningInvoice;
+use App\Models\SupplierPurchaseInvoice;
 use App\Services\Accounting\InterveningSourceReconciliation;
 use App\Services\Accounting\OpeningBooksService;
 use App\Services\Accounting\SupplierPayablesService;
@@ -22,6 +25,8 @@ class OpeningBooks extends Component
     use WithFileUploads;
 
     public string $cutoverDate = '';
+
+    public int $currentStep = 1;
 
     public array $lines = [];
 
@@ -45,6 +50,10 @@ class OpeningBooks extends Component
 
     public function mount(): void
     {
+        $this->currentStep = (int) session()->get('opening-cutover.current-step', 1);
+        if ($this->currentStep < 1 || $this->currentStep > 4) {
+            $this->currentStep = 1;
+        }
         $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->first();
         $this->cutoverDate = $journal?->accounting_date?->format('Y-m-d') ?? now('Asia/Manila')->toDateString();
         $this->lines = $journal
@@ -75,6 +84,23 @@ class OpeningBooks extends Component
             ];
         })->all();
         $this->editingInventoryValuation = $valuation?->status !== 'approved';
+    }
+
+    public function goToStep(int $step): void
+    {
+        abort_unless(in_array($step, [1, 2, 3, 4], true), 404);
+        $this->currentStep = $step;
+        session()->put('opening-cutover.current-step', $step);
+    }
+
+    public function nextStep(): void
+    {
+        $this->goToStep(min(4, $this->currentStep + 1));
+    }
+
+    public function previousStep(): void
+    {
+        $this->goToStep(max(1, $this->currentStep - 1));
     }
 
     public function addOpeningLine(): void
@@ -149,6 +175,7 @@ class OpeningBooks extends Component
     {
         $this->authorizePermission('accounting.approve-opening-books');
         app(OpeningBooksService::class)->approveOpening(auth()->id());
+        $this->goToStep(4);
         session()->flash('opening-message', 'Opening journal approved.');
     }
 
@@ -156,6 +183,7 @@ class OpeningBooks extends Component
     {
         $this->authorizePermission('accounting.approve-opening-books');
         app(OpeningBooksService::class)->approveCutover(auth()->id());
+        $this->goToStep(4);
         session()->flash('opening-message', 'Cutover approved and opening balances posted.');
     }
 
@@ -342,6 +370,7 @@ class OpeningBooks extends Component
     {
         $this->authorizePermission('accounting.activate-books');
         app(OpeningBooksService::class)->activateProduction((int) auth()->id());
+        $this->goToStep(4);
         session()->flash('opening-message', 'Production accounting activated.');
     }
 
@@ -350,18 +379,73 @@ class OpeningBooks extends Component
         $journal = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->with('lines.account', 'approver')->first();
         $sources = app(InterveningSourceReconciliation::class)->sources();
         [$debitTotalCents, $creditTotalCents] = $this->openingTotals();
+        $accounts = AccountingAccount::query()->orderBy('code')->get();
+        $cutoverDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->cutoverDate) ? $this->cutoverDate : now('Asia/Manila')->toDateString();
+        $previewLines = AccountingJournalLine::query()
+            ->join('accounting_journals', 'accounting_journals.id', '=', 'accounting_journal_lines.accounting_journal_id')
+            ->where('accounting_journals.book_key', 'FCDC')
+            ->where('accounting_journals.status', 'posted')
+            ->where('accounting_journals.source_type', '!=', 'opening')
+            ->whereDate('accounting_journals.accounting_date', '<', $cutoverDate)
+            ->selectRaw('accounting_journal_lines.accounting_account_id, SUM(accounting_journal_lines.debit_cents) as debits, SUM(accounting_journal_lines.credit_cents) as credits')
+            ->groupBy('accounting_journal_lines.accounting_account_id')
+            ->get()
+            ->map(function ($line) use ($accounts): ?array {
+                $net = (int) $line->debits - (int) $line->credits;
+                if ($net === 0) {
+                    return null;
+                }
+                $account = $accounts->firstWhere('id', (int) $line->accounting_account_id);
+                if (! $account) {
+                    return null;
+                }
+
+                return ['account' => $account, 'debit_cents' => max(0, $net), 'credit_cents' => max(0, -$net)];
+            })->filter()->values();
+        $scan = [
+            'accounts' => $accounts->count(),
+            'approved_accounts' => $accounts->filter(fn ($account) => $account->isApprovedForPosting())->count(),
+            'posted_journals' => AccountingJournal::where('book_key', 'FCDC')->where('status', 'posted')->count(),
+            'inventory_items' => Inventory::count(),
+            'suppliers' => Supplier::count(),
+            'supplier_invoices' => SupplierOpeningInvoice::activePosted()->count() + SupplierPurchaseInvoice::where('status', 'posted')->count(),
+        ];
+        $openingJournalCount = AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->count();
+        $apLines = $journal?->lines->filter(fn ($line) => $line->account?->classification === 'accounts_payable') ?? collect();
+        $apBookCents = (int) $apLines->sum('credit_cents') - (int) $apLines->sum('debit_cents');
+        $apScheduleCents = (int) SupplierOpeningInvoice::activePosted()->sum('amount_cents')
+            + (int) SupplierOpeningInvoice::query()->where('status', 'draft')->whereNull('reversal_of_id')->sum('amount_cents');
+        $inventoryLines = $journal?->lines->filter(fn ($line) => $line->account?->classification === 'inventory') ?? collect();
+        $inventoryBookCents = (int) $inventoryLines->sum('debit_cents') - (int) $inventoryLines->sum('credit_cents');
+        $inventoryValuation = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines.inventory', 'approver')->first();
+        $inventoryScheduleCents = $inventoryValuation ? (int) $inventoryValuation->lines->sum('carrying_value_cents') : null;
+        $preflight = [
+            'ap_book_cents' => $apBookCents,
+            'ap_schedule_cents' => $apScheduleCents,
+            'ap_matches' => $journal ? $apBookCents === $apScheduleCents : null,
+            'inventory_book_cents' => $inventoryBookCents,
+            'inventory_schedule_cents' => $inventoryScheduleCents,
+            'inventory_matches' => $inventoryValuation && $journal ? $inventoryBookCents === $inventoryScheduleCents : null,
+        ];
 
         return view('livewire.accounting.opening-books', [
-            'accounts' => AccountingAccount::where('is_active', true)->orderBy('code')->get(),
+            'accounts' => $accounts->where('is_active', true),
+            'cutoverDate' => $cutoverDate,
             'journal' => $journal,
             'inventoryItems' => Inventory::orderBy('id')->get(),
-            'inventoryValuation' => OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines.inventory', 'approver')->first(),
+            'inventoryValuation' => $inventoryValuation,
             'ytdSummary' => AccountingYtdSummary::where('book_key', 'FCDC')->where('fiscal_year', (int) substr($this->cutoverDate, 0, 4))->with('lines.account', 'approver')->first(),
             'interveningSources' => $sources,
             'readiness' => app(OpeningBooksService::class)->readiness(),
             'debitTotalCents' => $debitTotalCents,
             'creditTotalCents' => $creditTotalCents,
             'openingBalanced' => $debitTotalCents !== null && $creditTotalCents !== null && $debitTotalCents > 0 && $debitTotalCents === $creditTotalCents,
+            'scan' => $scan,
+            'previewLines' => $previewLines,
+            'previewDebitCents' => (int) $previewLines->sum('debit_cents'),
+            'previewCreditCents' => (int) $previewLines->sum('credit_cents'),
+            'duplicatePostingClear' => $openingJournalCount <= 1,
+            'preflight' => $preflight,
         ])->layout('layouts.app', ['title' => 'Opening Books & Cutover']);
     }
 

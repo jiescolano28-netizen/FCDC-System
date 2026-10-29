@@ -121,6 +121,9 @@
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.trial-balance') ? 'active' : '' }}" href="{{ route('accounting.trial-balance') }}" @if (request()->routeIs('accounting.trial-balance')) aria-current="page" @endif>
                                 <span class="nav-icon" aria-hidden="true">⚖</span><span class="nav-label">Trial Balance</span>
                             </a>
+                            <a class="nav-item nav-child {{ request()->routeIs('accounting.opening-books') ? 'active' : '' }}" href="{{ route('accounting.opening-books') }}" @if (request()->routeIs('accounting.opening-books')) aria-current="page" @endif>
+                                <span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">Opening Balance / Cutover</span>
+                            </a>
                             <a class="nav-item nav-child {{ request()->routeIs('accounting.sales-inventory-profitability') ? 'active' : '' }}" href="{{ route('accounting.sales-inventory-profitability') }}" @if (request()->routeIs('accounting.sales-inventory-profitability')) aria-current="page" @endif>
                                 <span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">Sales and Inventory Profitability Report</span>
                             </a>

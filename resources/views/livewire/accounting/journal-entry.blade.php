@@ -2,7 +2,7 @@
     <header class="page-heading journal-entry-heading">
         <div>
             <h1 id="journal-entry-heading">Journal Entry</h1>
-            <p class="page-subtitle">Prepare and approve cutover opening balances, generate journals from POS and recorded cost sources, prepare reviewed manual drafts, and correct posted history through linked reversals.</p>
+            <p class="page-subtitle">Prepare reviewed manual drafts, generate journals from POS and recorded cost sources, and correct posted history through linked reversals.</p>
         </div>
     </header>
 
@@ -12,7 +12,6 @@
 
     <nav class="journal-section-nav" aria-label="Journal entry sections">
         <a href="#regular-journal-entries">Regular Journal Entries</a>
-        <a href="#opening-balance-cutover">Opening Balance / Cutover</a>
         <a href="#source-generated-journals">Source-Generated Journals</a>
     </nav>
 
@@ -211,163 +210,6 @@
                 <p class="journal-history-empty">No journal entries match these filters. Saved drafts and posted entries appear here.</p>
             @endif
         </section>
-    </section>
-
-    <section class="journal-opening-panel" id="opening-balance-cutover" aria-labelledby="journal-opening-heading">
-        <header class="journal-opening-header">
-            <div>
-                <span class="journal-manual-kicker">Cutover</span>
-                <h2 id="journal-opening-heading">Opening Balance / Cutover Journal</h2>
-                <p>Enter the approved balances carried into the books at the Manila cutover date. Debits and credits must match exactly. Once approved, the General Ledger uses these balances as its opening position and applies later posted transactions as running balances.</p>
-            </div>
-            @if ($openingJournal)
-                <span class="journal-source-status {{ $openingJournal->status === 'posted' ? 'is-posted' : 'is-ready' }}">
-                    {{ $openingJournal->status === 'posted' ? 'Approved and posted' : ucwords(str_replace('_', ' ', $openingJournal->status)) }}
-                </span>
-            @else
-                <span class="journal-source-status is-blocked">Not prepared</span>
-            @endif
-        </header>
-
-        @unless (auth()->user()->can('accounting.maintain-opening-books') || auth()->user()->can('accounting.approve-opening-books'))
-            <p class="journal-section-notice" role="status">View-only access. You need opening-book prepare or approve permission to change the cutover journal.</p>
-        @endunless
-
-        @if ($openingJournal?->status === 'posted')
-            <div class="journal-opening-approved" role="status">
-                <dl>
-                    <div><dt>Cutover date</dt><dd>{{ $openingJournal->accounting_date->format('F j, Y') }}</dd></div>
-                    <div><dt>Status</dt><dd>Approved and posted</dd></div>
-                    <div><dt>Prepared by</dt><dd>{{ $openingJournal->preparer?->username ?? '—' }}</dd></div>
-                    <div><dt>Approved by</dt><dd>{{ $openingJournal->approver?->username ?? '—' }}</dd></div>
-                </dl>
-                <div class="journal-opening-table-wrap">
-                    <table class="journal-opening-table">
-                        <caption class="sr-only">Approved opening balance account lines</caption>
-                        <thead><tr><th scope="col">Account</th><th scope="col" class="journal-source-amount">Debit (PHP)</th><th scope="col" class="journal-source-amount">Credit (PHP)</th></tr></thead>
-                        <tbody>
-                            @foreach ($openingJournal->lines as $line)
-                                <tr wire:key="opening-approved-line-{{ $line->id }}">
-                                    <td>{{ $line->account->code }} — {{ $line->account->name }}</td>
-                                    <td class="journal-source-amount">{{ $line->debit_cents ? number_format($line->debit_cents / 100, 2) : '—' }}</td>
-                                    <td class="journal-source-amount">{{ $line->credit_cents ? number_format($line->credit_cents / 100, 2) : '—' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <th scope="row">Total</th>
-                                <td class="journal-source-amount">{{ number_format($openingJournal->lines->sum('debit_cents') / 100, 2) }}</td>
-                                <td class="journal-source-amount">{{ number_format($openingJournal->lines->sum('credit_cents') / 100, 2) }}</td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-                <p class="journal-opening-note">
-                    These approved balances are locked. The General Ledger applies them automatically at the cutover date.
-                    <a href="{{ route('accounting.general-ledger') }}">Open the General Ledger</a>
-                </p>
-            </div>
-        @else
-            <form class="journal-opening-form" wire:submit="saveOpening">
-                <div class="journal-entry-header-fields">
-                    <label>
-                        <span>Cutover date (Asia/Manila)</span>
-                        <input type="date" wire:model="cutoverDate" @disabled(auth()->user()->cannot('accounting.maintain-opening-books'))>
-                        @error('cutoverDate') <small class="settings-error">{{ $message }}</small> @enderror
-                    </label>
-                </div>
-                <p class="journal-opening-help">Use approved active accounts. Opening Inventory and Accounts Payable additionally require their approved supporting schedules before the balance can be posted.</p>
-
-                <div class="journal-lines-heading">
-                    <div><h3>Opening account lines</h3><p>Each line needs exactly one positive debit or credit amount in PHP centavos.</p></div>
-                    @can('accounting.maintain-opening-books')
-                        <button class="journal-secondary-button" type="button" wire:click="addOpeningLine" @disabled(count($openingLines) >= 100)>Add opening line</button>
-                    @endcan
-                </div>
-                <div class="journal-line-list" role="region" aria-label="Opening balance lines" tabindex="0">
-                    <table class="journal-lines-table">
-                        <thead><tr><th scope="col">#</th><th scope="col">Account</th><th scope="col">Debit (PHP)</th><th scope="col">Credit (PHP)</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-                        <tbody>
-                            @foreach ($openingLines as $index => $line)
-                                <tr wire:key="opening-line-{{ $index }}">
-                                    <th scope="row" class="journal-line-number">{{ str_pad($index + 1, 2, '0', STR_PAD_LEFT) }}</th>
-                                    <td>
-                                        <label class="sr-only" for="opening-account-{{ $index }}">Opening account, line {{ $index + 1 }}</label>
-                                        <select id="opening-account-{{ $index }}" wire:model="openingLines.{{ $index }}.accountId" @disabled(auth()->user()->cannot('accounting.maintain-opening-books'))>
-                                            <option value="">Select account</option>
-                                            @foreach ($accountsByType as $accountType => $typeAccounts)
-                                                <optgroup label="{{ $accountType }}">
-                                                    @foreach ($typeAccounts as $account)
-                                                        <option value="{{ $account->id }}">{{ $account->code }} · {{ $account->name }} · {{ $accountType }}</option>
-                                                    @endforeach
-                                                </optgroup>
-                                            @endforeach
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <label class="sr-only" for="opening-debit-{{ $index }}">Opening debit amount, line {{ $index + 1 }}</label>
-                                        <input id="opening-debit-{{ $index }}" type="number" min="0" step="0.01" inputmode="decimal" wire:model.live.debounce.300ms="openingLines.{{ $index }}.debit" placeholder="0.00" @disabled(auth()->user()->cannot('accounting.maintain-opening-books'))>
-                                    </td>
-                                    <td>
-                                        <label class="sr-only" for="opening-credit-{{ $index }}">Opening credit amount, line {{ $index + 1 }}</label>
-                                        <input id="opening-credit-{{ $index }}" type="number" min="0" step="0.01" inputmode="decimal" wire:model.live.debounce.300ms="openingLines.{{ $index }}.credit" placeholder="0.00" @disabled(auth()->user()->cannot('accounting.maintain-opening-books'))>
-                                    </td>
-                                    <td class="journal-line-action">
-                                        @can('accounting.maintain-opening-books')
-                                            <button class="journal-remove-button" type="button" wire:click="removeOpeningLine({{ $index }})" aria-label="Remove opening line {{ $index + 1 }}" @disabled(count($openingLines) <= 2)>Remove</button>
-                                        @endcan
-                                    </td>
-                                </tr>
-                                @if ($openingAttempted)
-                                    @error("lines.{$index}")
-                                        <tr class="journal-line-error-row" wire:key="opening-line-{{ $index }}-error">
-                                            <td colspan="5"><p class="journal-line-error" role="alert">{{ $message }}</p></td>
-                                        </tr>
-                                    @enderror
-                                    @error("lines.{$index}.accountId")
-                                        <tr class="journal-line-error-row" wire:key="opening-line-{{ $index }}-account-error">
-                                            <td colspan="5"><p class="journal-line-error" role="alert">{{ $message }}</p></td>
-                                        </tr>
-                                    @enderror
-                                @endif
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="journal-entry-totals {{ $isOpeningBalanced ? 'is-balanced' : 'is-unbalanced' }}" aria-live="polite" aria-atomic="true">
-                    <div><span>Debit total</span><strong>₱{{ number_format($openingDebitTotal, 2) }}</strong></div>
-                    <div><span>Credit total</span><strong>₱{{ number_format($openingCreditTotal, 2) }}</strong></div>
-                    <div class="journal-balance-state">
-                        <strong>{{ $isOpeningBalanced ? 'Balanced' : 'Not balanced' }}</strong>
-                        @unless ($isOpeningBalanced)<span>Opening debits and credits must match exactly before approval.</span>@endunless
-                    </div>
-                </div>
-
-                @if ($openingAttempted)
-                    @foreach (['opening', 'lines'] as $openingErrorField)
-                        @foreach ($errors->get($openingErrorField) as $openingError)
-                            <p class="settings-error journal-total-error" role="alert">{{ $openingError }}</p>
-                        @endforeach
-                    @endforeach
-                @endif
-
-                <div class="journal-opening-actions">
-                    @can('accounting.maintain-opening-books')
-                        <button class="journal-save-button" type="submit">Save opening journal</button>
-                    @endcan
-                    @if ($openingJournal?->status === 'draft')
-                        @can('accounting.approve-opening-books')
-                            <button class="journal-save-button journal-approve-button" type="button" wire:click="approveOpening">Approve and post opening balance</button>
-                        @endcan
-                    @endif
-                </div>
-                @if ($openingJournal?->status === 'draft')
-                    <p class="journal-opening-note">Prepared by {{ $openingJournal->preparer?->username ?? 'staff member' }}. A reviewer with opening-book approval permission posts the balance once it is balanced and supported.</p>
-                @endif
-            </form>
-        @endif
     </section>
 
     @php
