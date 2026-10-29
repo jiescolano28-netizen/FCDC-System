@@ -1,14 +1,19 @@
 <?php
 
+use App\Livewire\Accounting\AccountingOverview;
+use App\Livewire\Accounting\FinancialStatements;
 use App\Livewire\Accounting\OpeningBooks;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingPostingMapping;
-use App\Models\Inventory;
-use App\Models\StockMovement;
 use App\Models\Employee;
+use App\Models\Inventory;
+use App\Models\OpeningInventoryValuation;
+use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -139,7 +144,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
         ->assertSee('12.50')
         ->assertSee('2.5000')
         ->assertSee('31.25');
-    $valuation = App\Models\OpeningInventoryValuation::with('lines')->firstOrFail();
+    $valuation = OpeningInventoryValuation::with('lines')->firstOrFail();
     $valuationLine = $valuation->lines->firstOrFail();
     expect(fn () => $valuation->update(['evidence_reference' => 'rewritten']))
         ->toThrow(LogicException::class, 'Posted opening inventory valuation is immutable.')
@@ -150,7 +155,6 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
         ->and($item->fresh()->qty)->toBe('12.50')
         ->and((int) DB::table('opening_inventory_valuation_lines')->where('inventory_id', $item->id)->value('carrying_value_cents'))->toBe(3125)
         ->and(app(OpeningBooksService::class)->readiness()['inventory'])->toBe('Opening stock schedule reconciled');
-
 
 });
 
@@ -176,6 +180,70 @@ function approvedOpeningAccount(string $code, string $classification, string $ty
         'approved_by' => auth()->id(),
     ]);
 }
+
+test('opening balance CSV import maps approved chart codes into an unsaved draft and reports unknown accounts', function () {
+    $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);
+    approvedOpeningAccount('1000', 'cash', 'Asset', 'debit');
+    approvedOpeningAccount('3000', 'capital', 'Equity', 'credit');
+
+    $this->actingAs($preparer);
+    $component = Livewire::test(OpeningBooks::class)
+        ->set('openingCsv', UploadedFile::fake()->createWithContent(
+            'balances.csv',
+            "account_code,debit,credit\n1000,100.00,\n3000,,100.00\n",
+        ))
+        ->call('importOpeningCsv')
+        ->assertHasNoErrors()
+        ->assertSee('2 account rows imported to the draft');
+
+    expect($component->get('lines'))->toHaveCount(2)
+        ->and($component->viewData('debitTotalCents'))->toBe(10000)
+        ->and($component->viewData('creditTotalCents'))->toBe(10000)
+        ->and($component->viewData('openingBalanced'))->toBeTrue()
+        ->and(DB::table('accounting_journals')->count())->toBe(0);
+
+    Livewire::test(OpeningBooks::class)
+        ->set('openingCsv', UploadedFile::fake()->createWithContent(
+            'unknown.csv',
+            "account_code,debit,credit\n9999,100.00,\n3000,,100.00\n",
+        ))
+        ->call('importOpeningCsv')
+        ->assertHasErrors('openingCsv')
+        ->assertSee('not active and approved');
+});
+
+test('inventory and supplier CSV imports reuse existing records and save schedules only as drafts', function () {
+    $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books', 'accounting.maintain-suppliers']);
+    $item = Inventory::create([
+        'name' => 'CSV test item', 'category' => 'Materials', 'qty' => '0.00', 'unit' => 'piece',
+        'unit_cost' => '0.00', 'reorder_level' => '0.00',
+    ]);
+    $supplier = Supplier::create(['code' => 'CSV-SUP-01', 'name' => 'CSV Supplier', 'created_by' => $preparer->id]);
+
+    $this->actingAs($preparer);
+    Livewire::test(OpeningBooks::class)
+        ->set('inventoryCsv', UploadedFile::fake()->createWithContent(
+            'inventory.csv',
+            "item_code,quantity,value\n{$item->code},0.00,0.00\n",
+        ))
+        ->call('importInventoryCsv')
+        ->assertHasNoErrors()
+        ->assertSee('1 inventory rows imported to the draft')
+        ->assertSet('inventoryLines.0.inventoryId', (string) $item->id);
+
+    Livewire::test(OpeningBooks::class)
+        ->set('supplierCsv', UploadedFile::fake()->createWithContent(
+            'suppliers.csv',
+            "supplier_code,invoice_number,recognition_date,due_date,amount,description,terms\nCSV-SUP-01,OPEN-CSV-01,2026-01-01,2026-01-31,125.00,Opening invoice,Net 30\n",
+        ))
+        ->call('importSupplierCsv')
+        ->assertHasNoErrors()
+        ->assertSee('1 supplier invoices imported as drafts');
+
+    expect(DB::table('supplier_opening_invoices')->where('supplier_id', $supplier->id)->value('status'))->toBe('draft')
+        ->and(DB::table('stock_movements')->where('inventory_id', $item->id)->count())->toBe(0)
+        ->and(DB::table('opening_inventory_valuations')->count())->toBe(0);
+});
 
 test('an authorized reviewer approves one balanced cash and capital opening at a Manila cutover date', function () {
     $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);
@@ -263,10 +331,10 @@ test('authorized production activation requires reconciled books and is exactly 
         ->assertHasNoErrors()
         ->assertSee('Production activated');
 
-    Livewire::test(\App\Livewire\Accounting\AccountingOverview::class)
+    Livewire::test(AccountingOverview::class)
         ->assertSee('Revenue')
         ->assertSee('No posted activity in this period');
-    Livewire::test(\App\Livewire\Accounting\FinancialStatements::class)
+    Livewire::test(FinancialStatements::class)
         ->assertSee('Sales')
         ->assertSee('No posted income or expense activity in this period.');
 
@@ -274,7 +342,6 @@ test('authorized production activation requires reconciled books and is exactly 
         ->and(DB::table('accounting_production_activations')->value('activated_by'))->toBe($operator->id)
         ->and(app(OpeningBooksService::class)->readiness()['production_activated'])->toBeTrue();
 });
-
 
 test('opening approval rejects unequal and empty lines, unapproved accounts, duplicate posting and unauthorized reviewers', function () {
     $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);
@@ -349,7 +416,7 @@ test('opening cutover readiness names missing chart and controlled supporting ev
         ->assertSee('Save a cutover date to determine YTD evidence requirements');
 });
 
-test('midyear cutover requires separately approved supported YTD income and expense and preserves approval identity', function () {
+test('midyear cutover approves its opening journal and required YTD evidence atomically', function () {
     $preparer = openingBooksEmployee(['accounting.view', 'accounting.maintain-opening-books']);
     $reviewer = openingBooksEmployee(['accounting.view', 'accounting.approve-opening-books']);
     $cash = approvedOpeningAccount('1000', 'cash', 'Asset', 'debit');
@@ -366,7 +433,8 @@ test('midyear cutover requires separately approved supported YTD income and expe
         ->call('saveOpening')
         ->assertHasNoErrors();
     $this->actingAs($reviewer);
-    Livewire::test(OpeningBooks::class)->call('approveOpening')->assertHasNoErrors();
+    Livewire::test(OpeningBooks::class)->call('approveCutover')->assertHasErrors('ytdLines');
+    expect(DB::table('accounting_journals')->where('source_type', 'opening')->value('status'))->toBe('draft');
     Livewire::test(OpeningBooks::class)->assertSee('Pre-cutover YTD evidence required');
 
     $this->actingAs($preparer);
@@ -378,11 +446,12 @@ test('midyear cutover requires separately approved supported YTD income and expe
         ->assertHasNoErrors();
     $this->actingAs($reviewer);
     Livewire::test(OpeningBooks::class)
-        ->call('approveYtdSummary')
+        ->call('approveCutover')
         ->assertHasNoErrors()
         ->assertSee('Approved through June 30, 2026');
 
     expect(DB::table('accounting_ytd_summaries')->value('approved_by'))->toBe($reviewer->id)
+        ->and(DB::table('accounting_journals')->where('source_type', 'opening')->value('status'))->toBe('posted')
         ->and(DB::table('accounting_ytd_summary_lines')->value('amount_cents'))->toBe(25000)
         ->and($sales->fresh()->used_at)->not->toBeNull()
         ->and(app(OpeningBooksService::class)->readiness()['ytd'])->toBe('Approved pre-cutover YTD evidence');

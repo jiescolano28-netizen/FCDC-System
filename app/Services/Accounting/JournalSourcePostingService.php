@@ -16,11 +16,12 @@ use Illuminate\Validation\ValidationException;
 /**
  * Generates posted accounting journals from persisted operating sources.
  *
- * POS sales already post automatically at checkout through
- * PosSalePostingService. This service covers the two source registers that were
- * not yet connected to Accounting: Reworking Cost Records and Operating Cost
- * Records. Each source row can produce at most one journal because source_type
- * and source_id are unique and checked before insertion.
+ * POS sales post automatically at checkout through PosSalePostingService, and
+ * validated Operating Cost Records post automatically when approved accounts
+ * are configured. This service also supports explicit generation for source
+ * registers such as Reworking Cost Records and for operating costs saved before
+ * accounting configuration. Each source row can produce at most one journal
+ * because source_type and source_id are unique and checked before insertion.
  */
 class JournalSourcePostingService
 {

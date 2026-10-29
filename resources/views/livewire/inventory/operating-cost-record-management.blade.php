@@ -298,7 +298,7 @@
         <div class="columns" style="justify-content:space-between; margin-bottom:12px;">
             <div>
                 <h2 class="operating-cost-section-title">Operating Expenses</h2>
-                <p class="muted">Record and monitor the day-to-day operating expenses of the business. These entries are standalone and do not change the input VAT totals in VAT Compliance.</p>
+                <p class="muted">Record and monitor the day-to-day operating expenses of the business. Validated records post a balanced journal automatically once approved accounting accounts are configured. These entries do not change the input VAT totals in VAT Compliance.</p>
             </div>
             <div class="actions">
                 @can('inventory.create')
@@ -379,7 +379,7 @@
                         <div class="inventory-form-field">
                             <label for="operating-cost-payment-method">Payment method</label>
                             <input id="operating-cost-payment-method" wire:model="paymentMethod" maxlength="100" placeholder="e.g. Cash, Bank Transfer, Card, Accounts Payable">
-                            <span class="operating-cost-hint">Accounting can generate a journal for cash, bank transfer, card, or accounts payable settlements.</span>
+                            <span class="operating-cost-hint">Accounting posts a journal automatically for cash, bank transfer, card, or accounts payable settlements when the approved accounts are configured.</span>
                             @error('paymentMethod') <span class="error">{{ $message }}</span> @enderror
                         </div>
 
@@ -478,6 +478,7 @@
                         <th scope="col">Description</th>
                         <th scope="col" class="numeric">Amount</th>
                         <th scope="col">Payment method</th>
+                        <th scope="col">Accounting</th>
                         <th scope="col">Receipt</th>
                         @if ($hasActions)
                             <th scope="col">Actions</th>
@@ -494,6 +495,15 @@
                             <td><span class="operating-cost-description" title="{{ $record->description }}">{{ $record->description }}</span></td>
                             <td class="numeric">₱{{ number_format((float) $record->amount, 2) }}</td>
                             <td>{{ $record->payment_method }}</td>
+                            <td>
+                                @php($postedJournal = $postedJournals->get((string) $record->id))
+                                @if ($postedJournal)
+                                    <span class="status status-posted">Posted</span>
+                                    <span class="muted">{{ $postedJournal->reference }}</span>
+                                @else
+                                    <span class="muted">Not posted</span>
+                                @endif
+                            </td>
                             <td>
                                 @if ($record->attachment_path)
                                     <div class="operating-cost-attachment">
@@ -522,7 +532,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $hasActions ? 8 : 7 }}">
+                            <td colspan="{{ $hasActions ? 9 : 8 }}">
                                 <div class="operating-cost-empty">
                                     <strong>No operating cost records found.</strong>
                                     <span>Add an expense record to keep track of the business's day-to-day operating costs.</span>

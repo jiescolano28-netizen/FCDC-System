@@ -173,7 +173,16 @@
                             </div>
                         </details>
                     </td>
-                    <td><span class="journal-register-status status-{{ $journal->status }}">{{ ucwords(str_replace('_', ' ', $journal->status)) }}</span></td>
+                    <td>
+                        <span class="journal-register-status status-{{ $journal->status }}">{{ ucwords(str_replace('_', ' ', $journal->status)) }}</span>
+                        <small class="muted" style="display: block; margin-top: 0.25rem;">
+                            {{ $journal->source_type === 'opening'
+                                ? 'Opening balance / cutover'
+                                : (in_array($journal->source_type, ['manual', 'reversal', 'replacement'], true)
+                                    ? 'Manual journal workflow'
+                                    : 'Automatic source posting') }}
+                        </small>
+                    </td>
                     <td class="journal-register-amount">₱{{ number_format($journal->lines->sum('debit_cents') / 100, 2) }}</td>
                     <td class="journal-register-amount">₱{{ number_format($journal->lines->sum('credit_cents') / 100, 2) }}</td>
                     <td><div class="journal-register-actions">
@@ -369,7 +378,7 @@
         <header>
             <div>
                 <h2 id="journal-source-heading">Source-Generated Journals</h2>
-                <p>POS sales post automatically at checkout. Recorded reworking and operating costs can be posted here from their saved source records.</p>
+                <p>POS sales post automatically at checkout. Validated operating cost records post automatically when their approved accounts are configured. Any remaining reworking and operating cost records can be posted here from their saved source records.</p>
             </div>
             <span class="journal-source-note">One journal per source record</span>
         </header>
@@ -427,7 +436,7 @@
                     <header>
                         <div>
                             <h3 id="journal-source-{{ $sourceType }}-heading">{{ $group['label'] }}</h3>
-                            <p>{{ $sourceType === 'reworking_cost' ? 'Recorded reworking costs that do not yet have a journal.' : 'Recorded operating expenses that do not yet have a journal.' }}</p>
+                            <p>{{ $sourceType === 'reworking_cost' ? 'Recorded reworking costs that do not yet have a journal.' : 'Recorded operating expenses that do not yet have a journal. New validated records post automatically when accounting is configured.' }}</p>
                         </div>
                         <span class="journal-source-count">{{ count($group['records']) }} {{ count($group['records']) === 1 ? 'record' : 'records' }}</span>
                     </header>

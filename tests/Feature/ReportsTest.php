@@ -2,9 +2,13 @@
 
 use App\Livewire\Dashboard\ReportsPage;
 use App\Livewire\Pos\PointOfSale;
+use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
+use App\Models\AccountingPostingPeriod;
 use App\Models\Employee;
 use App\Models\Inventory;
 use App\Models\PosTransaction;
+use App\Services\Accounting\OpeningBooksService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -40,9 +44,12 @@ test('Reports is a separately routed authenticated Dashboard page', function () 
         ->assertSee('Reports')
         ->assertSee('Dashboard')
         ->assertSee(route('reports'), false)
+        ->assertSee('Sales')
+        ->assertSee('Inventory')
+        ->assertSee('Accounting')
+        ->assertSee('VAT Reports')
         ->assertSee('Sales trend')
-        ->assertSee('Inventory value by category')
-        ->assertSee('Recent sales')
+        ->assertSee('Export CSV')
         ->assertDontSee('id="view-reports"', false);
 });
 
@@ -65,36 +72,54 @@ test('Reports separates illustrative trends from persisted transactions and inve
         ->assertHasNoErrors();
 
     $this->get(route('reports'))->assertOk()
-        ->assertSee('Fixed illustrative series')
+        ->assertSee('Actual completed POS transactions')
         ->assertSee('POS-')
         ->assertSee('₱44.80')
         ->assertSee('Cash')
         ->assertSee('Lumber')
-        ->assertSee('Masonry')
-        ->assertSee('Lumber · piece: 8.00')
-        ->assertSee('Masonry · bag: 4.00')
-        ->assertSee('"label":"Lumber","total":40', false)
-        ->assertSee('"label":"Masonry","total":32', false);
+        ->assertSee('"label":"Lumber","total":44.8', false);
+
+    Livewire::test(ReportsPage::class)->set('activeReport', 'inventory')
+        ->assertSee('Current inventory value')
+        ->assertSee('Lumber')->assertSee('piece')->assertSee('8.00')
+        ->assertSee('Masonry')->assertSee('bag')->assertSee('4.00')
+        ->assertSee('Inventory is a current snapshot');
+
+    Livewire::test(ReportsPage::class)->set('activeReport', 'vat')
+        ->assertSee('Output VAT')
+        ->assertSee('saved reworking-cost records')
+        ->assertSee('POS-');
+
+    $vatCsvReport = Livewire::test(ReportsPage::class)->set('activeReport', 'vat')
+        ->call('exportCsv');
+    $vatCsv = base64_decode($vatCsvReport->effects['download']['content']);
+    expect($vatCsv)->toContain('Transaction', 'Output VAT', '4.80', 'POS-');
 
     expect($board->fresh()->qty)->toBe('8.00');
 });
 
-test('Reports period selection updates only the illustrative sales series', function () {
+test('Reports date presets select actual range-backed sales data', function () {
     $this->actingAs(createReportsEmployee());
 
     Livewire::test(ReportsPage::class)
         ->assertSee('Sales trend')
-        ->call('setSalesPeriod', 'month')
-        ->assertSee('Wk 1')
-        ->call('setSalesPeriod', 'invalid')
-        ->assertSee('Wk 1');
+        ->call('setPeriod', 'month')
+        ->assertSee('Actual completed POS transactions')
+        ->call('setPeriod', 'invalid')
+        ->assertSee('Actual completed POS transactions');
 });
 
 test('Reports shows useful empty states when no inventory or transactions exist', function () {
     $this->actingAs(createReportsEmployee())->get(route('reports'))->assertOk()
-        ->assertSee('No inventory categories to chart yet.')
-        ->assertSee('No completed transactions.')
+        ->assertSee('No completed POS line items in this date range.')
+        ->assertSee('No completed POS transactions for this period.')
         ->assertSee('₱0.00');
+
+    Livewire::test(ReportsPage::class)->set('activeReport', 'inventory')
+        ->assertSee('No inventory categories are recorded.');
+    Livewire::test(ReportsPage::class)->set('activeReport', 'accounting')
+        ->assertSee('Accounting report unavailable')
+        ->assertSee('Production activation unavailable');
 });
 test('Reports aggregates completed POS sales daily and monthly from transaction snapshots', function () {
     $this->actingAs(createReportsEmployee());
@@ -133,8 +158,8 @@ test('Reports aggregates completed POS sales daily and monthly from transaction 
     $makeTransaction('POS-OTHER-MONTH', '2026-09-30 10:00:00', 'bank_transfer', 'Old snapshot', 'Old category', '11.20');
 
     $reports = Livewire::test(ReportsPage::class)
-        ->set('reportDate', '2026-10-09')
-        ->assertSee('Completed POS sales')
+        ->set('fromDate', '2026-10-09')->set('toDate', '2026-10-09')
+        ->assertSee('Completed sales')
         ->assertSee('₱44.80')
         ->assertSee('Pine board snapshot')
         ->assertSee('Lumber snapshot')
@@ -142,7 +167,7 @@ test('Reports aggregates completed POS sales daily and monthly from transaction 
         ->assertDontSee('Cement snapshot')
         ->assertDontSee('Old snapshot');
 
-    $reports->set('reportPeriod', 'monthly')
+    $reports->set('fromDate', '2026-10-01')->set('toDate', '2026-10-31')
         ->assertSee('₱67.20')
         ->assertSee('Pine board snapshot')
         ->assertSee('Cement snapshot')
@@ -152,15 +177,96 @@ test('Reports aggregates completed POS sales daily and monthly from transaction 
         ->assertDontSee('Old snapshot');
 });
 
-test('Reports keeps rendering a usable period for cleared and impossible report dates', function () {
+test('Reports keeps rendering a usable period for cleared and impossible date filters', function () {
     $this->actingAs(createReportsEmployee());
 
     Livewire::test(ReportsPage::class)
-        ->set('reportDate', '')
-        ->assertHasErrors('reportDate')
-        ->assertSee('Completed POS sales')
-        ->set('reportDate', '2026-02-31')
-        ->assertHasErrors('reportDate')
-        ->assertDontSee('March 3, 2026')
-        ->assertSee('Completed POS sales');
+        ->set('fromDate', '')
+        ->assertSee('Completed sales')
+        ->set('fromDate', '2026-02-31')
+        ->assertSee('Completed sales')
+        ->assertSee('Reports');
+});
+
+test('Reports CSV exports use filtered persisted sales and inventory records', function () {
+    $this->actingAs(createReportsEmployee());
+    $inventory = createReportsInventory();
+    $date = now('Asia/Manila');
+    $transaction = PosTransaction::create([
+        'transaction_number' => 'POS-REPORT-CSV-001',
+        'subtotal' => '20.00',
+        'vat_rate' => '0.12',
+        'vat_amount' => '2.40',
+        'total' => '22.40',
+        'payment_method' => 'cash',
+        'amount_received' => '22.40',
+        'change_due' => '0.00',
+        'status' => 'completed',
+        'completed_at' => $date->copy()->utc(),
+    ]);
+    $transaction->lines()->create([
+        'inventory_id' => $inventory->id,
+        'inventory_code' => $inventory->code,
+        'item_name' => $inventory->name,
+        'category' => $inventory->category,
+        'unit' => $inventory->unit,
+        'quantity' => 1,
+        'selling_price' => 20,
+        'unit_cost' => 5,
+        'line_subtotal' => 20,
+        'vat_amount' => 2.40,
+        'line_total' => 22.40,
+    ]);
+
+    $reports = Livewire::test(ReportsPage::class)
+        ->set('fromDate', $date->toDateString())->set('toDate', $date->toDateString())
+        ->call('exportCsv')
+        ->assertFileDownloaded('fcdc-sales-report-'.$date->toDateString().'-to-'.$date->toDateString().'.csv');
+    $salesCsv = base64_decode($reports->effects['download']['content']);
+    expect($salesCsv)->toContain('POS-REPORT-CSV-001', 'completed', '22.40');
+
+    $inventoryReport = Livewire::test(ReportsPage::class)->set('activeReport', 'inventory')
+        ->call('exportCsv')
+        ->assertFileDownloaded('fcdc-inventory-report-'.$date->copy()->startOfMonth()->toDateString().'-to-'.$date->toDateString().'.csv');
+    $inventoryCsv = base64_decode($inventoryReport->effects['download']['content']);
+    expect($inventoryCsv)->toContain($inventory->code, 'Pine board', 'Lumber', 'In Stock');
+});
+
+test('Accounting report calculations use only covered posted approved income and expense entries', function () {
+    $this->travelTo(now('Asia/Manila')->setDate(2026, 10, 29));
+    $employee = createReportsEmployee();
+    $revenueAccount = AccountingAccount::create([
+        'code' => 'RPT-4000', 'name' => 'Report Sales', 'type' => 'Revenue', 'classification' => 'sales',
+        'normal_balance' => 'credit', 'is_active' => true, 'approved_at' => now(),
+    ]);
+    $expenseAccount = AccountingAccount::create([
+        'code' => 'RPT-6000', 'name' => 'Report Operating Expense', 'type' => 'Expense', 'classification' => 'operating_expense',
+        'normal_balance' => 'debit', 'is_active' => true, 'approved_at' => now(),
+    ]);
+    $period = AccountingPostingPeriod::firstOrCreateForDate('2026-10-15');
+    AccountingJournal::create([
+        'book_key' => 'FCDC', 'reference' => 'RPT-OPENING', 'source_type' => 'opening', 'source_id' => 'FCDC',
+        'accounting_date' => '2026-01-01', 'posting_period_id' => $period->id, 'description' => 'Test cutover',
+        'status' => 'posted', 'prepared_by' => $employee->id,
+    ]);
+    $journal = AccountingJournal::create([
+        'book_key' => 'FCDC', 'reference' => 'RPT-POSTED-001', 'source_type' => 'manual_adjustment', 'source_id' => 'RPT-POSTED-001',
+        'accounting_date' => '2026-10-15', 'posting_period_id' => $period->id, 'description' => 'Report activity',
+        'status' => 'draft', 'prepared_by' => $employee->id,
+    ]);
+    $journal->lines()->create(['accounting_account_id' => $revenueAccount->id, 'debit_cents' => 0, 'credit_cents' => 100000]);
+    $journal->lines()->create(['accounting_account_id' => $expenseAccount->id, 'debit_cents' => 25000, 'credit_cents' => 0]);
+    $journal->forceFill(['status' => 'posted', 'posted_at' => now(), 'posted_by' => $employee->id])->save();
+
+    $readiness = Mockery::mock(OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn(['production_activated' => true, 'production' => 'Production activated']);
+    app()->instance(OpeningBooksService::class, $readiness);
+
+    $method = new ReflectionMethod(ReportsPage::class, 'accountingReport');
+    $report = $method->invoke(new ReportsPage, '2026-10-01', '2026-10-31');
+    expect($report['available'])->toBeTrue()
+        ->and($report['revenue'])->toEqual(1000)
+        ->and($report['expenses'])->toEqual(250)
+        ->and($report['net'])->toEqual(750)
+        ->and($report['lines'])->toHaveCount(2);
 });

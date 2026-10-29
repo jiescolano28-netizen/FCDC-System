@@ -3,6 +3,7 @@
 use App\Livewire\Accounting\GeneralLedger;
 use App\Livewire\Accounting\JournalEntry;
 use App\Livewire\Accounting\TrialBalance;
+use App\Livewire\Inventory\OperatingCostRecordManagement;
 use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\AccountingPostingPeriod;
@@ -272,6 +273,101 @@ test('source-generated journals update the general ledger and trial balance with
         ->assertSee('Input VAT')
         ->assertSee('Rent Expense')
         ->assertSee('Books balance');
+});
+
+test('a validated operating cost record posts its balanced journal automatically on save', function () {
+    [$accounts] = prepareJournalSourceBooks();
+    $employee = journalSourceEmployee(['accounting.view', 'inventory.view', 'inventory.create', 'inventory.update']);
+    $this->actingAs($employee);
+
+    Livewire::test(OperatingCostRecordManagement::class)
+        ->set('expenseDate', now('Asia/Manila')->toDateString())
+        ->set('referenceNumber', 'OC-AUTO-001')
+        ->set('expenseCategory', 'Rent Expense')
+        ->set('expenseDescription', 'Automatically posted warehouse rent')
+        ->set('amount', '500.00')
+        ->set('paymentMethod', 'Bank Transfer')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSee('OC-AUTO-001')
+        ->assertSee('Posted');
+
+    $record = OperatingCostRecord::query()->where('reference_number', 'OC-AUTO-001')->sole();
+    $journal = AccountingJournal::query()
+        ->where('source_type', 'operating_cost')
+        ->where('source_id', (string) $record->id)
+        ->with('lines')
+        ->sole();
+    $lines = $journal->lines->keyBy('accounting_account_id');
+
+    expect($journal->status)->toBe('posted')
+        ->and($journal->posted_by)->toBe($employee->id)
+        ->and($journal->approved_by)->toBeNull()
+        ->and($lines[$accounts['rent']->id]->debit_cents)->toBe(50000)
+        ->and($lines[$accounts['bank']->id]->credit_cents)->toBe(50000)
+        ->and($journal->lines->sum('debit_cents'))->toBe($journal->lines->sum('credit_cents'));
+
+    Livewire::actingAs($employee)->test(GeneralLedger::class)
+        ->set('accountId', (string) $accounts['rent']->id)
+        ->assertSee('OPEX-'.$record->id)
+        ->assertSee('500.00');
+});
+
+test('operating cost records remain available without a journal until approved accounts are configured', function () {
+    $employee = journalSourceEmployee(['inventory.view', 'inventory.create']);
+    $this->actingAs($employee);
+
+    Livewire::test(OperatingCostRecordManagement::class)
+        ->set('expenseDate', now('Asia/Manila')->toDateString())
+        ->set('referenceNumber', 'OC-AUTO-002')
+        ->set('expenseCategory', 'Rent Expense')
+        ->set('expenseDescription', 'Saved before accounting configuration')
+        ->set('amount', '250.00')
+        ->set('paymentMethod', 'Cash')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSee('Not posted');
+
+    expect(OperatingCostRecord::query()->where('reference_number', 'OC-AUTO-002')->exists())->toBeTrue()
+        ->and(AccountingJournal::query()->where('source_type', 'operating_cost')->count())->toBe(0);
+});
+
+test('posted operating cost records cannot be edited or deleted as source records', function () {
+    prepareJournalSourceBooks();
+    $employee = journalSourceEmployee([
+        'accounting.view',
+        'inventory.view',
+        'inventory.create',
+        'inventory.update',
+        'inventory.delete',
+    ]);
+    $this->actingAs($employee);
+
+    Livewire::test(OperatingCostRecordManagement::class)
+        ->set('expenseDate', now('Asia/Manila')->toDateString())
+        ->set('referenceNumber', 'OC-AUTO-003')
+        ->set('expenseCategory', 'Rent Expense')
+        ->set('expenseDescription', 'Posted rent')
+        ->set('amount', '500.00')
+        ->set('paymentMethod', 'Bank Transfer')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $record = OperatingCostRecord::query()->where('reference_number', 'OC-AUTO-003')->sole();
+
+    Livewire::test(OperatingCostRecordManagement::class)
+        ->call('edit', $record->id)
+        ->set('amount', '600.00')
+        ->call('save')
+        ->assertHasErrors('referenceNumber');
+
+    Livewire::test(OperatingCostRecordManagement::class)
+        ->call('delete', $record->id)
+        ->assertHasErrors('delete');
+
+    expect($record->fresh()->amount)->toBe('500.00')
+        ->and(OperatingCostRecord::query()->whereKey($record->id)->exists())->toBeTrue()
+        ->and(AccountingJournal::query()->where('source_type', 'operating_cost')->count())->toBe(1);
 });
 
 function fillJournalSourceForm($component, array $data)

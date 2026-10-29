@@ -97,7 +97,7 @@ test('trial balance is an authenticated accounting report with supported date co
         ->assertSee('Accounting')
         ->assertSee('From date')
         ->assertSee('To date')
-        ->assertSee('Posted General Ledger coverage is unavailable')
+        ->assertSee('Opening balances or cutover are incomplete')
         ->assertSee(route('accounting.trial-balance'), false)
         ->assertSee('class="app-body trial-balance-body"', false);
 
@@ -127,6 +127,9 @@ test('trial balance carries opening balances through an empty month and presents
         ->assertSee('Account 2000')
         ->assertSee('25.00')
         ->assertSee('Account 1010')
+        ->assertSee('scope="colgroup"', false)
+        ->assertSee('id="tb-adjusted-credit"', false)
+        ->assertSee('headers="tb-account-'.$cash->id.' tb-adjusted-debit"', false)
         ->assertSee('5.00')
         ->assertSee('No activity during this period')
         ->assertSee('Books balance')
@@ -161,14 +164,14 @@ test('trial balance includes both boundary days, cumulative closing and reports 
     Livewire::actingAs($viewer)->test(TrialBalance::class)
         ->set('fromDate', '2025-12-31')
         ->set('toDate', '2026-01-02')
-        ->assertSee('before approved accounting cutover coverage');
+        ->assertSee('Account 1000');
 
     Livewire::actingAs($viewer)->test(TrialBalance::class)
         ->set('fromDate', '2026-03-01')
         ->set('toDate', '2026-02-28')
         ->assertSee('Choose a valid inclusive date range.');
 });
-test('trial balance excludes posted activity before the approved cutover', function () {
+test('trial balance includes posted activity before the approved cutover', function () {
     $viewer = createTrialBalanceEmployee();
     $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
     $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
@@ -178,9 +181,36 @@ test('trial balance excludes posted activity before the approved cutover', funct
     Livewire::actingAs($viewer)->test(TrialBalance::class)
         ->set('fromDate', '2026-01-01')
         ->set('toDate', '2026-01-31')
-        ->assertSee('100.00')
-        ->assertDontSee('999.00')
+        ->assertSee('1,099.00')
+        ->assertSee('999.00')
         ->assertSee('Books balance');
+});
+
+test('trial balance displays posted balances and movements while opening readiness is pending', function () {
+    $viewer = createTrialBalanceEmployee();
+    $cash = trialBalanceAccount('1000', 'cash', 'Asset', 'debit');
+    $inventory = trialBalanceAccount('1200', 'inventory', 'Asset', 'debit');
+    $equity = trialBalanceAccount('3000', 'capital', 'Equity', 'credit');
+    postTrialBalanceJournal('POSTED-WITHOUT-CUTOVER-TB', '2026-02-10', [[$cash, 12500, 0], [$inventory, 3000, 0], [$equity, 0, 15500]]);
+
+    $readiness = Mockery::mock(OpeningBooksService::class);
+    $readiness->shouldReceive('readiness')->andReturn([
+        'production_activated' => false,
+        'production' => 'Production activation unavailable: supplier and inventory reconciliation pending.',
+    ]);
+    app()->instance(OpeningBooksService::class, $readiness);
+
+    Livewire::actingAs($viewer)->test(TrialBalance::class)
+        ->set('fromDate', '2026-02-01')
+        ->set('toDate', '2026-02-28')
+        ->assertSee('Opening balances or cutover are incomplete')
+        ->assertSee('Account 1000')
+        ->assertSee('125.00')
+        ->assertSee('Period debits')
+        ->assertSee('155.00')
+        ->assertSee('Inventory schedule unavailable')
+        ->assertSee('Books balance')
+        ->assertDontSee('Trial Balance unavailable');
 });
 
 test('direct cash disbursements do not reduce the supplier accounts payable schedule', function () {
