@@ -89,11 +89,12 @@ class GeneralLedger extends Component
             ->first();
         $cutover = $cutoverJournal?->accounting_date;
         $cutoverDate = $cutover ? CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString() : null;
+        $openingBalancesIncomplete = $cutoverJournal === null;
         $account = $this->accountId !== ''
             ? AccountingAccount::query()->whereNotNull('approved_at')->find($this->accountId)
             : null;
         $dateError = $this->dateRangeError($cutoverDate);
-        $reportStartDate = $cutoverDate ? $this->reportCutoffDate($cutoverDate) : null;
+        $reportStartDate = $this->reportStartDate($cutoverDate);
         $lines = collect();
         $allAccountRows = collect();
         $openingBalanceCents = 0;
@@ -101,14 +102,14 @@ class GeneralLedger extends Component
         $totalCreditCents = 0;
         $closingBalanceCents = 0;
 
-        if ($cutoverDate && $dateError === null) {
+        if ($dateError === null) {
             $history = AccountingJournalLine::query()
                 ->with(['journal.correctionOf', 'account'])
                 ->when($account, fn ($query) => $query->where('accounting_account_id', $account->id))
                 ->whereHas('journal', fn (Builder $query) => $query
                     ->where('book_key', $this->bookKey)
                     ->where('status', 'posted')
-                    ->whereDate('accounting_date', '>=', $cutoverDate)
+                    ->when($cutoverDate !== null, fn (Builder $query) => $query->whereDate('accounting_date', '>=', $cutoverDate))
                     ->whereDate('accounting_date', '<=', $this->toDate))
                 ->join('accounting_journals', 'accounting_journal_lines.accounting_journal_id', '=', 'accounting_journals.id')
                 ->orderBy('accounting_journals.accounting_date')
@@ -180,6 +181,7 @@ class GeneralLedger extends Component
             'selectedAccount' => $account,
             'cutoverDate' => $cutoverDate,
             'cutoverJournal' => $cutoverJournal,
+            'openingBalancesIncomplete' => $openingBalancesIncomplete,
             'reportStartDate' => $reportStartDate,
             'dateError' => $dateError,
             'openingBalanceCents' => $openingBalanceCents,
@@ -225,23 +227,42 @@ class GeneralLedger extends Component
         return Str::contains(Str::lower($label), 'book') ? $label : $label.' Book';
     }
 
-    private function reportCutoffDate(string $cutoverDate): string
+    private function reportStartDate(?string $cutoverDate): ?string
     {
         if ($this->cutoffDate !== '') {
             return $this->cutoffDate;
         }
+        if ($this->fromDate !== '') {
+            return $this->fromDate;
+        }
+        if ($cutoverDate !== null) {
+            return $cutoverDate;
+        }
 
-        return $this->fromDate !== '' ? $this->fromDate : $cutoverDate;
+        return $this->earliestPostedDate() ?? $this->toDate;
+    }
+
+    private function earliestPostedDate(): ?string
+    {
+        if (! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
+            return null;
+        }
+
+        $date = AccountingJournal::query()
+            ->where('book_key', $this->bookKey)
+            ->where('status', 'posted')
+            ->whereDate('accounting_date', '<=', $this->toDate)
+            ->min('accounting_date');
+
+        return $date ? CarbonImmutable::parse($date, 'Asia/Manila')->toDateString() : null;
     }
 
     private function dateRangeError(?string $cutoverDate): ?string
     {
-        if (! $cutoverDate) {
-            return 'Posted General Ledger coverage is unavailable until approved opening balances are posted.';
-        }
-
-        $fromDate = $this->reportCutoffDate($cutoverDate);
-        if (! CarbonImmutable::hasFormat($fromDate, 'Y-m-d') || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
+        $fromDate = $this->reportStartDate($cutoverDate);
+        if ($fromDate === null
+            || ! CarbonImmutable::hasFormat($fromDate, 'Y-m-d')
+            || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
             return 'Choose a valid cut-off and end date.';
         }
 
@@ -250,7 +271,7 @@ class GeneralLedger extends Component
         if (! $from || ! $to || $from->format('Y-m-d') !== $fromDate || $to->format('Y-m-d') !== $this->toDate || $from->gt($to)) {
             return 'Choose a valid inclusive date range.';
         }
-        if ($fromDate < $cutoverDate) {
+        if ($cutoverDate !== null && $fromDate < $cutoverDate) {
             return 'The selected range begins before approved accounting cutover coverage.';
         }
 

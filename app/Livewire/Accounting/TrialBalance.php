@@ -33,12 +33,10 @@ class TrialBalance extends Component
             ->where('status', 'posted')->value('accounting_date');
         $cutoverDate = $cutover ? CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString() : null;
         $readiness = app(OpeningBooksService::class)->readiness();
-        if (! $readiness['production_activated']) {
-            $cutoverDate = null;
-        }
-        $dateError = $readiness['production_activated']
-            ? $this->dateRangeError($cutoverDate)
-            : $readiness['production'];
+        $dateError = $this->dateRangeError();
+        $openingWarning = ! $cutoverDate || ! ($readiness['production_activated'] ?? false)
+            ? 'Opening balances or cutover are incomplete. This report shows posted journal activity only; supplier and inventory reconciliation may still be pending.'
+            : null;
         $accounts = collect();
         $totalDebitsCents = 0;
         $totalCreditsCents = 0;
@@ -61,7 +59,6 @@ class TrialBalance extends Component
                 ->join('accounting_journals', 'accounting_journals.id', '=', 'accounting_journal_lines.accounting_journal_id')
                 ->where('accounting_journals.book_key', 'FCDC')
                 ->where('accounting_journals.status', 'posted')
-                ->whereDate('accounting_journals.accounting_date', '>=', $cutoverDate)
                 ->whereDate('accounting_journals.accounting_date', '<=', $this->toDate)
                 ->select(
                     'accounting_journal_lines.*',
@@ -140,8 +137,12 @@ class TrialBalance extends Component
             $inventoryAccounts = $accounts->filter(fn ($row) => $row['account']->classification === 'inventory');
             $inventoryBookCents = (int) $inventoryAccounts->sum(fn ($row) => $row['closing_debit_cents'] - $row['closing_credit_cents']);
             if ($inventoryAccounts->isNotEmpty()) {
-                [$inventoryScheduleCents, $inventoryCoverageError] = $positionSchedules->inventoryValueAsOf($this->toDate, $cutoverDate);
-                $inventoryMismatch = $inventoryScheduleCents !== null && $inventoryBookCents !== $inventoryScheduleCents;
+                if ($cutoverDate === null) {
+                    $inventoryCoverageError = 'An approved opening inventory valuation matching accounting cutover is required.';
+                } else {
+                    [$inventoryScheduleCents, $inventoryCoverageError] = $positionSchedules->inventoryValueAsOf($this->toDate, $cutoverDate);
+                    $inventoryMismatch = $inventoryScheduleCents !== null && $inventoryBookCents !== $inventoryScheduleCents;
+                }
             }
         }
 
@@ -149,6 +150,7 @@ class TrialBalance extends Component
 
         return view('livewire.accounting.trial-balance', [
             'cutoverDate' => $cutoverDate,
+            'openingWarning' => $openingWarning,
             'dateError' => $dateError,
             'accounts' => $accounts,
             'totalDebitsCents' => $totalDebitsCents,
@@ -177,11 +179,8 @@ class TrialBalance extends Component
         ])->layout('layouts.app', ['title' => 'Trial Balance']);
     }
 
-    private function dateRangeError(?string $cutoverDate): ?string
+    private function dateRangeError(): ?string
     {
-        if (! $cutoverDate) {
-            return 'Posted General Ledger coverage is unavailable until approved opening balances are posted.';
-        }
         if (! CarbonImmutable::hasFormat($this->fromDate, 'Y-m-d') || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
             return 'Choose a valid start and end date.';
         }
@@ -190,10 +189,6 @@ class TrialBalance extends Component
         if (! $from || ! $to || $from->format('Y-m-d') !== $this->fromDate || $to->format('Y-m-d') !== $this->toDate || $from->gt($to)) {
             return 'Choose a valid inclusive date range.';
         }
-        if ($this->fromDate < $cutoverDate) {
-            return 'The selected range begins before approved accounting cutover coverage.';
-        }
-
         return null;
     }
 }

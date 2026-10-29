@@ -1,152 +1,63 @@
-<section class="dashboard-page reports-page" id="reports-page" data-reports-page>
-    <header class="dashboard-heading">
-        <div>
-            <h1>Reports</h1>
-            <p class="dashboard-subtitle">Sales performance and stock allocation.</p>
+<section class="dashboard-page reports-page fcdc-reports" id="reports-page" data-reports-page>
+    <header class="dashboard-heading reports-heading">
+        <div><h1>Reports</h1><p class="dashboard-subtitle">Sales, inventory, accounting and VAT performance from recorded FCDC data.</p></div>
+        <div class="reports-header-controls">
+            <div class="dashboard-period-toggle" role="group" aria-label="Report date range">
+                @foreach (['today' => 'Today', 'week' => 'This Week', 'month' => 'This Month', 'year' => 'This Year', 'custom' => 'Custom'] as $key => $label)
+                    <button type="button" wire:click="setPeriod('{{ $key }}')" @class(['active' => $period === $key]) aria-pressed="{{ $period === $key ? 'true' : 'false' }}">{{ $label }}</button>
+                @endforeach
+            </div>
+            <label><span class="sr-only">From date</span><input type="date" wire:model.live="fromDate" aria-label="Report start date"></label>
+            <label><span class="sr-only">To date</span><input type="date" wire:model.live="toDate" aria-label="Report end date"></label>
+            <button type="button" class="button button-primary reports-export-button" wire:click="exportCsv">Export CSV</button>
         </div>
     </header>
 
-    <section class="dashboard-card reports-sales-card" aria-labelledby="completed-pos-sales-title">
-        <div class="dashboard-card-heading">
-            <h2 class="dashboard-card-title" id="completed-pos-sales-title">Completed POS sales</h2>
-            <div class="dashboard-period-toggle" role="group" aria-label="POS sales reporting period">
-                <button type="button" wire:click="$set('reportPeriod', 'daily')" @class(['active' => $reportPeriod === 'daily']) @if ($reportPeriod === 'daily') aria-pressed="true" @else aria-pressed="false" @endif>Daily</button>
-                <button type="button" wire:click="$set('reportPeriod', 'monthly')" @class(['active' => $reportPeriod === 'monthly']) @if ($reportPeriod === 'monthly') aria-pressed="true" @else aria-pressed="false" @endif>Monthly</button>
-            </div>
-        </div>
-        <label for="pos-report-date">{{ $reportPeriod === 'monthly' ? 'Month' : 'Day' }}</label>
-        <input id="pos-report-date" type="date" wire:model.live="reportDate">
-        @error('reportDate') <p class="reports-empty">{{ $message }}</p> @enderror
-        <p class="dashboard-chart-note">
-            Actual completed POS transactions · {{ $reportStart->format($reportPeriod === 'monthly' ? 'F Y' : 'F j, Y') }} ·
-            {{ $posSales['count'] }} transactions
-        </p>
-        <p class="dashboard-stat-value">₱{{ number_format($posSales['total'], 2) }}</p>
-        <p class="dashboard-stat-note">Recorded transaction totals, including recorded VAT. Illustrative sales below are separate.</p>
+    <nav class="reports-tabs" aria-label="Report sections" role="tablist">
+        @foreach (['sales' => 'Sales', 'inventory' => 'Inventory', 'accounting' => 'Accounting', 'vat' => 'VAT Reports'] as $key => $label)
+            <button type="button" role="tab" wire:click="$set('activeReport', '{{ $key }}')" @class(['active' => $activeReport === $key]) aria-selected="{{ $activeReport === $key ? 'true' : 'false' }}">{{ $label }}</button>
+        @endforeach
+    </nav>
+    <p class="reports-period-caption">Selected period: {{ $reportRangeLabel }} · dates use Asia/Manila business time</p>
 
-        <div class="reports-chart-grid">
-            <section aria-labelledby="pos-sales-by-item-title">
-                <h3 id="pos-sales-by-item-title">Sales by item</h3>
-                <div class="reports-table-wrap">
-                    <table class="reports-table">
-                        <thead><tr><th>Item snapshot</th><th class="numeric">Quantity</th><th class="numeric">Sales</th></tr></thead>
-                        <tbody>
-                            @forelse ($posSales['items'] as $item)
-                                <tr wire:key="pos-report-item-{{ $loop->index }}">
-                                    <td>{{ $item->item_name }} · {{ $item->inventory_code }}</td>
-                                    <td class="numeric">{{ number_format((float) $item->quantity, 2) }} {{ $item->unit }}</td>
-                                    <td class="numeric">₱{{ number_format((float) $item->total, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="3" class="reports-empty">No completed POS transactions for this period.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-            <section aria-labelledby="pos-sales-by-category-title">
-                <h3 id="pos-sales-by-category-title">Sales by category</h3>
-                <div class="reports-table-wrap">
-                    <table class="reports-table">
-                        <thead><tr><th>Category snapshot</th><th class="numeric">Sales</th></tr></thead>
-                        <tbody>
-                            @forelse ($posSales['categories'] as $category)
-                                <tr wire:key="pos-report-category-{{ $loop->index }}">
-                                    <td>{{ $category->category }}</td>
-                                    <td class="numeric">₱{{ number_format((float) $category->total, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr><td colspan="2" class="reports-empty">No completed POS transactions for this period.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-        <h3>Sales by payment method</h3>
-        <div class="reports-table-wrap">
-            <table class="reports-table">
-                <thead><tr><th>Payment method</th><th class="numeric">Transactions</th><th class="numeric">Sales</th></tr></thead>
-                <tbody>
-                    @forelse ($posSales['payments'] as $payment)
-                        <tr wire:key="pos-report-payment-{{ $payment->payment_method }}">
-                            <td>{{ str_replace('_', ' ', ucfirst($payment->payment_method)) }}</td>
-                            <td class="numeric">{{ $payment->count }}</td>
-                            <td class="numeric">₱{{ number_format((float) $payment->total, 2) }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="3" class="reports-empty">No completed POS transactions for this period.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <div class="dashboard-stats reports-stats">
-        <article class="dashboard-card dashboard-stat">
-            <span class="dashboard-stat-icon" aria-hidden="true">₱</span>
-            <div><p class="dashboard-stat-label">Illustrative sales</p><p class="dashboard-stat-value">₱{{ number_format($periodTotal, 2) }}</p><p class="dashboard-stat-note">{{ $period['label'] }} · not recorded sales</p></div>
-        </article>
-        <article class="dashboard-card dashboard-stat">
-            <span class="dashboard-stat-icon" aria-hidden="true">▧</span>
-            <div><p class="dashboard-stat-label">Inventory value</p><p class="dashboard-stat-value">₱{{ number_format($inventoryValue, 2) }}</p><p class="dashboard-stat-note">Persisted Inventory records</p></div>
-        </article>
-        <article class="dashboard-card dashboard-stat">
-            <span class="dashboard-stat-icon" aria-hidden="true">▥</span>
-            <div><p class="dashboard-stat-label">Tracked inventory items</p><p class="dashboard-stat-value">{{ $inventoryCount }}</p><p class="dashboard-stat-note">Persisted Inventory records</p></div>
-        </article>
-    </div>
-
-    <div class="reports-chart-grid">
-        <section class="dashboard-card reports-chart-card" aria-labelledby="reports-sales-title">
-            <div class="dashboard-card-heading">
-                <h2 id="reports-sales-title">Sales trend</h2>
-                <div class="dashboard-period-toggle" role="group" aria-label="Illustrative sales trend period">
-                    @foreach (['week' => 'Week', 'month' => 'Month', 'year' => 'Year'] as $key => $label)
-                        <button type="button" wire:click="setSalesPeriod('{{ $key }}')" @class(['active' => $salesPeriod === $key]) @if ($salesPeriod === $key) aria-pressed="true" @else aria-pressed="false" @endif>{{ $label }}</button>
-                    @endforeach
-                </div>
+    @if ($activeReport === 'sales')
+        <section class="reports-section" role="tabpanel" aria-label="Sales reports">
+            <div class="dashboard-stats reports-kpis">
+                <article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">₱</span><div><p class="dashboard-stat-label">Completed sales</p><p class="dashboard-stat-value">₱{{ number_format($sales['total'], 2) }}</p><p class="dashboard-stat-note">Completed POS totals including recorded VAT</p></div></article>
+                <article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">▤</span><div><p class="dashboard-stat-label">Completed transactions</p><p class="dashboard-stat-value">{{ number_format($sales['count']) }}</p><p class="dashboard-stat-note">Only POS transactions with completed status</p></div></article>
+                <article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">▧</span><div><p class="dashboard-stat-label">Items sold</p><p class="dashboard-stat-value">{{ number_format($sales['quantity'], 2) }}</p><p class="dashboard-stat-note">Quantity from immutable POS line snapshots</p></div></article>
+                <article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">↗</span><div><p class="dashboard-stat-label">Average transaction</p><p class="dashboard-stat-value">₱{{ number_format($sales['average'], 2) }}</p><p class="dashboard-stat-note">Completed sales ÷ completed transactions</p></div></article>
+                <article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">★</span><div><p class="dashboard-stat-label">Top item</p><p class="dashboard-stat-value reports-top-item">{{ $sales['bestItem']?->item_name ?? 'No sales' }}</p><p class="dashboard-stat-note">{{ $sales['bestItem'] ? number_format((float) $sales['bestItem']->quantity, 2).' '.$sales['bestItem']->unit.' sold' : 'No completed line items in range' }}</p></div></article>
             </div>
-            <p class="dashboard-chart-note">Fixed illustrative series, separate from completed POS transactions and persisted inventory.</p>
-            <div class="dashboard-chart-wrap" data-dashboard-chart="sales" data-chart='@json($period['data'])'>
-                <canvas data-chart-canvas role="img" aria-label="Illustrative sales trend for {{ $period['label'] }}"></canvas>
+            <div class="reports-chart-grid reports-sales-charts">
+                <section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Sales trend</h2><p class="dashboard-chart-note">Actual completed POS transactions; daily for periods up to 62 days, monthly for longer ranges.</p><div class="dashboard-chart-wrap" data-dashboard-chart="sales" data-chart='@json($sales['trend'])'><canvas data-chart-canvas role="img" aria-label="Actual completed POS sales trend"></canvas></div></section>
+                <section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Sales by category</h2><p class="dashboard-chart-note">Category snapshots saved on transaction lines</p>@if ($sales['categories']->isEmpty())<p class="dashboard-empty">No completed POS line items for this period.</p>@else<div class="dashboard-category-chart" style="height: {{ max(180, $sales['categories']->count() * 34) }}px" data-dashboard-chart="categories" data-chart='@json($sales['categories'])'><canvas data-chart-canvas role="img" aria-label="Completed POS sales by category"></canvas></div>@endif</section>
+                <section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Sales by payment method</h2><p class="dashboard-chart-note">Completed transaction totals</p>@if ($sales['payments']->isEmpty())<p class="dashboard-empty">No completed transactions for this period.</p>@else<div class="reports-payment-chart" data-dashboard-chart="pie" data-center-label="Sales total" data-chart='@json($sales['payments'])'><canvas data-chart-canvas role="img" aria-label="Completed POS sales by payment method"></canvas></div><ul class="reports-compact-legend">@foreach ($sales['payments'] as $index => $payment)<li><i style="--slice-color: {{ ['#245332', '#3f7d3a', '#79a96f', '#c9a227', '#8cae91', '#55735c'][$index % 6] }}"></i><span>{{ str_replace('_', ' ', ucfirst($payment->label)) }}</span><strong>₱{{ number_format((float) $payment->total, 2) }}</strong></li>@endforeach</ul>@endif</section>
             </div>
+            <section class="dashboard-card reports-table-card"><div class="dashboard-card-heading"><h2 class="dashboard-card-title">Top items by sales</h2></div><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>#</th><th>Item snapshot</th><th>Category</th><th class="numeric">Quantity sold</th><th class="numeric">Sales total</th></tr></thead><tbody>@forelse ($sales['items'] as $item)<tr wire:key="report-sales-item-{{ $loop->index }}"><td>{{ $loop->iteration }}</td><td>{{ $item->item_name }} <small>{{ $item->inventory_code }}</small></td><td>{{ $item->category }}</td><td class="numeric">{{ number_format((float) $item->quantity, 2) }} {{ $item->unit }}</td><td class="numeric">₱{{ number_format((float) $item->total, 2) }}</td></tr>@empty<tr><td colspan="5" class="reports-empty">No completed POS line items in this date range.</td></tr>@endforelse</tbody></table></div></section>
+            <section class="dashboard-card reports-table-card"><h2 class="dashboard-card-title">Sales transactions</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Receipt</th><th>Date &amp; time</th><th>Customer</th><th class="numeric">Items</th><th>Payment method</th><th class="numeric">Total</th><th>Status</th></tr></thead><tbody>@forelse ($sales['transactions'] as $transaction)<tr wire:key="reports-transaction-{{ $transaction->id }}"><td>{{ $transaction->transaction_number }}</td><td>{{ \App\Support\PhilippineTime::format($transaction->completed_at, 'Y-m-d H:i') }}</td><td>{{ $transaction->customer_name ?: 'Walk-in customer' }}</td><td class="numeric">{{ number_format((float) $transaction->lines->sum('quantity'), 2) }}</td><td>{{ str_replace('_', ' ', ucfirst($transaction->payment_method)) }}</td><td class="numeric">₱{{ number_format((float) $transaction->total, 2) }}</td><td>{{ ucfirst($transaction->status) }}</td></tr>@empty<tr><td colspan="7" class="reports-empty">No completed POS transactions for this period.</td></tr>@endforelse</tbody></table></div>@if ($sales['transactionLimit'])<p class="dashboard-chart-note">Showing the latest 100 transactions in the table. CSV export includes the full selected range.</p>@endif</section>
         </section>
-
-        <section class="dashboard-card" aria-labelledby="reports-category-title">
-            <h2 class="dashboard-card-title" id="reports-category-title">Inventory value by category</h2>
-            <p class="dashboard-chart-note">Persisted quantity × unit cost. Completed sales update on-hand quantities.</p>
-            @if ($categoryValues === [])
-                <p class="dashboard-empty">No inventory categories to chart yet.</p>
-            @else
-                <div class="dashboard-category-chart reports-category-chart" style="height: {{ max(200, count($categoryValues) * 36) }}px" data-dashboard-chart="categories" data-chart='@json($categoryValues)'>
-                    <canvas data-chart-canvas role="img" aria-label="Persisted inventory value and quantity by category"></canvas>
-                </div>
-                <ul class="reports-category-quantities" aria-label="Persisted inventory quantities by category and unit">
-                    @foreach ($inventoryQuantities as $inventoryQuantity)
-                        <li>{{ $inventoryQuantity->category }} · {{ $inventoryQuantity->unit }}: {{ number_format((float) $inventoryQuantity->quantity, 2) }}</li>
-                    @endforeach
-                </ul>
+    @elseif ($activeReport === 'inventory')
+        <section class="reports-section" role="tabpanel" aria-label="Inventory reports">
+            <p class="reports-limitation">{{ $inventory['note'] }}</p>
+            <div class="dashboard-stats reports-kpis reports-inventory-kpis"><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">▧</span><div><p class="dashboard-stat-label">Tracked materials</p><p class="dashboard-stat-value">{{ number_format($inventory['count']) }}</p><p class="dashboard-stat-note">Current inventory records</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">₱</span><div><p class="dashboard-stat-label">Current inventory value</p><p class="dashboard-stat-value">₱{{ number_format($inventory['value'], 2) }}</p><p class="dashboard-stat-note">Carrying value; falls back to quantity × unit cost where unset</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">✓</span><div><p class="dashboard-stat-label">In stock</p><p class="dashboard-stat-value">{{ number_format($inventory['inStock']) }}</p><p class="dashboard-stat-note">Above reorder level</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon warning">!</span><div><p class="dashboard-stat-label">Low stock</p><p class="dashboard-stat-value">{{ number_format($inventory['lowStock']) }}</p><p class="dashboard-stat-note">Positive quantity at/below reorder level</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon warning">×</span><div><p class="dashboard-stat-label">Out of stock</p><p class="dashboard-stat-value">{{ number_format($inventory['outOfStock']) }}</p><p class="dashboard-stat-note">Zero or negative quantity</p></div></article></div>
+            <div class="reports-chart-grid reports-inventory-grid"><section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Inventory value by category</h2><p class="dashboard-chart-note">Current carrying value, grouped by inventory category</p>@if ($inventory['categories']->isEmpty())<p class="dashboard-empty">No inventory categories are recorded.</p>@else<div class="dashboard-category-chart" style="height: {{ max(200, $inventory['categories']->count() * 36) }}px" data-dashboard-chart="categories" data-chart='@json($inventory['categories'])'><canvas data-chart-canvas role="img" aria-label="Current inventory carrying value by category"></canvas></div>@endif</section><section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Quantity by category and unit</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Category</th><th>Unit</th><th class="numeric">Quantity</th></tr></thead><tbody>@forelse ($inventory['quantities'] as $row)<tr><td>{{ $row->category }}</td><td>{{ $row->unit }}</td><td class="numeric">{{ number_format((float) $row->quantity, 2) }}</td></tr>@empty<tr><td colspan="3" class="reports-empty">No inventory quantities recorded.</td></tr>@endforelse</tbody></table></div></section></div>
+            <section class="dashboard-card reports-table-card"><h2 class="dashboard-card-title">Inventory details</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Code</th><th>Material</th><th>Category</th><th class="numeric">Quantity</th><th>Unit</th><th class="numeric">Unit cost</th><th class="numeric">Carrying value</th><th>Status</th></tr></thead><tbody>@forelse ($inventory['items'] as $item)<tr wire:key="inventory-report-{{ $item->id }}"><td>{{ $item->code }}</td><td>{{ $item->name }}</td><td>{{ $item->category }}</td><td class="numeric">{{ number_format((float) $item->qty, 2) }}</td><td>{{ $item->unit }}</td><td class="numeric">₱{{ number_format((float) $item->unit_cost, 2) }}</td><td class="numeric">₱{{ number_format($item->carrying_value_cents === null ? (float) $item->qty * (float) $item->unit_cost : $item->carrying_value_cents / 100, 2) }}</td><td>{{ $item->stockStatusLabel() }}</td></tr>@empty<tr><td colspan="8" class="reports-empty">No inventory records.</td></tr>@endforelse</tbody></table></div></section>
+        </section>
+    @elseif ($activeReport === 'accounting')
+        <section class="reports-section" role="tabpanel" aria-label="Accounting reports">
+            @if (! $accounting['available'])<div class="reports-limitation" role="status"><strong>Accounting report unavailable</strong><p>{{ $accounting['error'] }}</p><p>Values are withheld until the accounting coverage and approval requirements are satisfied.</p></div>@else
+                <div class="dashboard-stats reports-kpis reports-accounting-kpis"><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">↗</span><div><p class="dashboard-stat-label">Revenue</p><p class="dashboard-stat-value">₱{{ number_format($accounting['revenue'], 2) }}</p><p class="dashboard-stat-note">Approved posted income classifications</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon warning">↘</span><div><p class="dashboard-stat-label">Expenses</p><p class="dashboard-stat-value">₱{{ number_format($accounting['expenses'], 2) }}</p><p class="dashboard-stat-note">Includes COGS and approved expense classifications</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">₱</span><div><p class="dashboard-stat-label">Net income</p><p class="dashboard-stat-value">₱{{ number_format($accounting['net'], 2) }}</p><p class="dashboard-stat-note">Revenue less expenses; selected period</p></div></article></div>
+                <section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Accounting performance</h2><p class="dashboard-chart-note">Posted FCDC journals only; fiscal-year closing entries and their corrections are excluded.</p><div class="dashboard-chart-wrap" data-dashboard-chart="comparison" data-chart='@json($accounting['chart'])'><canvas data-chart-canvas role="img" aria-label="Posted accounting revenue and expenses"></canvas></div><div class="fcdc-chart-legend"><span><i class="revenue"></i>Revenue</span><span><i class="expenses"></i>Expenses</span></div></section>
+                <section class="dashboard-card reports-table-card"><h2 class="dashboard-card-title">Posted accounting lines</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Date</th><th>Journal</th><th>Account</th><th>Classification</th><th class="numeric">Debit</th><th class="numeric">Credit</th></tr></thead><tbody>@forelse ($accounting['lines'] as $line)<tr><td>{{ $line->journal->accounting_date->toDateString() }}</td><td>{{ $line->journal->reference }}</td><td>{{ $line->account->code }} · {{ $line->account->name }}</td><td>{{ str_replace('_', ' ', ucfirst($line->account->classification)) }}</td><td class="numeric">₱{{ number_format($line->debit_cents / 100, 2) }}</td><td class="numeric">₱{{ number_format($line->credit_cents / 100, 2) }}</td></tr>@empty<tr><td colspan="6" class="reports-empty">No posted income or expense entries in the selected period.</td></tr>@endforelse</tbody></table></div></section>
             @endif
         </section>
-    </div>
-
-    <section class="dashboard-card reports-sales-card" aria-labelledby="recent-sales-title">
-        <h2 class="dashboard-card-title" id="recent-sales-title">Recent sales</h2>
-        <p class="dashboard-chart-note">Completed POS transactions recorded at checkout. The chart above remains illustrative.</p>
-        <div class="reports-table-wrap">
-            <table class="reports-table">
-                <thead><tr><th>Transaction</th><th>Date</th><th class="numeric">Items</th><th class="numeric">Total</th><th>Method</th><th>Status</th></tr></thead>
-                <tbody>
-                    @forelse ($sales as $sale)
-                        <tr wire:key="reports-transaction-{{ $sale->id }}">
-                            <td>{{ $sale->transaction_number }}</td><td>{{ \App\Support\PhilippineTime::format($sale->completed_at, 'Y-m-d') }}</td><td class="numeric">{{ number_format((float) $sale->lines->sum('quantity'), 2) }}</td><td class="numeric">₱{{ number_format((float) $sale->total, 2) }}</td><td>{{ str_replace('_', ' ', ucfirst($sale->payment_method)) }}</td><td>{{ ucfirst($sale->status) }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="reports-empty">No completed transactions.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </section>
+    @else
+        <section class="reports-section" role="tabpanel" aria-label="VAT reports">
+            <p class="reports-limitation">{{ $vat['coverage_note'] }}</p>
+            <div class="dashboard-stats reports-kpis reports-vat-kpis"><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">%</span><div><p class="dashboard-stat-label">Taxable sales</p><p class="dashboard-stat-value">₱{{ number_format((float) $vat['taxable_sales'], 2) }}</p><p class="dashboard-stat-note">Saved VAT classification totals</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">₱</span><div><p class="dashboard-stat-label">Output VAT</p><p class="dashboard-stat-value">₱{{ number_format((float) $vat['output_vat'], 2) }}</p><p class="dashboard-stat-note">From recorded completed POS VAT</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">↓</span><div><p class="dashboard-stat-label">Input VAT captured</p><p class="dashboard-stat-value">₱{{ number_format((float) $vat['input_vat'], 2) }}</p><p class="dashboard-stat-note">{{ $vat['input_vat_status'] }} · saved reworking-cost records</p></div></article><article class="dashboard-card dashboard-stat"><span class="dashboard-stat-icon">₱</span><div><p class="dashboard-stat-label">Net VAT payable estimate</p><p class="dashboard-stat-value">₱{{ number_format((float) $vat['vat_payable_estimate'], 2) }}</p><p class="dashboard-stat-note">Output VAT less captured input VAT only</p></div></article></div>
+            <div class="reports-chart-grid reports-vat-grid"><section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">Sales by VAT classification</h2><p class="dashboard-chart-note">Recorded VAT-inclusive totals grouped by saved classification</p>@if ($vat['classifications'] === [])<p class="dashboard-empty">No completed POS VAT records for this date range.</p>@else<div class="dashboard-category-chart" style="height: {{ max(180, count($vat['classifications']) * 36) }}px" data-dashboard-chart="categories" data-chart='@json($vat['classifications'])'><canvas data-chart-canvas role="img" aria-label="Sales by saved VAT classification"></canvas></div>@endif</section><section class="dashboard-card reports-chart-card"><h2 class="dashboard-card-title">VAT classification summary</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Classification</th><th class="numeric">Sales</th></tr></thead><tbody>@foreach (['zero_rated_sales' => 'Zero-rated sales', 'exempt_sales' => 'VAT-exempt sales', 'non_vat_sales' => 'Non-VAT / outside-scope sales'] as $field => $label)<tr><td>{{ $label }}</td><td class="numeric">₱{{ number_format((float) $vat[$field], 2) }}</td></tr>@endforeach</tbody></table></div></section></div>
+            <section class="dashboard-card reports-table-card"><h2 class="dashboard-card-title">Recorded POS VAT transactions</h2><div class="reports-table-wrap"><table class="reports-table"><thead><tr><th>Transaction</th><th>Date</th><th>Classification</th><th class="numeric">Taxable</th><th class="numeric">Output VAT</th><th class="numeric">Total</th></tr></thead><tbody>@forelse ($vat['records'] as $record)<tr wire:key="vat-report-{{ $record->id }}"><td>{{ $record->posTransaction?->transaction_number }}</td><td>{{ \App\Support\PhilippineTime::format($record->completed_at, 'Y-m-d H:i') }}</td><td>{{ str_replace('_', ' ', ucfirst($record->tax_classification)) }}</td><td class="numeric">₱{{ number_format((float) $record->taxable_sales, 2) }}</td><td class="numeric">₱{{ number_format((float) $record->output_vat, 2) }}</td><td class="numeric">₱{{ number_format((float) $record->total, 2) }}</td></tr>@empty<tr><td colspan="6" class="reports-empty">No completed POS VAT records for this period.</td></tr>@endforelse</tbody></table></div></section>
+        </section>
+    @endif
 </section>

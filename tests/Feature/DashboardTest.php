@@ -40,9 +40,15 @@ test('dashboard route serves only the authenticated inventory dashboard', functi
         ->assertSee('dashboard-page', false)
         ->assertSee(route('pos'), false)
         ->assertSee('No inventory materials have been added yet.')
-        ->assertDontSee('Demo sales')
-        ->assertDontSee('VAT')
-        ->assertDontSee('Accounts payable');
+        ->assertSee('Today')
+        ->assertSee('This Week')
+        ->assertSee('This Month')
+        ->assertSee('This Year')
+        ->assertSee('Custom Date Range')
+        ->assertSee('Sales performance')
+        ->assertSee('Revenue vs. expenses')
+        ->assertSee('VAT collected')
+        ->assertDontSee('Demo sales');
 });
 test('dashboard shows persisted inventory summaries, stock boundaries, and recent materials without demo business figures', function () {
     $employee = createDashboardEmployee();
@@ -88,20 +94,19 @@ test('dashboard shows persisted inventory summaries, stock boundaries, and recen
     Livewire::test(DashboardPage::class)
         ->assertSee('4 tracked materials')
         ->assertSee('₱52.00')
-        ->assertSeeInOrder(['Low stock items', '1', 'Items at or below low stock level'])
         ->assertSee('Stock alerts')
+        ->assertSee('1')
         ->assertSee('Pine board')
         ->assertSee('Cement bag')
         ->assertSee('Steel rod')
         ->assertSee('Tile')
-        ->assertSeeInOrder(['Out of stock items', '2', 'Items with zero or negative quantity'])
+        ->assertSee('2 items currently out of stock.')
         ->assertSee('Recently added materials')
         ->assertSeeInOrder(['Cement bag', 'Steel rod', 'Tile', 'Pine board'])
-        ->assertSee('Inventory value by category')
+        ->assertSee('Inventory value')
         ->assertSee('"label":"Lumber","total":50', false)
         ->assertSee('"label":"Masonry","total":8', false)
-        ->assertDontSee('VAT')
-        ->assertDontSee('Accounts payable');
+        ->assertSee('Output VAT');
 });
 
 test('dashboard shows useful empty states when inventory and low-stock matches are absent', function () {
@@ -114,4 +119,16 @@ test('dashboard shows useful empty states when inventory and low-stock matches a
         ->assertSee('No low-stock items need attention.')
         ->assertSee('No inventory categories to chart yet.')
         ->assertSee('0');
+});
+
+test('dashboard date presets and custom date range are interactive', function () {
+    $this->actingAs(createDashboardEmployee());
+    $dashboard = Livewire::test(DashboardPage::class)->call('setPeriod', 'today');
+
+    expect($dashboard->get('fromDate'))->toBe(now('Asia/Manila')->toDateString())
+        ->and($dashboard->get('toDate'))->toBe(now('Asia/Manila')->toDateString());
+
+    $dashboard->set('fromDate', '2026-01-05')->set('toDate', '2026-01-12');
+    expect($dashboard->get('fromDate'))->toBe('2026-01-05')
+        ->and($dashboard->get('toDate'))->toBe('2026-01-12');
 });

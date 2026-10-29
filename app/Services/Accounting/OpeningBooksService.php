@@ -177,6 +177,48 @@ class OpeningBooksService
         });
     }
 
+    /**
+     * Approve the prepared cutover evidence and post its opening journal as one
+     * atomic reviewer action. Any validation failure rolls the entire action back.
+     */
+    public function approveCutover(int $actorId): AccountingJournal
+    {
+        return DB::transaction(function () use ($actorId): AccountingJournal {
+            $journal = AccountingJournal::where('source_type', 'opening')
+                ->where('source_id', 'FCDC')
+                ->lockForUpdate()
+                ->firstOrFail();
+            if ($journal->status !== 'draft') {
+                throw ValidationException::withMessages(['opening' => 'This cutover has already been posted and cannot be approved again.']);
+            }
+
+            $valuation = OpeningInventoryValuation::where('book_key', 'FCDC')->lockForUpdate()->first();
+            if ($valuation?->status === 'draft') {
+                $this->approveInventoryValuation($actorId);
+            }
+
+            // Post the opening journal, then approve the required midyear summary.
+            // Nested transactions participate in this transaction, so a YTD error
+            // also rolls back inventory changes, supplier posting and the journal.
+            $posted = $this->approveOpening($actorId);
+            $cutover = CarbonImmutable::parse($posted->accounting_date, 'Asia/Manila');
+            if ($cutover->toDateString() !== $cutover->startOfYear()->toDateString()) {
+                $summary = AccountingYtdSummary::where('book_key', 'FCDC')
+                    ->where('fiscal_year', $cutover->year)
+                    ->lockForUpdate()
+                    ->first();
+                if (! $summary) {
+                    throw ValidationException::withMessages(['ytdLines' => 'Add the supported pre-cutover YTD summary through the day before cutover.']);
+                }
+                if ($summary->status === 'draft') {
+                    $this->approveYtdSummary($actorId);
+                }
+            }
+
+            return $posted->refresh()->load('lines.account');
+        });
+    }
+
     public function saveYtdSummary(int $year, string $throughDate, string $evidence, array $lines, int $actorId): AccountingYtdSummary
     {
         $throughDate = $this->validBusinessDate($throughDate);

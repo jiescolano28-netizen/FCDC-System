@@ -2,7 +2,7 @@
     <header class="page-heading">
         <div>
             <h1 id="opening-books-heading">Opening Books &amp; Cutover</h1>
-            <p class="page-subtitle">Approve the Manila cutover date, opening balances and current-year historical summaries.</p>
+            <p class="page-subtitle">Prepare and reconcile opening balances, inventory and supplier schedules, then submit the complete cutover for one authorized review.</p>
         </div>
     </header>
 
@@ -13,8 +13,23 @@
         <div role="alert"><ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
     @endif
 
+    <nav class="cutover-steps" aria-label="Opening balance setup steps">
+        <a href="#opening-balances">1. Account balances</a>
+        <a href="#opening-inventory-heading">2. Inventory</a>
+        <a href="#supplier-schedule">3. Suppliers</a>
+        <a href="#cutover-readiness-heading">4. Review and post</a>
+    </nav>
+
+    <section class="chart-account-card" aria-label="Opening balance totals">
+        <h2>Account balance check</h2>
+        <p>Debits: <strong>₱{{ $debitTotalCents === null ? '—' : number_format($debitTotalCents / 100, 2) }}</strong>
+            · Credits: <strong>₱{{ $creditTotalCents === null ? '—' : number_format($creditTotalCents / 100, 2) }}</strong>
+            · <strong>{{ $openingBalanced ? 'Balanced' : 'Needs review' }}</strong></p>
+        <p>These totals update as you enter amounts. Invalid or incomplete amounts are checked again when you save.</p>
+    </section>
+
     <section class="chart-account-card" aria-labelledby="cutover-readiness-heading">
-        <h2 id="cutover-readiness-heading">Readiness and historical coverage</h2>
+        <h2 id="cutover-readiness-heading">Cutover checklist</h2>
         <dl>
             @foreach ($readiness as $name => $state)
                 @if (is_string($state))
@@ -39,7 +54,7 @@
         @endif
     </section>
 
-    <section class="chart-account-card" aria-labelledby="opening-journal-heading">
+    <section id="opening-balances" class="chart-account-card" aria-labelledby="opening-journal-heading">
         <h2 id="opening-journal-heading">Opening journal</h2>
         @if ($journal?->status === 'posted')
             <p>Approved cutover: {{ \Carbon\CarbonImmutable::parse($journal->accounting_date, 'Asia/Manila')->format('F j, Y') }}</p>
@@ -53,6 +68,18 @@
             <form wire:submit="saveOpening">
                 <label>Cutover date (Asia/Manila)<input type="date" wire:model="cutoverDate" required></label>
                 <p>Fiscal year is January 1 through December 31. Use exact PHP centavos; debit and credit totals must match.</p>
+                @can('accounting.maintain-opening-books')
+                    <details>
+                        <summary>Import account balances from CSV</summary>
+                        <p>Use the template columns <code>account_code,debit,credit</code>. Import fills this draft only; check the totals and save to validate it.</p>
+                        <p><a href="{{ asset('templates/opening-balances.csv') }}" download>Download CSV template</a></p>
+                        <div>
+                            <label>Account balances CSV<input type="file" wire:model="openingCsv" accept=".csv,text/csv" required></label>
+                            @error('openingCsv') <p role="alert">{{ $message }}</p> @enderror
+                            <button type="button" wire:click="importOpeningCsv" wire:loading.attr="disabled" wire:target="importOpeningCsv,openingCsv">Import to draft</button>
+                        </div>
+                    </details>
+                @endcan
                 @foreach ($lines as $index => $line)
                     <div wire:key="opening-line-{{ $index }}">
                         <label>Approved account
@@ -63,8 +90,8 @@
                                 @endforeach
                             </select>
                         </label>
-                        <label>Debit PHP<input inputmode="decimal" wire:model="lines.{{ $index }}.debit"></label>
-                        <label>Credit PHP<input inputmode="decimal" wire:model="lines.{{ $index }}.credit"></label>
+                        <label>Debit PHP<input inputmode="decimal" wire:model.live.debounce.300ms="lines.{{ $index }}.debit"></label>
+                        <label>Credit PHP<input inputmode="decimal" wire:model.live.debounce.300ms="lines.{{ $index }}.credit"></label>
                     </div>
                 @endforeach
                 @can('accounting.maintain-opening-books')
@@ -74,7 +101,7 @@
             </form>
             @if ($journal?->status === 'draft')
                 <p>Pending approval. Prepared by {{ $journal->preparer?->username ?? 'staff member' }}.</p>
-                @can('accounting.approve-opening-books')<button type="button" wire:click="approveOpening">Approve opening journal</button>@endcan
+                @can('accounting.approve-opening-books')<button type="button" wire:click="approveCutover">Approve and post cutover</button>@endcan
             @endif
         @endif
     </section>
@@ -100,6 +127,18 @@
         @else
             <form wire:submit="saveInventoryValuation">
                 <label>Cutover count/value evidence<input wire:model="inventoryEvidence" maxlength="255" required></label>
+                @can('accounting.maintain-opening-books')
+                    <details>
+                        <summary>Import inventory counts and values from CSV</summary>
+                        <p>Use one row per item, with columns <code>item_code,quantity,value</code>. Every current inventory item must be included. Import does not post stock movements.</p>
+                        <p><a href="{{ asset('templates/opening-inventory.csv') }}" download>Download inventory CSV template</a></p>
+                        <div>
+                            <label>Inventory CSV<input type="file" wire:model="inventoryCsv" accept=".csv,text/csv"></label>
+                            @error('inventoryCsv') <p role="alert">{{ $message }}</p> @enderror
+                            <button type="button" wire:click="importInventoryCsv" wire:loading.attr="disabled" wire:target="importInventoryCsv,inventoryCsv">Import to draft</button>
+                        </div>
+                    </details>
+                @endcan
                 @foreach ($inventoryLines as $index => $line)
                     @php($item = $inventoryItems->firstWhere('id', (int) $line['inventoryId']))
                     <div wire:key="opening-inventory-line-{{ $index }}">
@@ -112,9 +151,30 @@
             </form>
             @if ($inventoryValuation?->status === 'draft')
                 <p>Opening inventory valuation pending approval. Prepared by {{ $inventoryValuation->preparer?->username ?? 'staff member' }}.</p>
-                @can('accounting.approve-opening-books')<button type="button" wire:click="approveInventoryValuation">Approve opening valuation</button>@endcan
+                <p>Inventory valuation will be validated and approved together with the opening journal when the reviewer posts cutover.</p>
             @endif
         @endif
+    </section>
+
+    <section id="supplier-schedule" class="chart-account-card" aria-labelledby="supplier-schedule-heading">
+        <h2 id="supplier-schedule-heading">Supplier balances</h2>
+        <p>{{ $readiness['supplier'] }}</p>
+        <p>Enter opening supplier invoices in Accounts Payable. The system checks that the schedule total matches the Accounts Payable opening credit before posting.</p>
+        @can('accounting.maintain-suppliers')
+            <a class="button" href="{{ route('accounting.accounts-payable') }}">Manage supplier opening invoices</a>
+            @can('accounting.maintain-opening-books')
+                <details>
+                    <summary>Import supplier invoices from CSV</summary>
+                    <p>Suppliers must already exist. Rows are imported as drafts only; if any row is invalid, the entire import is cancelled.</p>
+                    <p><a href="{{ asset('templates/opening-suppliers.csv') }}" download>Download supplier CSV template</a></p>
+                    <div>
+                        <label>Supplier invoices CSV<input type="file" wire:model="supplierCsv" accept=".csv,text/csv"></label>
+                        @error('supplierCsv') <p role="alert">{{ $message }}</p> @enderror
+                        <button type="button" wire:click="importSupplierCsv" wire:loading.attr="disabled" wire:target="importSupplierCsv,supplierCsv">Import invoices as drafts</button>
+                    </div>
+                </details>
+            @endcan
+        @endcan
     </section>
 
     <section class="chart-account-card" aria-labelledby="ytd-summary-heading">
@@ -151,7 +211,7 @@
             </form>
             @if ($ytdSummary?->status === 'draft')
                 <p>YTD summary pending approval.</p>
-                @can('accounting.approve-opening-books')<button type="button" wire:click="approveYtdSummary">Approve YTD summary</button>@endcan
+                <p>Where required for a midyear cutover, YTD evidence will be validated and approved with the opening journal.</p>
             @endif
         @endif
     </section>

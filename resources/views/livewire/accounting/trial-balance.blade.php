@@ -27,6 +27,9 @@
             @if ($cutoverDate)
                 <p>Supported accounting coverage begins {{ $cutoverDate }}.</p>
             @endif
+            @if ($openingWarning)
+                <p class="trial-balance-status has-accounting-error" role="status">{{ $openingWarning }}</p>
+            @endif
         </header>
 
         @if ($dateError)
@@ -70,32 +73,39 @@
                     <p class="trial-balance-no-activity" role="status">No activity during this period; opening balances are retained.</p>
                 @endif
                 <div class="trial-balance-table-wrap">
-                    <table class="trial-balance-table">
+                    <table class="trial-balance-table" aria-label="Trial balance by account">
+                        <colgroup><col class="trial-balance-account-column"><col span="10" class="trial-balance-amount-column"></colgroup>
                         <thead>
                             <tr>
-                                <th scope="col" rowspan="2">Account</th>
-                                <th scope="colgroup" colspan="2">Opening balance</th>
-                                <th scope="colgroup" colspan="2">Period activity*</th>
-                                <th scope="colgroup" colspan="2">Unadjusted balance</th>
-                                <th scope="colgroup" colspan="2">Adjustments</th>
-                                <th scope="colgroup" colspan="2">Adjusted balance</th>
+                                <th id="tb-account-heading" scope="col" rowspan="2">Account</th>
+                                <th id="tb-opening-group" scope="colgroup" colspan="2">Opening balance</th>
+                                <th id="tb-period-group" scope="colgroup" colspan="2">Period activity*</th>
+                                <th id="tb-unadjusted-group" scope="colgroup" colspan="2">Unadjusted balance</th>
+                                <th id="tb-adjustments-group" scope="colgroup" colspan="2">Adjustments</th>
+                                <th id="tb-adjusted-group" scope="colgroup" colspan="2">Adjusted balance</th>
                             </tr>
-                            <tr><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Debit</th><th scope="col">Credit</th></tr>
+                            <tr>
+                                <th id="tb-opening-debit" scope="col" headers="tb-opening-group">Debit</th><th id="tb-opening-credit" scope="col" headers="tb-opening-group">Credit</th>
+                                <th id="tb-period-debit" scope="col" headers="tb-period-group">Debit</th><th id="tb-period-credit" scope="col" headers="tb-period-group">Credit</th>
+                                <th id="tb-unadjusted-debit" scope="col" headers="tb-unadjusted-group">Debit</th><th id="tb-unadjusted-credit" scope="col" headers="tb-unadjusted-group">Credit</th>
+                                <th id="tb-adjustment-debit" scope="col" headers="tb-adjustments-group">Debit</th><th id="tb-adjustment-credit" scope="col" headers="tb-adjustments-group">Credit</th>
+                                <th id="tb-adjusted-debit" scope="col" headers="tb-adjusted-group">Debit</th><th id="tb-adjusted-credit" scope="col" headers="tb-adjusted-group">Credit</th>
+                            </tr>
                         </thead>
                         <tbody>
                             @foreach ($accounts as $row)
                                 <tr>
-                                    <th scope="row"><span>{{ $row['account']->code }}</span> {{ $row['account']->name }}@if (! $row['account']->is_active) <span class="trial-balance-inactive">Inactive</span>@endif</th>
-                                    <td>{{ number_format($row['opening_debit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['opening_credit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['period_debit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['period_credit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['unadjusted_debit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['unadjusted_credit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['adjustment_debit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['adjustment_credit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['closing_debit_cents'] / 100, 2) }}</td>
-                                    <td>{{ number_format($row['closing_credit_cents'] / 100, 2) }}</td>
+                                    <th id="tb-account-{{ $row['account']->id }}" scope="row"><span>{{ $row['account']->code }}</span> {{ $row['account']->name }}@if (! $row['account']->is_active) <span class="trial-balance-inactive">Inactive</span>@endif</th>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-opening-debit">{{ number_format($row['opening_debit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-opening-credit">{{ number_format($row['opening_credit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-period-debit">{{ number_format($row['period_debit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-period-credit">{{ number_format($row['period_credit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-unadjusted-debit">{{ number_format($row['unadjusted_debit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-unadjusted-credit">{{ number_format($row['unadjusted_credit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-adjustment-debit">{{ number_format($row['adjustment_debit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-adjustment-credit">{{ number_format($row['adjustment_credit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-adjusted-debit">{{ number_format($row['closing_debit_cents'] / 100, 2) }}</td>
+                                    <td headers="tb-account-{{ $row['account']->id }} tb-adjusted-credit">{{ number_format($row['closing_credit_cents'] / 100, 2) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

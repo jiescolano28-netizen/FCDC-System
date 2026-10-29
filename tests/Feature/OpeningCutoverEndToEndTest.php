@@ -176,11 +176,6 @@ test('a labelled illustrative cutover with reconciled opening schedules activate
         ->assertHasNoErrors();
 
     $this->actingAs($reviewer);
-    Livewire::test(OpeningBooks::class)
-        ->call('approveInventoryValuation')
-        ->assertHasNoErrors()
-        ->assertSee('Opening valuation approved');
-
     $this->actingAs($preparer);
     Livewire::test(OpeningBooks::class)
         ->set('cutoverDate', '2026-01-01')
@@ -195,8 +190,9 @@ test('a labelled illustrative cutover with reconciled opening schedules activate
 
     $this->actingAs($reviewer);
     Livewire::test(OpeningBooks::class)
-        ->call('approveOpening')
+        ->call('approveCutover')
         ->assertHasNoErrors()
+        ->assertSee('Cutover approved and opening balances posted')
         ->assertSee('Opening supplier schedule reconciled')
         ->assertSee('Opening stock schedule reconciled');
 
@@ -230,8 +226,11 @@ test('a labelled illustrative cutover with reconciled opening schedules activate
     $trialBalanceBeforeActivation = Livewire::test(TrialBalance::class)
         ->set('fromDate', '2026-01-01')
         ->set('toDate', '2026-01-31')
-        ->assertSee('Trial Balance unavailable');
-    expect($trialBalanceBeforeActivation->viewData('dateError'))->toBe('Production ready for authorized activation');
+        ->assertSee('Opening balances or cutover are incomplete')
+        ->assertSee('Books balance');
+    expect($trialBalanceBeforeActivation->viewData('dateError'))->toBeNull()
+        ->and($trialBalanceBeforeActivation->viewData('totalDebitsCents'))->toBe(13500000)
+        ->and($trialBalanceBeforeActivation->viewData('totalCreditsCents'))->toBe(13500000);
 
     $balanceSheetBeforeActivation = Livewire::test(FinancialStatements::class)
         ->set('statementType', 'balance-sheet')

@@ -2,14 +2,19 @@
 
 namespace App\Livewire\Inventory;
 
+use App\Models\AccountingAccount;
+use App\Models\AccountingJournal;
 use App\Models\DemolitionProject;
 use App\Models\OperatingCostRecord;
 use App\Models\ReworkingCostRecord;
+use App\Services\Accounting\JournalSourcePostingService;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -339,50 +344,62 @@ class OperatingCostRecordManagement extends Component
             : new OperatingCostRecord;
 
         $wasEditing = $record->exists;
+        $postedJournal = $wasEditing ? $this->postedJournalFor($record) : null;
+
+        if ($postedJournal && $this->financialFieldsChanged($record, $validated)) {
+            throw ValidationException::withMessages([
+                'referenceNumber' => 'This operating cost record is already posted to accounting. Correct the posted journal instead of changing its source amounts.',
+            ]);
+        }
+
         $oldPath = $record->attachment_path;
         $oldDisk = $record->attachment_disk ?: self::ATTACHMENT_DISK;
         $storedFile = null;
 
         try {
-            if ($this->attachmentFile) {
-                $storedFile = [
-                    'path' => $this->attachmentFile->store(self::ATTACHMENT_DIRECTORY, self::ATTACHMENT_DISK),
-                    'name' => $this->attachmentFile->getClientOriginalName(),
-                    'mime' => $this->attachmentFile->getMimeType() ?: $this->attachmentFile->getClientMimeType(),
-                    'size' => (int) $this->attachmentFile->getSize(),
-                    'disk' => self::ATTACHMENT_DISK,
+            DB::transaction(function () use ($validated, $record, $wasEditing, $postedJournal, &$storedFile): void {
+                if ($this->attachmentFile) {
+                    $storedFile = [
+                        'path' => $this->attachmentFile->store(self::ATTACHMENT_DIRECTORY, self::ATTACHMENT_DISK),
+                        'name' => $this->attachmentFile->getClientOriginalName(),
+                        'mime' => $this->attachmentFile->getMimeType() ?: $this->attachmentFile->getClientMimeType(),
+                        'size' => (int) $this->attachmentFile->getSize(),
+                        'disk' => self::ATTACHMENT_DISK,
+                    ];
+                }
+
+                $attributes = [
+                    'expense_date' => $validated['expenseDate'],
+                    'reference_number' => trim($validated['referenceNumber']),
+                    'expense_category' => $validated['expenseCategory'],
+                    'description' => trim($validated['expenseDescription']),
+                    'amount' => number_format((float) $validated['amount'], 2, '.', ''),
+                    'payment_method' => trim($validated['paymentMethod']),
                 ];
-            }
 
-            $attributes = [
-                'expense_date' => $validated['expenseDate'],
-                'reference_number' => trim($validated['referenceNumber']),
-                'expense_category' => $validated['expenseCategory'],
-                'description' => trim($validated['expenseDescription']),
-                'amount' => number_format((float) $validated['amount'], 2, '.', ''),
-                'payment_method' => trim($validated['paymentMethod']),
-            ];
+                if (! $wasEditing) {
+                    $attributes['employee_id'] = auth()->id();
+                }
 
-            if (! $wasEditing) {
-                $attributes['employee_id'] = auth()->id();
-            }
+                if ($storedFile) {
+                    $attributes['attachment_path'] = $storedFile['path'];
+                    $attributes['attachment_name'] = $storedFile['name'];
+                    $attributes['attachment_mime'] = $storedFile['mime'];
+                    $attributes['attachment_size'] = $storedFile['size'];
+                    $attributes['attachment_disk'] = $storedFile['disk'];
+                } elseif ($this->removeExistingAttachment) {
+                    $attributes['attachment_path'] = null;
+                    $attributes['attachment_name'] = null;
+                    $attributes['attachment_mime'] = null;
+                    $attributes['attachment_size'] = null;
+                    $attributes['attachment_disk'] = null;
+                }
 
-            if ($storedFile) {
-                $attributes['attachment_path'] = $storedFile['path'];
-                $attributes['attachment_name'] = $storedFile['name'];
-                $attributes['attachment_mime'] = $storedFile['mime'];
-                $attributes['attachment_size'] = $storedFile['size'];
-                $attributes['attachment_disk'] = $storedFile['disk'];
-            } elseif ($this->removeExistingAttachment) {
-                $attributes['attachment_path'] = null;
-                $attributes['attachment_name'] = null;
-                $attributes['attachment_mime'] = null;
-                $attributes['attachment_size'] = null;
-                $attributes['attachment_disk'] = null;
-            }
+                $record->fill($attributes);
+                $record->save();
 
-            $record->fill($attributes);
-            $record->save();
+                $this->postValidatedRecord($record, $postedJournal);
+            });
 
             if ($oldPath && ($storedFile || $this->removeExistingAttachment)) {
                 Storage::disk($oldDisk)->delete($oldPath);
@@ -402,11 +419,66 @@ class OperatingCostRecordManagement extends Component
         $this->dispatch('operating-cost-record-form-close');
     }
 
+    /**
+     * Post a validated operating cost record to the accounting books.
+     *
+     * Records created before the chart and posting rules are configured remain
+     * saved and can still be generated from the Journal Entry workspace. Once
+     * approved accounts exist, the source action posts its balanced journal
+     * automatically and a failed posting rolls the source change back rather
+     * than inventing accounts or bypassing accounting checks.
+     */
+    private function postValidatedRecord(OperatingCostRecord $record, ?AccountingJournal $existingJournal): void
+    {
+        if ($existingJournal || ! $this->accountingIsConfigured()) {
+            return;
+        }
+
+        app(JournalSourcePostingService::class)->postOperatingCost($record->id, (int) auth()->id());
+    }
+
+    private function accountingIsConfigured(): bool
+    {
+        return AccountingAccount::query()
+            ->where('is_active', true)
+            ->whereNotNull('approved_at')
+            ->exists();
+    }
+
+    private function postedJournalFor(OperatingCostRecord $record): ?AccountingJournal
+    {
+        if (! $record->exists) {
+            return null;
+        }
+
+        return AccountingJournal::query()
+            ->where('source_type', JournalSourcePostingService::SOURCE_OPERATING_COST)
+            ->where('source_id', (string) $record->id)
+            ->first();
+    }
+
+    private function financialFieldsChanged(OperatingCostRecord $record, array $validated): bool
+    {
+        return $record->expense_date?->format('Y-m-d') !== $validated['expenseDate']
+            || $record->reference_number !== trim($validated['referenceNumber'])
+            || $record->expense_category !== $validated['expenseCategory']
+            || $record->description !== trim($validated['expenseDescription'])
+            || (string) $record->amount !== number_format((float) $validated['amount'], 2, '.', '')
+            || $record->payment_method !== trim($validated['paymentMethod']);
+    }
+
     public function delete(int $id): void
     {
         $this->authorizePermission('inventory.delete');
 
         $record = OperatingCostRecord::findOrFail($id);
+
+        if ($this->postedJournalFor($record)) {
+            throw ValidationException::withMessages([
+                'delete' => 'This operating cost record is already posted to accounting and cannot be deleted. Use a linked accounting correction instead.',
+            ]);
+        }
+
         $disk = $record->attachment_disk ?: self::ATTACHMENT_DISK;
 
         if ($record->attachment_path) {
@@ -512,6 +584,12 @@ class OperatingCostRecordManagement extends Component
             ->orderByDesc('id')
             ->get();
 
+        $postedJournals = AccountingJournal::query()
+            ->where('source_type', JournalSourcePostingService::SOURCE_OPERATING_COST)
+            ->whereIn('source_id', $records->pluck('id')->map(fn (int $id): string => (string) $id)->all())
+            ->get()
+            ->keyBy('source_id');
+
         $allRecords = OperatingCostRecord::query()->get(['amount', 'attachment_path', 'expense_date']);
 
         $summary = [
@@ -528,6 +606,7 @@ class OperatingCostRecordManagement extends Component
             'batchAttachmentUrls' => $batchAttachmentUrls,
             'batchSummary' => $batchSummary,
             'records' => $records,
+            'postedJournals' => $postedJournals,
             'summary' => $summary,
             'expenseCategories' => self::EXPENSE_CATEGORIES,
             'projects' => DemolitionProject::query()->orderBy('name')->get(['id', 'code', 'name']),
