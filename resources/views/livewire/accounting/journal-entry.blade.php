@@ -6,9 +6,18 @@
         </div>
     </header>
 
-    @if (session()->has('journal-entry-message'))
-        <p class="journal-entry-feedback" role="status">{{ session('journal-entry-message') }}</p>
-    @endif
+    <div
+        class="journal-entry-feedback"
+        role="status"
+        aria-live="polite"
+        x-data="{ visible: @js(session()->has('journal-entry-message')), message: @js(session('journal-entry-message', '')) }"
+        x-init="if (visible) setTimeout(() => visible = false, 5000)"
+        x-show="visible"
+        x-transition.opacity
+    >
+        <span x-text="message"></span>
+        <button type="button" aria-label="Dismiss notification" @click="visible = false">&times;</button>
+    </div>
 
     <nav class="journal-section-nav" aria-label="Journal entry sections">
         <a href="#regular-journal-entries">Regular Journal Entries</a>
@@ -189,7 +198,7 @@
                         @if ($journal->status === 'draft' && $journal->source_type === 'manual')
                             @can('accounting.create-journal-entry')
                                 <button type="button" wire:click="editDraft({{ $journal->id }})">Edit</button>
-                                <button type="button" wire:click="deleteDraft({{ $journal->id }})">Delete</button>
+                                <button type="button" data-delete-journal="{{ $journal->id }}" data-journal-reference="{{ $journal->reference }}">Delete</button>
                                 <button type="button" wire:click="submitForReview({{ $journal->id }})">Submit</button>
                             @endcan
                         @elseif ($journal->status === 'pending_review' && $journal->source_type === 'manual')

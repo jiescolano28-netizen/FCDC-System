@@ -479,16 +479,9 @@ class OpeningBooksService
         });
         $schedule = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines')->first();
         if ($inventoryLines->isEmpty() && ! $schedule) {
-            $hasCutoverStock = StockMovement::query()
-                ->whereDate('effective_date', '<=', $date)
-                ->select('inventory_id')
-                ->groupBy('inventory_id')
-                ->havingRaw('SUM(quantity) <> 0')
-                ->exists();
-            if ($hasCutoverStock) {
-                throw ValidationException::withMessages(['opening' => 'Opening Inventory with on-hand stock requires a per-item valuation schedule.']);
-            }
-
+            // A cutover journal may establish other opening balances before the
+            // inventory schedule is ready. Readiness still blocks production
+            // activation until stock is valued and reconciled.
             return;
         }
         if (! $schedule || $schedule->cutover_date->toDateString() !== $date

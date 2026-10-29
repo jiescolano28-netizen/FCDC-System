@@ -154,8 +154,8 @@ class JournalEntry extends Component
         $this->openingAttempted = false;
         $journal = app(ManualJournalService::class)->saveDraft($this->formData(), auth()->id(), $this->editingDraftId);
         $this->editingDraftId = $journal->id;
-        $this->showEntryModal = true;
-        session()->flash('journal-entry-message', 'Journal draft saved. Review the lines and submit it when ready.');
+        $this->showEntryModal = false;
+        $this->dispatch('journal-entry-notification', message: 'Journal draft saved successfully and is okay for approval.');
     }
 
     public function submitForReview(int $journalId): void
@@ -194,6 +194,7 @@ class JournalEntry extends Component
         if ($this->editingDraftId === $journalId) {
             $this->resetForm();
         }
+        $this->showEntryModal = false;
         session()->flash('journal-entry-message', 'Journal draft deleted.');
     }
 

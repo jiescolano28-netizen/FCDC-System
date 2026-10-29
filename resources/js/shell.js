@@ -3,6 +3,20 @@ import 'choices.js/public/assets/styles/choices.min.css';
 import Swal from 'sweetalert2';
 import './dashboard.js';
 
+const registerJournalEntryNotifications = () => {
+    window.Livewire.on('journal-entry-notification', (event) => {
+        Swal.fire({
+            icon: 'success',
+            title: 'Draft saved',
+            text: event.message,
+            confirmButtonText: 'Okay',
+        });
+    });
+};
+
+if (window.Livewire) registerJournalEntryNotifications();
+else document.addEventListener('livewire:init', registerJournalEntryNotifications, { once: true });
+
 const sidebar = document.querySelector('#app-sidebar');
 
 if (sidebar) {
@@ -200,6 +214,27 @@ if (batchCategoryAttachmentsModal) {
 
 
 document.addEventListener('click', async (event) => {
+    const journalButton = event.target.closest('[data-delete-journal]');
+    if (journalButton) {
+        event.preventDefault();
+        const result = await Swal.fire({
+            icon: 'warning',
+            title: 'Delete journal draft?',
+            text: `${journalButton.dataset.journalReference} will be permanently deleted.`,
+            showCancelButton: true,
+            confirmButtonText: 'Delete draft',
+            confirmButtonColor: '#b91c1c',
+            cancelButtonText: 'Cancel',
+        });
+
+        if (result.isConfirmed) {
+            const componentId = journalButton.closest('[wire\\:id]')?.getAttribute('wire:id');
+            if (componentId) window.Livewire.find(componentId).call('deleteDraft', journalButton.dataset.deleteJournal);
+        }
+
+        return;
+    }
+
     const button = event.target.closest('[data-delete-employee]');
     if (!button) return;
 
