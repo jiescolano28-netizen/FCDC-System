@@ -42,6 +42,10 @@ class OpeningBooks extends Component
 
     public bool $editingInventoryValuation = false;
 
+    public bool $editingSupplierSchedule = false;
+
+    public array $supplierOpeningInvoices = [];
+
     public string $ytdThroughDate = '';
 
     public string $ytdEvidence = '';
@@ -83,7 +87,8 @@ class OpeningBooks extends Component
                 'value' => $line ? number_format($line->carrying_value_cents / 100, 2, '.', '') : '',
             ];
         })->all();
-        $this->editingInventoryValuation = $valuation?->status !== 'approved';
+        $this->editingInventoryValuation = false;
+        $this->loadSupplierOpeningInvoices();
     }
 
     public function goToStep(int $step): void
@@ -190,6 +195,8 @@ class OpeningBooks extends Component
     public function saveInventoryValuation(): void
     {
         $this->authorizePermission('accounting.maintain-opening-books');
+        abort_unless($this->editingInventoryValuation, 403);
+        abort_if(OpeningInventoryValuation::openingJournalPosted(), 409);
         app(OpeningBooksService::class)->saveInventoryValuation(
             $this->cutoverDate,
             $this->inventoryEvidence,
@@ -198,6 +205,47 @@ class OpeningBooks extends Component
         );
         session()->flash('opening-message', 'Opening inventory schedule saved. Pending approval.');
         $this->editingInventoryValuation = false;
+    }
+
+    public function unlockInventoryValuation(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        abort_if(OpeningInventoryValuation::openingJournalPosted(), 409);
+        $this->editingInventoryValuation = true;
+    }
+
+    public function unlockSupplierSchedule(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        $this->authorizePermission('accounting.maintain-suppliers');
+        abort_if(AccountingJournal::where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists(), 409);
+        $this->editingSupplierSchedule = true;
+    }
+
+    public function saveSupplierSchedule(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        $this->authorizePermission('accounting.maintain-suppliers');
+        abort_unless($this->editingSupplierSchedule, 403);
+
+        DB::transaction(function (): void {
+            foreach ($this->supplierOpeningInvoices as $invoice) {
+                app(SupplierPayablesService::class)->saveOpeningInvoice([
+                    'id' => $invoice['id'],
+                    'supplier_id' => $invoice['supplierId'],
+                    'invoice_number' => $invoice['invoiceNumber'],
+                    'recognition_date' => $invoice['recognitionDate'],
+                    'due_date' => $invoice['dueDate'],
+                    'amount' => $invoice['amount'],
+                    'description' => $invoice['description'],
+                    'terms' => $invoice['terms'],
+                ], (int) auth()->id());
+            }
+        });
+
+        $this->editingSupplierSchedule = false;
+        $this->loadSupplierOpeningInvoices();
+        session()->flash('opening-message', 'Supplier/AP schedule saved as drafts. No accounting entries were posted.');
     }
 
     public function importInventoryCsv(): void
@@ -311,6 +359,7 @@ class OpeningBooks extends Component
         }
 
         $this->reset('supplierCsv');
+        $this->loadSupplierOpeningInvoices();
         session()->flash('opening-message', count($rows).' supplier invoices imported as drafts. Their total must match the Accounts Payable opening balance.');
     }
 
@@ -324,9 +373,7 @@ class OpeningBooks extends Component
 
     public function reviseInventoryValuation(): void
     {
-        $this->authorizePermission('accounting.maintain-opening-books');
-        abort_if(OpeningInventoryValuation::openingJournalPosted(), 409);
-        $this->editingInventoryValuation = true;
+        $this->unlockInventoryValuation();
     }
 
     public function addYtdLine(): void
@@ -492,5 +539,26 @@ class OpeningBooks extends Component
     private function authorizePermission(string $permission): void
     {
         abort_unless(auth()->user()?->can($permission), 403);
+    }
+
+    private function loadSupplierOpeningInvoices(): void
+    {
+        $this->supplierOpeningInvoices = SupplierOpeningInvoice::where('status', 'draft')
+            ->whereNull('reversal_of_id')
+            ->with('supplier')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (SupplierOpeningInvoice $invoice) => [
+                'id' => $invoice->id,
+                'supplierId' => (string) $invoice->supplier_id,
+                'supplierName' => $invoice->supplier?->name ?? $invoice->supplier_name_snapshot,
+                'supplierCode' => $invoice->supplier?->code ?? $invoice->supplier_code_snapshot,
+                'invoiceNumber' => $invoice->invoice_number,
+                'recognitionDate' => $invoice->recognition_date->format('Y-m-d'),
+                'dueDate' => $invoice->due_date->format('Y-m-d'),
+                'amount' => number_format($invoice->amount_cents / 100, 2, '.', ''),
+                'description' => $invoice->description,
+                'terms' => $invoice->terms ?? '',
+            ])->all();
     }
 }

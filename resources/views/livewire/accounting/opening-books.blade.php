@@ -122,23 +122,23 @@
                 <section class="cutover-subpanel">
                     <h3>Inventory valuation</h3>
                     <p>{{ $readiness['inventory'] }}</p>
-                    @if ($inventoryValuation?->status === 'approved' && ! $editingInventoryValuation)
-                        <p>Saved schedule approved for {{ $inventoryValuation->cutover_date->format('F j, Y') }}. Evidence: {{ $inventoryValuation->evidence_reference }}.</p>
+                    @if ($inventoryValuation && ! $editingInventoryValuation)
+                        <p>Saved schedule {{ $inventoryValuation->status }} for {{ $inventoryValuation->cutover_date->format('F j, Y') }}. Evidence: {{ $inventoryValuation->evidence_reference }}.</p>
                         <div class="cutover-table-wrap"><table><thead><tr><th>Item</th><th>Quantity</th><th>Value (PHP)</th></tr></thead><tbody>
                             @foreach ($inventoryValuation->lines as $line)<tr><td>{{ $line->inventory->code }} — {{ $line->inventory->name }}</td><td>{{ $line->quantity }}</td><td>{{ number_format($line->carrying_value_cents / 100, 2) }}</td></tr>@endforeach
                         </tbody></table></div>
-                        @if ($journal?->status !== 'posted') @can('accounting.maintain-opening-books')<button type="button" class="button-secondary" wire:click="reviseInventoryValuation">Revise inventory draft</button>@endcan @endif
+                        @if ($journal?->status !== 'posted') @can('accounting.maintain-opening-books')<button type="button" class="button-secondary" wire:click="unlockInventoryValuation">Edit / Unlock inventory schedule</button>@endcan @endif
                     @else
                         <form wire:submit="saveInventoryValuation">
-                            <label>Cutover count/value evidence<input wire:model="inventoryEvidence" maxlength="255" required></label>
-                            @can('accounting.maintain-opening-books')
+                            <label>Cutover count/value evidence<input wire:model="inventoryEvidence" maxlength="255" required @disabled(! $editingInventoryValuation)></label>
+                            @if ($editingInventoryValuation) @can('accounting.maintain-opening-books')
                                 <details><summary>Import inventory from CSV</summary><p>Include every current item exactly once. Columns: <code>item_code,quantity,value</code>.</p><p><a href="{{ asset('templates/opening-inventory.csv') }}" download>Download inventory template</a></p><label>Inventory CSV<input type="file" wire:model="inventoryCsv" accept=".csv,text/csv"></label>@error('inventoryCsv')<p role="alert">{{ $message }}</p>@enderror<button type="button" wire:click="importInventoryCsv">Import to draft</button></details>
-                            @endcan
+                            @endcan @endif
                             @foreach ($inventoryLines as $index => $line)
                                 @php($item = $inventoryItems->firstWhere('id', (int) $line['inventoryId']))
-                                <div class="cutover-entry-row" wire:key="opening-inventory-line-{{ $index }}"><strong>{{ $item?->code }} — {{ $item?->name }} ({{ $item?->unit }})</strong><label>Quantity<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.quantity" required></label><label>Carrying value PHP<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.value" required></label></div>
+                                <div class="cutover-entry-row" wire:key="opening-inventory-line-{{ $index }}"><strong>{{ $item?->code }} — {{ $item?->name }} ({{ $item?->unit }})</strong><label>Quantity<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.quantity" required @disabled(! $editingInventoryValuation)></label><label>Carrying value PHP<input inputmode="decimal" wire:model="inventoryLines.{{ $index }}.value" required @disabled(! $editingInventoryValuation)></label></div>
                             @endforeach
-                            @can('accounting.maintain-opening-books')<button type="submit">Save inventory schedule</button>@endcan
+                            @if ($editingInventoryValuation) @can('accounting.maintain-opening-books')<button type="submit">Save inventory draft</button>@endcan @else <p>Inventory schedule is locked. Unlock to edit and save changes as a draft.</p>@can('accounting.maintain-opening-books')<button type="button" class="button-secondary" wire:click="unlockInventoryValuation">Edit / Unlock inventory schedule</button>@endcan @endif
                         </form>
                         @if ($inventoryValuation?->status === 'draft')<p>Inventory schedule saved as draft; it will be validated with the opening journal.</p>@endif
                     @endif
@@ -148,6 +148,31 @@
                     <h3>Supplier / Accounts Payable balances</h3>
                     <p>{{ $readiness['supplier'] }}</p>
                     <p>Opening supplier invoice totals must match the Accounts Payable credit balance exactly.</p>
+                    @if ($supplierOpeningInvoices !== [])
+                        @if (! $editingSupplierSchedule)
+                            <div class="cutover-table-wrap"><table><thead><tr><th>Supplier / Invoice</th><th>Recognition date</th><th>Due date</th><th>Amount (PHP)</th><th>Description</th><th>Terms</th></tr></thead><tbody>
+                                @foreach ($supplierOpeningInvoices as $invoice)<tr><td>{{ $invoice['supplierCode'] }} — {{ $invoice['supplierName'] }} / {{ $invoice['invoiceNumber'] }}</td><td>{{ $invoice['recognitionDate'] }}</td><td>{{ $invoice['dueDate'] }}</td><td>{{ $invoice['amount'] }}</td><td>{{ $invoice['description'] }}</td><td>{{ $invoice['terms'] ?: '—' }}</td></tr>@endforeach
+                            </tbody></table></div>
+                            @if ($journal?->status !== 'posted') @can('accounting.maintain-opening-books') @can('accounting.maintain-suppliers')<button type="button" class="button-secondary" wire:click="unlockSupplierSchedule">Edit / Unlock supplier schedule</button>@endcan @endcan @endif
+                        @else
+                            <form wire:submit="saveSupplierSchedule">
+                                @foreach ($supplierOpeningInvoices as $index => $invoice)
+                                    <fieldset class="cutover-entry-row" wire:key="opening-supplier-{{ $invoice['id'] }}"><legend>{{ $invoice['supplierCode'] }} — {{ $invoice['supplierName'] }}</legend>
+                                        <label>Invoice number<input wire:model="supplierOpeningInvoices.{{ $index }}.invoiceNumber" required maxlength="100"></label>
+                                        <label>Recognition date<input type="date" wire:model="supplierOpeningInvoices.{{ $index }}.recognitionDate" required></label>
+                                        <label>Due date<input type="date" wire:model="supplierOpeningInvoices.{{ $index }}.dueDate" required></label>
+                                        <label>Amount PHP<input inputmode="decimal" wire:model="supplierOpeningInvoices.{{ $index }}.amount" required></label>
+                                        <label>Description<input wire:model="supplierOpeningInvoices.{{ $index }}.description" required maxlength="4000"></label>
+                                        <label>Terms<input wire:model="supplierOpeningInvoices.{{ $index }}.terms" maxlength="180"></label>
+                                    </fieldset>
+                                @endforeach
+                                @can('accounting.maintain-opening-books') @can('accounting.maintain-suppliers')<button type="submit">Save supplier/AP drafts</button>@endcan @endcan
+                            </form>
+                        @endif
+                        <p>Only draft opening invoices are editable here. Posted supplier records remain read-only.</p>
+                    @else
+                        <p>No draft supplier opening invoices are available to edit.</p>
+                    @endif
                     @can('accounting.maintain-suppliers')
                         <a class="button-link" href="{{ route('accounting.accounts-payable') }}">Open Accounts Payable</a>
                         @can('accounting.maintain-opening-books')

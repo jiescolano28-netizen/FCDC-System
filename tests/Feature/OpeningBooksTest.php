@@ -63,6 +63,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
             ['inventoryId' => (string) $item->id, 'quantity' => '-1.00', 'value' => '31.25'],
             ['inventoryId' => (string) $other->id, 'quantity' => '4.00', 'value' => '4.00'],
         ])
+        ->call('unlockInventoryValuation')
         ->call('saveInventoryValuation')
         ->assertHasErrors('inventoryLines');
     Livewire::test(OpeningBooks::class)
@@ -72,6 +73,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
             ['inventoryId' => (string) $item->id, 'quantity' => '12.50', 'value' => '0.00'],
             ['inventoryId' => (string) $other->id, 'quantity' => '4.00', 'value' => '4.00'],
         ])
+        ->call('unlockInventoryValuation')
         ->call('saveInventoryValuation')
         ->assertHasErrors('inventoryLines.0');
     Livewire::test(OpeningBooks::class)
@@ -81,6 +83,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
             ['inventoryId' => (string) $item->id, 'quantity' => '12.50', 'value' => '31.25'],
             ['inventoryId' => (string) $other->id, 'quantity' => '3.00', 'value' => '3.00'],
         ])
+        ->call('unlockInventoryValuation')
         ->call('saveInventoryValuation')
         ->assertHasErrors('inventoryLines.1.quantity');
     Livewire::test(OpeningBooks::class)
@@ -90,6 +93,7 @@ test('opening inventory schedule reconciles to cutover stock, approves its carry
             ['inventoryId' => (string) $item->id, 'quantity' => '12.50', 'value' => '31.25'],
             ['inventoryId' => (string) $other->id, 'quantity' => '4.00', 'value' => '4.00'],
         ])
+        ->call('unlockInventoryValuation')
         ->call('saveInventoryValuation')
         ->assertHasNoErrors();
     Livewire::test(OpeningBooks::class)
