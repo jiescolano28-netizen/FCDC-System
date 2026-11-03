@@ -1979,3 +1979,23 @@
     body.profitability-body .profitability-table td { padding: 5px 4px; border: 1px solid #bbb; white-space: normal; }
     body.profitability-body .profitability-table tr { break-inside: avoid; }
 }
+.correction-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 14px; border-bottom: 1px solid #dce8df; }
+.correction-tabs button, .correction-tabs a { min-height: 38px; padding: 8px 13px; border: 1px solid #dce5df; border-radius: 8px 8px 0 0; color: #33483a; background: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.correction-tabs .is-active { color: #fff; border-color: #16732b; background: #16732b; }
+.correction-workflow { display: flex; align-items: center; justify-content: space-around; gap: 10px; margin: 12px 0 16px; padding: 15px; border-radius: 10px; color: #14532d; background: #eef7ef; text-align: center; }
+.correction-workflow span { font-size: 12px; font-weight: 700; }
+.correction-workflow small { display: block; margin-top: 3px; color: #52645a; font-weight: 400; }
+.correction-layout { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(220px, .9fr); gap: 14px; }
+.correction-requests, .correction-summary { min-width: 0; padding: 14px; border: 1px solid #e2ebe4; border-radius: 10px; background: #fff; }
+.correction-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.correction-section-heading h4, .correction-summary h4 { margin: 0 0 10px; color: #183d21; font-size: 15px; }
+.correction-section-heading button { margin-bottom: 8px; }
+.correction-status { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #edf2ef; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.correction-status.is-pending_review { color: #805b00; background: #fff2bf; }
+.correction-status.is-approved { color: #14532d; background: #dcf2d8; }
+.correction-status.is-rejected { color: #9f2525; background: #fee2e2; }
+.correction-status.is-posted { color: #14532d; background: #dcf2d8; }
+.correction-summary > div { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid #e7eee8; font-size: 12px; }
+.correction-summary .correction-safe-note { display: block; margin-top: 12px; padding: 11px; border: 0; border-radius: 8px; color: #14532d; background: #eef7e8; font-weight: 650; }
+@media (max-width: 760px) { .correction-layout { grid-template-columns: 1fr; } .correction-workflow { align-items: stretch; flex-wrap: wrap; } }
+@media (max-width: 520px) { .correction-workflow { justify-content: center; } .correction-workflow b { display: none; } .correction-section-heading { align-items: flex-start; flex-direction: column; } }

@@ -329,16 +329,23 @@
                 <section class="cutover-subpanel" aria-labelledby="opening-correction-step-heading">
                     <h3 id="opening-correction-step-heading">Opening Balance Correction</h3>
                     <p>Request a controlled correction to posted opening balances. Posted records are never edited; requests are reviewed and posted as separate linked corrections.</p>
-                    @can('accounting.maintain-opening-books')<button type="button" wire:click="goToStep(3)">Request Correction</button>@endcan
+                    <nav class="correction-tabs" aria-label="Opening balance views"><button type="button" class="is-active">Correction &amp; Reconciliation</button><button type="button" wire:click="goToStep(3)">Cutover Details</button><a href="#opening-correction-history">Correction History</a></nav>
+                    <div class="correction-workflow" aria-label="Correction workflow"><span>Request Correction <small>Preparer</small></span><b aria-hidden="true">→</b><span>Review <small>Reviewer</small></span><b aria-hidden="true">→</b><span>Approve <small>Authorized</small></span><b aria-hidden="true">→</b><span>Post Adjustment <small>Linked journal</small></span><b aria-hidden="true">→</b><span>Update balances <small>Ledger &amp; schedules</small></span></div>
+                    <div class="correction-layout">
+                    <div class="correction-requests">
+                    <div class="correction-section-heading"><h4>Correction Requests</h4>@can('accounting.maintain-opening-books')<button type="button" wire:click="goToStep(3)">＋ Request Correction</button>@endcan</div>
                     @if ($correctionRequests->isEmpty())
                         <p>No correction requests yet.</p>
                     @else
-                        <div class="cutover-table-wrap"><table><thead><tr><th>Requested</th><th>Correction</th><th>Status</th><th>Requester</th><th>Review / posting</th></tr></thead><tbody>
+                        <div class="cutover-table-wrap" id="opening-correction-history"><table><thead><tr><th>Request</th><th>Type / reason</th><th>Requested by</th><th>Date requested</th><th>Status</th><th>Actions</th></tr></thead><tbody>
                             @foreach ($correctionRequests as $request)
-                                <tr wire:key="opening-correction-step-{{ $request->id }}"><td>{{ $request->created_at->format('Y-m-d H:i') }}</td><td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br>{{ $request->reason }}</td><td>{{ ucfirst(str_replace('_', ' ', $request->status)) }}</td><td>{{ $request->preparer?->username ?? 'Unavailable' }}</td><td>@if ($request->status === 'posted'){{ $request->journal?->reference ?? 'Journal linked' }} · {{ $request->posted_at?->format('Y-m-d H:i') }}@elseif ($request->reviewer){{ $request->reviewer->username }}@else Pending review @endif</td></tr>
+                                <tr wire:key="opening-correction-step-{{ $request->id }}"><td>#{{ $request->id }}</td><td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br><small>{{ $request->reason }}</small></td><td>{{ $request->preparer?->username ?? 'Unavailable' }}</td><td>{{ $request->created_at->format('Y-m-d') }}</td><td><span class="correction-status is-{{ $request->status }}">{{ ucfirst(str_replace('_', ' ', $request->status)) }}</span></td><td><details><summary>View / actions</summary><p>{{ $request->reviewer?->username ?? 'Awaiting reviewer' }}@if ($request->journal) · {{ $request->journal->reference }}@endif</p>@if ($request->status === 'pending_review') @can('accounting.approve-opening-books')<label>Review note<textarea wire:model="correctionReviewNote" maxlength="4000"></textarea></label><button type="button" wire:click="approveOpeningCorrection({{ $request->id }})">Approve</button><button type="button" class="button-secondary" wire:click="rejectOpeningCorrection({{ $request->id }})">Reject</button>@endcan @elseif ($request->status === 'approved') @can('accounting.approve-opening-books')<button type="button" wire:click="postOpeningCorrection({{ $request->id }})">Post approved correction</button>@endcan @else {{ $request->review_note ?? ($request->journal?->reference ?? 'No further action') }} @endif</details></td></tr>
                             @endforeach
                         </tbody></table></div>
                     @endif
+                    </div>
+                    <aside class="correction-summary"><h4>Reconciliation Summary</h4><p>Opening balances remain unchanged until an approved correction is posted.</p><div><strong>Journal</strong><span>{{ $journal->reference }}</span></div><div><strong>Schedule checks</strong><span>{{ $preflight['ap_matches'] && $preflight['inventory_matches'] ? 'Reconciled' : 'Review required' }}</span></div><div class="correction-safe-note">✓ Original posted records remain immutable.</div></aside>
+                    </div>
                 </section>
             @else
                 <div class="cutover-approval-grid">
