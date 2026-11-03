@@ -460,7 +460,9 @@ class InterveningSourceReconciliation
             $linkedIdentityMatches = $linkedIdentityMatches
                 || ($stockMovement?->source_reference === 'pos_sale:'.$linkedJournal->source_id && $linkedJournal->source_type === 'pos_sale')
                 || ($stockMovement?->source_reference === 'supplier_purchase:'.$linkedJournal->source_id && $linkedJournal->source_type === 'supplier_purchase')
-                || ($stockMovement?->source_reference === 'direct_purchase:'.$linkedJournal->source_id && $linkedJournal->source_type === 'cash_disbursement');
+                || ($stockMovement?->source_reference === 'direct_purchase:'.$linkedJournal->source_id && $linkedJournal->source_type === 'cash_disbursement')
+                || ($stockMovement?->source_reference === 'opening_balance_correction:'.$linkedJournal->source_id
+                    && $linkedJournal->source_type === 'opening_balance_correction');
         }
         $journal = $sourceJournal ?? ($linkedJournalId ? AccountingJournal::query()->find($linkedJournalId) : null);
         if ($sourceJournal && $sourceJournal->status !== 'posted') {

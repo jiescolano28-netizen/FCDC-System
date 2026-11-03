@@ -104,7 +104,24 @@ class SupplierOpeningInvoice extends Model
 
     public function outstandingAmountCents(): int
     {
-        return max(0, (int) $this->amount_cents - $this->paidAmountCents());
+        return max(0, $this->effectiveAmountCents() - $this->paidAmountCents());
+    }
+
+    public function effectiveAmountCents(): int
+    {
+        $correction = DB::table('opening_balance_corrections')
+            ->where('correction_type', 'supplier_ap')
+            ->where('status', 'posted')
+            ->get(['details'])
+            ->sum(function (object $row): int {
+                $details = json_decode($row->details, true) ?: [];
+
+                return (int) collect($details['lines'] ?? [])
+                    ->where('supplier_opening_invoice_id', (int) $this->id)
+                    ->sum('delta_cents');
+            });
+
+        return max(0, (int) $this->amount_cents + (int) $correction);
     }
 
     public function payableStatus(): string
@@ -120,7 +137,7 @@ class SupplierOpeningInvoice extends Model
         }
         $paid = $this->paidAmountCents();
 
-        return $paid >= (int) $this->amount_cents ? 'Paid' : ($paid > 0 ? 'Partially paid' : 'Unpaid');
+        return $paid >= $this->effectiveAmountCents() ? 'Paid' : ($paid > 0 ? 'Partially paid' : 'Unpaid');
     }
 
     public function stateAsOf(string $date): string

@@ -7,11 +7,13 @@ use App\Models\AccountingJournal;
 use App\Models\AccountingJournalLine;
 use App\Models\AccountingYtdSummary;
 use App\Models\Inventory;
+use App\Models\OpeningBalanceCorrection;
 use App\Models\OpeningInventoryValuation;
 use App\Models\Supplier;
 use App\Models\SupplierOpeningInvoice;
 use App\Models\SupplierPurchaseInvoice;
 use App\Services\Accounting\InterveningSourceReconciliation;
+use App\Services\Accounting\OpeningBalanceCorrectionService;
 use App\Services\Accounting\OpeningBooksService;
 use App\Services\Accounting\SupplierPayablesService;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +47,20 @@ class OpeningBooks extends Component
     public bool $editingSupplierSchedule = false;
 
     public array $supplierOpeningInvoices = [];
+
+    public string $correctionType = 'journal';
+
+    public string $correctionReason = '';
+
+    public string $correctionReviewNote = '';
+
+    public string $correctionCounterAccountId = '';
+
+    public array $correctionJournalLines = [];
+
+    public array $correctionInventoryLines = [];
+
+    public array $correctionSupplierLines = [];
 
     public string $ytdThroughDate = '';
 
@@ -89,6 +105,13 @@ class OpeningBooks extends Component
         })->all();
         $this->editingInventoryValuation = false;
         $this->loadSupplierOpeningInvoices();
+        $this->correctionJournalLines = [['accountId' => '', 'debit' => '', 'credit' => ''], ['accountId' => '', 'debit' => '', 'credit' => '']];
+        $inventoryCorrections = $this->postedCorrectionDeltas('inventory', 'inventory_id');
+        $this->correctionInventoryLines = $valuation?->lines->map(fn ($line) => [
+            'inventoryId' => (string) $line->inventory_id,
+            'value' => number_format(((int) $line->carrying_value_cents + (int) ($inventoryCorrections[$line->inventory_id] ?? 0)) / 100, 2, '.', ''),
+        ])->all() ?? [];
+        $this->loadSupplierCorrectionLines();
     }
 
     public function goToStep(int $step): void
@@ -246,6 +269,59 @@ class OpeningBooks extends Component
         $this->editingSupplierSchedule = false;
         $this->loadSupplierOpeningInvoices();
         session()->flash('opening-message', 'Supplier/AP schedule saved as drafts. No accounting entries were posted.');
+    }
+
+    public function addCorrectionJournalLine(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        if (count($this->correctionJournalLines) < 100) {
+            $this->correctionJournalLines[] = ['accountId' => '', 'debit' => '', 'credit' => ''];
+        }
+    }
+
+    public function requestOpeningCorrection(): void
+    {
+        $this->authorizePermission('accounting.maintain-opening-books');
+        if ($this->correctionType === 'supplier_ap') {
+            $this->authorizePermission('accounting.maintain-suppliers');
+        }
+        $details = match ($this->correctionType) {
+            'journal' => ['lines' => $this->correctionJournalLines],
+            'inventory' => ['lines' => $this->correctionInventoryLines, 'counterAccountId' => $this->correctionCounterAccountId],
+            'supplier_ap' => ['lines' => $this->correctionSupplierLines, 'counterAccountId' => $this->correctionCounterAccountId],
+            default => throw ValidationException::withMessages(['correctionType' => 'Select a supported correction type.']),
+        };
+        app(OpeningBalanceCorrectionService::class)->request([
+            'type' => $this->correctionType,
+            'reason' => $this->correctionReason,
+            'details' => $details,
+        ], auth()->user());
+        $this->correctionReason = '';
+        $this->correctionReviewNote = '';
+        session()->flash('opening-message', 'Correction request submitted for independent review. No accounting entries have been posted.');
+    }
+
+    public function approveOpeningCorrection(int $requestId): void
+    {
+        $this->authorizePermission('accounting.approve-opening-books');
+        app(OpeningBalanceCorrectionService::class)->approve($requestId, $this->correctionReviewNote, auth()->user());
+        $this->correctionReviewNote = '';
+        session()->flash('opening-message', 'Opening correction approved. It must be posted separately before affecting reports.');
+    }
+
+    public function rejectOpeningCorrection(int $requestId): void
+    {
+        $this->authorizePermission('accounting.approve-opening-books');
+        app(OpeningBalanceCorrectionService::class)->reject($requestId, $this->correctionReviewNote, auth()->user());
+        $this->correctionReviewNote = '';
+        session()->flash('opening-message', 'Opening correction request rejected and retained in the audit history.');
+    }
+
+    public function postOpeningCorrection(int $requestId): void
+    {
+        $this->authorizePermission('accounting.approve-opening-books');
+        app(OpeningBalanceCorrectionService::class)->post($requestId, auth()->user());
+        session()->flash('opening-message', 'Opening correction posted as a linked adjusting journal. The original opening journal remains unchanged.');
     }
 
     public function importInventoryCsv(): void
@@ -465,6 +541,10 @@ class OpeningBooks extends Component
         $inventoryLines = $journal?->lines->filter(fn ($line) => $line->account?->classification === 'inventory') ?? collect();
         $inventoryBookCents = (int) $inventoryLines->sum('debit_cents') - (int) $inventoryLines->sum('credit_cents');
         $inventoryValuation = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines.inventory', 'approver')->first();
+        $correctionRequests = OpeningBalanceCorrection::query()->with(['preparer', 'reviewer', 'poster', 'journal'])
+            ->where('opening_journal_id', $journal?->id ?? 0)->orderByDesc('id')->get();
+        $postedOpeningInvoices = SupplierOpeningInvoice::query()->where('status', 'posted')->where('opening_journal_id', $journal?->id ?? 0)
+            ->with('supplier')->orderBy('id')->get();
         $inventoryScheduleCents = $inventoryValuation ? (int) $inventoryValuation->lines->sum('carrying_value_cents') : null;
         $preflight = [
             'ap_book_cents' => $apBookCents,
@@ -493,6 +573,10 @@ class OpeningBooks extends Component
             'previewCreditCents' => (int) $previewLines->sum('credit_cents'),
             'duplicatePostingClear' => $openingJournalCount <= 1,
             'preflight' => $preflight,
+            'correctionRequests' => $correctionRequests,
+            'postedOpeningInvoices' => $postedOpeningInvoices,
+            'inventoryScheduleCorrections' => $this->postedCorrectionDeltas('inventory', 'inventory_id'),
+            'supplierScheduleCorrections' => $this->postedCorrectionDeltas('supplier_ap', 'supplier_opening_invoice_id'),
         ])->layout('layouts.app', ['title' => 'Opening Books & Cutover']);
     }
 
@@ -560,5 +644,25 @@ class OpeningBooks extends Component
                 'description' => $invoice->description,
                 'terms' => $invoice->terms ?? '',
             ])->all();
+    }
+
+    private function loadSupplierCorrectionLines(): void
+    {
+        $corrections = $this->postedCorrectionDeltas('supplier_ap', 'supplier_opening_invoice_id');
+        $this->correctionSupplierLines = SupplierOpeningInvoice::query()
+            ->where('status', 'posted')->whereNotNull('opening_journal_id')->with('supplier')->orderBy('id')->get()
+            ->map(fn (SupplierOpeningInvoice $invoice) => [
+                'invoiceId' => (string) $invoice->id,
+                'invoiceNumber' => $invoice->invoice_number,
+                'supplierName' => $invoice->supplier?->name ?? $invoice->supplier_name_snapshot,
+                'amount' => number_format(((int) $invoice->amount_cents + (int) ($corrections[$invoice->id] ?? 0)) / 100, 2, '.', ''),
+            ])->all();
+    }
+
+    private function postedCorrectionDeltas(string $type, string $key): array
+    {
+        return OpeningBalanceCorrection::query()->where('correction_type', $type)->where('status', 'posted')->get()
+            ->flatMap(fn (OpeningBalanceCorrection $request) => $request->details['lines'] ?? [])
+            ->groupBy($key)->map(fn ($lines) => (int) $lines->sum('delta_cents'))->all();
     }
 }

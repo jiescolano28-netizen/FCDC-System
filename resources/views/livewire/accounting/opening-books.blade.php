@@ -125,7 +125,7 @@
                     @if ($inventoryValuation && ! $editingInventoryValuation)
                         <p>Saved schedule {{ $inventoryValuation->status }} for {{ $inventoryValuation->cutover_date->format('F j, Y') }}. Evidence: {{ $inventoryValuation->evidence_reference }}.</p>
                         <div class="cutover-table-wrap"><table><thead><tr><th>Item</th><th>Quantity</th><th>Value (PHP)</th></tr></thead><tbody>
-                            @foreach ($inventoryValuation->lines as $line)<tr><td>{{ $line->inventory->code }} — {{ $line->inventory->name }}</td><td>{{ $line->quantity }}</td><td>{{ number_format($line->carrying_value_cents / 100, 2) }}</td></tr>@endforeach
+                            @foreach ($inventoryValuation->lines as $line)<tr><td>{{ $line->inventory->code }} — {{ $line->inventory->name }}</td><td>{{ $line->quantity }}</td><td>{{ number_format(($line->carrying_value_cents + ($inventoryScheduleCorrections[$line->inventory_id] ?? 0)) / 100, 2) }}</td></tr>@endforeach
                         </tbody></table></div>
                         @if ($journal?->status !== 'posted') @can('accounting.maintain-opening-books')<button type="button" class="button-secondary" wire:click="unlockInventoryValuation">Edit / Unlock inventory schedule</button>@endcan @endif
                     @else
@@ -148,6 +148,11 @@
                     <h3>Supplier / Accounts Payable balances</h3>
                     <p>{{ $readiness['supplier'] }}</p>
                     <p>Opening supplier invoice totals must match the Accounts Payable credit balance exactly.</p>
+                    @if ($postedOpeningInvoices->isNotEmpty())
+                        <div class="cutover-table-wrap"><table><thead><tr><th>Posted opening invoice</th><th>Supplier</th><th>Scheduled amount (PHP)</th></tr></thead><tbody>
+                            @foreach ($postedOpeningInvoices as $invoice)<tr><td>{{ $invoice->invoice_number }}</td><td>{{ $invoice->supplier?->name ?? $invoice->supplier_name_snapshot }}</td><td>{{ number_format(($invoice->amount_cents + ($supplierScheduleCorrections[$invoice->id] ?? 0)) / 100, 2) }}</td></tr>@endforeach
+                        </tbody></table></div>
+                    @endif
                     @if ($supplierOpeningInvoices !== [])
                         @if (! $editingSupplierSchedule)
                             <div class="cutover-table-wrap"><table><thead><tr><th>Supplier / Invoice</th><th>Recognition date</th><th>Due date</th><th>Amount (PHP)</th><th>Description</th><th>Terms</th></tr></thead><tbody>
@@ -199,6 +204,101 @@
                 </section>
             </div>
 
+            <section class="cutover-subpanel" aria-labelledby="opening-corrections-heading">
+                <h3 id="opening-corrections-heading">Posted opening balance corrections</h3>
+                <p>Request a dated adjustment to the posted Opening Journal, Inventory Valuation, or Supplier/AP schedule. Requests do not change posted balances until independently reviewed, approved, and posted. Pre-cutover YTD summaries are not included.</p>
+                @if ($journal?->status === 'posted')
+                    @can('accounting.maintain-opening-books')
+                        <form wire:submit="requestOpeningCorrection">
+                            <label>Correction area
+                                <select wire:model.live="correctionType">
+                                    <option value="journal">Opening Journal balance</option>
+                                    <option value="inventory">Opening Inventory Valuation</option>
+                                    @can('accounting.maintain-suppliers')<option value="supplier_ap">Supplier / Accounts Payable schedule</option>@endcan
+                                </select>
+                            </label>
+                            <label>Correction reason<textarea wire:model="correctionReason" maxlength="4000" required></textarea></label>
+                            @if ($correctionType === 'journal')
+                                <p>Enter balanced debit/credit adjustments. Inventory and Accounts Payable control accounts must be corrected through their schedules below.</p>
+                                @foreach ($correctionJournalLines as $index => $line)
+                                    <div class="cutover-entry-row" wire:key="correction-journal-line-{{ $index }}">
+                                        <label>Approved account<select wire:model="correctionJournalLines.{{ $index }}.accountId" required><option value="">Select account</option>@foreach ($accounts as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                                        <label>Debit PHP<input inputmode="decimal" wire:model="correctionJournalLines.{{ $index }}.debit"></label>
+                                        <label>Credit PHP<input inputmode="decimal" wire:model="correctionJournalLines.{{ $index }}.credit"></label>
+                                    </div>
+                                @endforeach
+                                <button type="button" class="button-secondary" wire:click="addCorrectionJournalLine">Add adjustment line</button>
+                            @elseif ($correctionType === 'inventory')
+                                <p>Enter corrected carrying values for the approved opening items. Quantities and the original approved schedule remain unchanged.</p>
+                                @forelse ($correctionInventoryLines as $index => $line)
+                                    @php($item = $inventoryItems->firstWhere('id', (int) $line['inventoryId']))
+                                    <div class="cutover-entry-row" wire:key="correction-inventory-{{ $line['inventoryId'] }}"><strong>{{ $item?->code }} — {{ $item?->name }}</strong><label>Corrected carrying value PHP<input inputmode="decimal" wire:model="correctionInventoryLines.{{ $index }}.value" required></label></div>
+                                @empty
+                                    <p role="status">An approved opening inventory valuation is required before requesting this correction.</p>
+                                @endforelse
+                                <label>Approved counterpart account<select wire:model="correctionCounterAccountId" required><option value="">Select non-control account</option>@foreach ($accounts->whereNotIn('classification', ['inventory', 'accounts_payable']) as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @else
+                                <p>Enter corrected amounts for posted opening supplier invoices. Posted invoice records are never edited.</p>
+                                @forelse ($correctionSupplierLines as $index => $line)
+                                    <div class="cutover-entry-row" wire:key="correction-supplier-{{ $line['invoiceId'] }}"><strong>{{ $line['supplierName'] }} — {{ $line['invoiceNumber'] }}</strong><label>Corrected invoice amount PHP<input inputmode="decimal" wire:model="correctionSupplierLines.{{ $index }}.amount" required></label></div>
+                                @empty
+                                    <p role="status">No posted opening supplier invoices are available for correction.</p>
+                                @endforelse
+                                <label>Approved counterpart account<select wire:model="correctionCounterAccountId" required><option value="">Select non-control account</option>@foreach ($accounts->whereNotIn('classification', ['inventory', 'accounts_payable']) as $account)<option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>@endforeach</select></label>
+                            @endif
+                            <button type="submit" wire:loading.attr="disabled">Submit correction request</button>
+                        </form>
+                    @endcan
+                    @if ($correctionRequests->isNotEmpty())
+                        <div class="cutover-table-wrap"><table><thead><tr><th>Requested</th><th>Area / reason</th><th>Status</th><th>Requester / review</th><th>Decision / posting</th></tr></thead><tbody>
+                            @foreach ($correctionRequests as $request)
+                                <tr wire:key="opening-correction-{{ $request->id }}">
+                                    <td>{{ $request->created_at->format('Y-m-d H:i') }}</td>
+                                    <td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br>{{ $request->reason }}
+                                        <details><summary>Review affected balances</summary><ul>
+                                            @if ($request->correction_type === 'journal')
+                                                @foreach ($request->details['lines'] as $line)
+                                                    @php($account = $accounts->firstWhere('id', (int) $line['accounting_account_id']))
+                                                    <li>{{ $account?->code }} — {{ $account?->name }}: debit ₱{{ number_format($line['debit_cents'] / 100, 2) }}, credit ₱{{ number_format($line['credit_cents'] / 100, 2) }}</li>
+                                                @endforeach
+                                            @elseif ($request->correction_type === 'inventory')
+                                                @foreach ($request->details['lines'] as $line)
+                                                    @php($item = $inventoryItems->firstWhere('id', (int) $line['inventory_id']))
+                                                    <li>{{ $item?->code }} — {{ $item?->name }}: ₱{{ number_format($line['old_value_cents'] / 100, 2) }} → ₱{{ number_format($line['new_value_cents'] / 100, 2) }}</li>
+                                                @endforeach
+                                            @else
+                                                @foreach ($request->details['lines'] as $line)
+                                                    <li>{{ $line['invoice_number'] }}: ₱{{ number_format($line['old_amount_cents'] / 100, 2) }} → ₱{{ number_format($line['new_amount_cents'] / 100, 2) }}</li>
+                                                @endforeach
+                                            @endif
+                                        </ul></details>
+                                    </td>
+                                    <td>{{ ucfirst(str_replace('_', ' ', $request->status)) }}</td>
+                                    <td>{{ $request->preparer?->username ?? 'Unavailable' }}@if ($request->reviewer) / {{ $request->reviewer->username }}@endif</td>
+                                    <td>
+                                        @if ($request->status === 'pending_review')
+                                            @can('accounting.approve-opening-books')
+                                                <label>Review note<textarea wire:model="correctionReviewNote" maxlength="4000"></textarea></label>
+                                                <button type="button" wire:click="approveOpeningCorrection({{ $request->id }})">Approve</button>
+                                                <button type="button" class="button-secondary" wire:click="rejectOpeningCorrection({{ $request->id }})">Reject</button>
+                                            @endcan
+                                        @elseif ($request->status === 'approved')
+                                            @can('accounting.approve-opening-books')<button type="button" wire:click="postOpeningCorrection({{ $request->id }})">Post approved correction</button>@endcan
+                                        @elseif ($request->status === 'posted')
+                                            {{ $request->journal?->reference ?? 'Journal linked' }} · {{ $request->posted_at?->format('Y-m-d H:i') }}
+                                        @else
+                                            {{ $request->review_note }}
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody></table></div>
+                    @endif
+                @else
+                    <p role="status">Post an Opening Balance / Cutover journal before requesting a correction.</p>
+                @endif
+            </section>
+
             <section class="cutover-subpanel cutover-checklist">
                 <h3>Validation checklist</h3>
                 <ul>
@@ -226,6 +326,20 @@
                     <section class="cutover-subpanel"><h3>Posted opening inventory schedule</h3><div class="cutover-table-wrap"><table><thead><tr><th>Item</th><th>Quantity</th><th>Unit cost (PHP)</th><th>Value (PHP)</th></tr></thead><tbody>@foreach ($inventoryValuation->lines as $line)<tr><td>{{ $line->inventory->code }} — {{ $line->inventory->name }}</td><td>{{ $line->quantity }}</td><td>{{ $line->quantity > 0 ? number_format(($line->carrying_value_cents / 100) / (float) $line->quantity, 4) : '0.0000' }}</td><td>{{ number_format($line->carrying_value_cents / 100, 2) }}</td></tr>@endforeach</tbody></table></div></section>
                 @endif
                 @if ($ytdSummary?->status === 'approved')<p>Approved through {{ $ytdSummary->through_date->format('F j, Y') }} — pre-cutover YTD summary.</p>@endif
+                <section class="cutover-subpanel" aria-labelledby="opening-correction-step-heading">
+                    <h3 id="opening-correction-step-heading">Opening Balance Correction</h3>
+                    <p>Request a controlled correction to posted opening balances. Posted records are never edited; requests are reviewed and posted as separate linked corrections.</p>
+                    @can('accounting.maintain-opening-books')<button type="button" wire:click="goToStep(3)">Request Correction</button>@endcan
+                    @if ($correctionRequests->isEmpty())
+                        <p>No correction requests yet.</p>
+                    @else
+                        <div class="cutover-table-wrap"><table><thead><tr><th>Requested</th><th>Correction</th><th>Status</th><th>Requester</th><th>Review / posting</th></tr></thead><tbody>
+                            @foreach ($correctionRequests as $request)
+                                <tr wire:key="opening-correction-step-{{ $request->id }}"><td>{{ $request->created_at->format('Y-m-d H:i') }}</td><td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br>{{ $request->reason }}</td><td>{{ ucfirst(str_replace('_', ' ', $request->status)) }}</td><td>{{ $request->preparer?->username ?? 'Unavailable' }}</td><td>@if ($request->status === 'posted'){{ $request->journal?->reference ?? 'Journal linked' }} · {{ $request->posted_at?->format('Y-m-d H:i') }}@elseif ($request->reviewer){{ $request->reviewer->username }}@else Pending review @endif</td></tr>
+                            @endforeach
+                        </tbody></table></div>
+                    @endif
+                </section>
             @else
                 <div class="cutover-approval-grid">
                     <section class="cutover-subpanel"><h3>Opening Balance Summary</h3><dl><dt>Cutover date</dt><dd>{{ $cutoverDate }}</dd><dt>Accounts in draft</dt><dd>{{ count($lines) }}</dd><dt>Total debit</dt><dd>₱{{ $debitTotalCents === null ? '—' : number_format($debitTotalCents / 100, 2) }}</dd><dt>Total credit</dt><dd>₱{{ $creditTotalCents === null ? '—' : number_format($creditTotalCents / 100, 2) }}</dd><dt>Inventory items</dt><dd>{{ $scan['inventory_items'] }}</dd><dt>Suppliers found</dt><dd>{{ $scan['suppliers'] }}</dd><dt>Draft status</dt><dd>{{ $journal?->status ?? 'Not saved' }}</dd></dl></section>

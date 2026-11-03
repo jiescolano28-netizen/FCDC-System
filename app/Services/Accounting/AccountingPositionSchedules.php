@@ -3,6 +3,7 @@
 namespace App\Services\Accounting;
 
 use App\Models\AccountingAccount;
+use App\Models\OpeningBalanceCorrection;
 use App\Models\OpeningInventoryValuation;
 use App\Models\StockMovement;
 use App\Models\SupplierOpeningInvoice;
@@ -19,6 +20,9 @@ class AccountingPositionSchedules
             ->whereDate('recognition_date', '<=', $date)->get();
         $invoiceCents = (int) $openingInvoices->sum(fn ($invoice) => $invoice->reversal_of_id ? -(int) $invoice->amount_cents : (int) $invoice->amount_cents)
             + (int) $purchaseInvoices->sum('gross_amount_cents');
+        $invoiceCents += (int) OpeningBalanceCorrection::query()->where('correction_type', 'supplier_ap')
+            ->where('status', 'posted')->whereDate('posting_date', '<=', $date)->get()
+            ->sum(fn (OpeningBalanceCorrection $correction) => collect($correction->details['lines'] ?? [])->sum('delta_cents'));
         $apAccountIds = AccountingAccount::query()->where('classification', 'accounts_payable')->pluck('id');
         $correctionApCents = (int) DB::table('accounting_journals')
             ->join('accounting_journal_lines', 'accounting_journal_lines.accounting_journal_id', '=', 'accounting_journals.id')

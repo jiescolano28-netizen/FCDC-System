@@ -238,6 +238,7 @@ class JournalEntry extends Component
             'reversal' => 'Correction reversal',
             'replacement' => 'Correction replacement',
             'opening' => 'Opening balances',
+            'opening_balance_correction' => 'Opening balance correction',
             default => ucwords(str_replace('_', ' ', $sourceType)),
         };
     }
@@ -341,6 +342,7 @@ class JournalEntry extends Component
             'reversal' => 'Correction reversal',
             'replacement' => 'Correction replacement',
             'opening' => 'Opening balances',
+            'opening_balance_correction' => 'Opening balance correction',
         ];
     }
 
