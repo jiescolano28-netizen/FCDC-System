@@ -445,6 +445,8 @@
 
 /* Live dashboard improvements */
 .fcdc-dashboard { display: grid; gap: 18px; }
+.fcdc-dashboard .dashboard-heading { margin-bottom: 0; }
+.fcdc-dashboard .dashboard-subtitle { margin-bottom: 0; }
 .fcdc-dashboard-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .fcdc-dashboard .dashboard-stat { min-height: 116px; }
 .fcdc-overview-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(330px, 1fr); align-items: stretch; gap: 16px; }
@@ -1918,6 +1920,19 @@
 
 .profitability-page { max-width: 1440px; margin: 0 auto; }
 .profitability-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
+
+/* Shared page-title typography across every module rendered in the application shell. */
+.app-main h1 {
+    margin: 0;
+    font-family: inherit;
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: -.025em;
+    line-height: 1.2;
+}
+@media (max-width: 520px) {
+    .app-main h1 { font-size: 22px; }
+}
 .profitability-heading { align-items: center; margin-bottom: 16px; }
 .profitability-controls { display: grid; grid-template-columns: repeat(2, minmax(180px, 250px)); gap: 12px; margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--emerald-100); border-radius: 10px; background: #fff; }
 .profitability-controls label > span { display: block; margin-bottom: 6px; color: var(--slate-700); font-size: 12px; font-weight: 600; }

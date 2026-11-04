@@ -63,19 +63,19 @@
                         </button>
                         <div class="nav-dropdown {{ request()->routeIs('inventory.*') ? 'open' : '' }}" id="inventory-menu">
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.overview') ? 'active' : '' }}" href="{{ route('inventory.overview') }}" @if (request()->routeIs('inventory.overview')) aria-current="page" @endif>
-                                <span class="nav-label">Inventory overview</span>
+                                <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-label">Inventory overview</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.management') ? 'active' : '' }}" href="{{ route('inventory.management') }}" @if (request()->routeIs('inventory.management')) aria-current="page" @endif>
-                                <span class="nav-label">Manage inventory</span>
+                                <span class="nav-icon" aria-hidden="true">▧</span><span class="nav-label">Manage inventory</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.batch-categories') ? 'active' : '' }}" href="{{ route('inventory.batch-categories') }}" @if (request()->routeIs('inventory.batch-categories')) aria-current="page" @endif>
-                                <span class="nav-label">Batch categories</span>
+                                <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Batch categories</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.reworking-cost-records') ? 'active' : '' }}" href="{{ route('inventory.reworking-cost-records') }}" @if (request()->routeIs('inventory.reworking-cost-records')) aria-current="page" @endif>
-                                <span class="nav-label">Reworking Cost Record</span>
+                                <span class="nav-icon" aria-hidden="true">↻</span><span class="nav-label">Reworking Cost Record</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('inventory.operating-cost-records') ? 'active' : '' }}" href="{{ route('inventory.operating-cost-records') }}" @if (request()->routeIs('inventory.operating-cost-records')) aria-current="page" @endif>
-                                <span class="nav-label">Operating Cost Record</span>
+                                <span class="nav-icon" aria-hidden="true">₱</span><span class="nav-label">Operating Cost Record</span>
                             </a>
                         </div>
                     </div>
@@ -88,16 +88,16 @@
                         </button>
                         <div class="nav-dropdown {{ $taxNavigationActive ? 'open' : '' }}" id="tax-menu">
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-records') ? 'active' : '' }}" href="{{ route('tax.vat-records') }}" @if (request()->routeIs('tax.vat-records')) aria-current="page" @endif>
-                                <span class="nav-label">VAT Records</span>
+                                <span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">VAT Records</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-summary') ? 'active' : '' }}" href="{{ route('tax.vat-summary') }}" @if (request()->routeIs('tax.vat-summary')) aria-current="page" @endif>
-                                <span class="nav-label">VAT Summary</span>
+                                <span class="nav-icon" aria-hidden="true">▥</span><span class="nav-label">VAT Summary</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('tax.report') ? 'active' : '' }}" href="{{ route('tax.report') }}" @if (request()->routeIs('tax.report')) aria-current="page" @endif>
-                                <span class="nav-label">VAT Report</span>
+                                <span class="nav-icon" aria-hidden="true">☰</span><span class="nav-label">VAT Report</span>
                             </a>
                             <a class="nav-item nav-child {{ request()->routeIs('tax.vat-return-preparation') ? 'active' : '' }}" href="{{ route('tax.vat-return-preparation') }}" @if (request()->routeIs('tax.vat-return-preparation')) aria-current="page" @endif>
-                                <span class="nav-label">VAT Return Preparation</span>
+                                <span class="nav-icon" aria-hidden="true">↗</span><span class="nav-label">VAT Return Preparation</span>
                             </a>
                         </div>
                     </div>
@@ -138,11 +138,6 @@
                             <span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span><span class="nav-arrow" aria-hidden="true">&#9662;</span>
                         </button>
                         <div class="nav-dropdown {{ $settingsNavigationActive ? 'open' : '' }}" id="settings-menu">
-                            @can('settings.view')
-                                <a class="nav-item nav-child {{ request()->routeIs('settings') ? 'active' : '' }}" href="{{ route('settings') }}" @if (request()->routeIs('settings')) aria-current="page" @endif>
-                                    <span class="nav-label">Company settings</span>
-                                </a>
-                            @endcan
                             @can('employees.view')
                                 <a class="nav-item nav-child {{ request()->routeIs('employees.*') ? 'active' : '' }}" href="{{ route('employees.index') }}" @if (request()->routeIs('employees.*')) aria-current="page" @endif>
                                     <span class="nav-icon" aria-hidden="true">♙</span><span class="nav-label">Employees</span>
