@@ -542,7 +542,17 @@ class OpeningBooks extends Component
         $inventoryBookCents = (int) $inventoryLines->sum('debit_cents') - (int) $inventoryLines->sum('credit_cents');
         $inventoryValuation = OpeningInventoryValuation::where('book_key', 'FCDC')->with('lines.inventory', 'approver')->first();
         $correctionRequests = OpeningBalanceCorrection::query()->with(['preparer', 'reviewer', 'poster', 'journal'])
-            ->where('opening_journal_id', $journal?->id ?? 0)->orderByDesc('id')->get();
+            ->orderByDesc('id')->get()
+            ->map(function (OpeningBalanceCorrection $request): OpeningBalanceCorrection {
+                $request->setAttribute('request_amount_cents', match ($request->correction_type) {
+                    'journal' => (int) collect($request->details['lines'] ?? [])->sum(fn (array $line) => max((int) ($line['debit_cents'] ?? 0), (int) ($line['credit_cents'] ?? 0))),
+                    'inventory' => (int) collect($request->details['lines'] ?? [])->sum('delta_cents'),
+                    'supplier_ap' => (int) collect($request->details['lines'] ?? [])->sum('delta_cents'),
+                    default => 0,
+                });
+
+                return $request;
+            });
         $postedOpeningInvoices = SupplierOpeningInvoice::query()->where('status', 'posted')->where('opening_journal_id', $journal?->id ?? 0)
             ->with('supplier')->orderBy('id')->get();
         $inventoryScheduleCents = $inventoryValuation ? (int) $inventoryValuation->lines->sum('carrying_value_cents') : null;

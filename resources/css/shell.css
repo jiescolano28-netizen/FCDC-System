@@ -2028,6 +2028,7 @@
 .correction-status.is-approved { color: #14532d; background: #dcf2d8; }
 .correction-status.is-rejected { color: #9f2525; background: #fee2e2; }
 .correction-status.is-posted { color: #14532d; background: #dcf2d8; }
+.correction-status.is-cancelled, .correction-status.is-canceled { color: #4b5563; background: #e5e7eb; }
 .correction-summary > div { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid #e7eee8; font-size: 12px; }
 .correction-summary .correction-safe-note { display: block; margin-top: 12px; padding: 11px; border: 0; border-radius: 8px; color: #14532d; background: #eef7e8; font-weight: 650; }
 @media (max-width: 760px) { .correction-layout { grid-template-columns: 1fr; } .correction-workflow { align-items: stretch; flex-wrap: wrap; } }

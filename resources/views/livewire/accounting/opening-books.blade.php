@@ -205,7 +205,7 @@
             </div>
 
             <section class="cutover-subpanel" aria-labelledby="opening-corrections-heading">
-                <h3 id="opening-corrections-heading">Posted opening balance corrections</h3>
+                <h3 id="opening-corrections-heading">Opening balance correction history</h3>
                 <p>Request a dated adjustment to the posted Opening Journal, Inventory Valuation, or Supplier/AP schedule. Requests do not change posted balances until independently reviewed, approved, and posted. Pre-cutover YTD summaries are not included.</p>
                 @if ($journal?->status === 'posted')
                     @can('accounting.maintain-opening-books')
@@ -250,7 +250,7 @@
                         </form>
                     @endcan
                     @if ($correctionRequests->isNotEmpty())
-                        <div class="cutover-table-wrap"><table><thead><tr><th>Requested</th><th>Area / reason</th><th>Status</th><th>Requester / review</th><th>Decision / posting</th></tr></thead><tbody>
+                        <div class="cutover-table-wrap"><table><thead><tr><th>Requested</th><th>Area / reason</th><th>Amount (PHP)</th><th>Status</th><th>Users</th><th>Review / posting dates</th></tr></thead><tbody>
                             @foreach ($correctionRequests as $request)
                                 <tr wire:key="opening-correction-{{ $request->id }}">
                                     <td>{{ $request->created_at->format('Y-m-d H:i') }}</td>
@@ -273,9 +273,11 @@
                                             @endif
                                         </ul></details>
                                     </td>
-                                    <td>{{ ucfirst(str_replace('_', ' ', $request->status)) }}</td>
-                                    <td>{{ $request->preparer?->username ?? 'Unavailable' }}@if ($request->reviewer) / {{ $request->reviewer->username }}@endif</td>
+                                    <td>{{ number_format($request->request_amount_cents / 100, 2) }}</td>
+                                    <td><span class="correction-status is-{{ $request->status }}">{{ match ($request->status) { 'posted' => 'Posted', 'rejected' => 'Rejected', 'cancelled', 'canceled' => 'Cancelled', 'approved' => 'Approved · awaiting post', 'pending_review' => 'Pending review', default => ucfirst(str_replace('_', ' ', $request->status)) } }}</span></td>
+                                    <td>Requested by {{ $request->preparer?->username ?? 'Unavailable' }}<br>Reviewed by {{ $request->reviewer?->username ?? '—' }}<br>Posted by {{ $request->poster?->username ?? '—' }}</td>
                                     <td>
+                                        Requested {{ $request->created_at?->format('Y-m-d H:i') }}<br>Reviewed {{ $request->reviewed_at?->format('Y-m-d H:i') ?? '—' }}<br>Posted {{ $request->posted_at?->format('Y-m-d H:i') ?? '—' }}
                                         @if ($request->status === 'pending_review')
                                             @can('accounting.approve-opening-books')
                                                 <label>Review note<textarea wire:model="correctionReviewNote" maxlength="4000"></textarea></label>
@@ -285,9 +287,9 @@
                                         @elseif ($request->status === 'approved')
                                             @can('accounting.approve-opening-books')<button type="button" wire:click="postOpeningCorrection({{ $request->id }})">Post approved correction</button>@endcan
                                         @elseif ($request->status === 'posted')
-                                            {{ $request->journal?->reference ?? 'Journal linked' }} · {{ $request->posted_at?->format('Y-m-d H:i') }}
+                                            <br>{{ $request->journal?->reference ?? 'Journal linked' }}
                                         @else
-                                            {{ $request->review_note }}
+                                            <br>{{ $request->review_note }}
                                         @endif
                                     </td>
                                 </tr>
@@ -329,17 +331,17 @@
                 <section class="cutover-subpanel" aria-labelledby="opening-correction-step-heading">
                     <h3 id="opening-correction-step-heading">Opening Balance Correction</h3>
                     <p>Request a controlled correction to posted opening balances. Posted records are never edited; requests are reviewed and posted as separate linked corrections.</p>
-                    <nav class="correction-tabs" aria-label="Opening balance views"><button type="button" class="is-active">Correction &amp; Reconciliation</button><button type="button" wire:click="goToStep(3)">Cutover Details</button><a href="#opening-correction-history">Correction History</a></nav>
+                    <nav class="correction-tabs" aria-label="Opening balance views"><button type="button" class="is-active">Correction &amp; Reconciliation</button><button type="button" wire:click="goToStep(3)">Cutover Details</button></nav>
                     <div class="correction-workflow" aria-label="Correction workflow"><span>Request Correction <small>Preparer</small></span><b aria-hidden="true">→</b><span>Review <small>Reviewer</small></span><b aria-hidden="true">→</b><span>Approve <small>Authorized</small></span><b aria-hidden="true">→</b><span>Post Adjustment <small>Linked journal</small></span><b aria-hidden="true">→</b><span>Update balances <small>Ledger &amp; schedules</small></span></div>
                     <div class="correction-layout">
                     <div class="correction-requests">
-                    <div class="correction-section-heading"><h4>Correction Requests</h4>@can('accounting.maintain-opening-books')<button type="button" wire:click="goToStep(3)">＋ Request Correction</button>@endcan</div>
+                    <div class="correction-section-heading"><h4>Correction History · all requests</h4>@can('accounting.maintain-opening-books')<button type="button" wire:click="goToStep(3)">＋ Request Correction</button>@endcan</div>
                     @if ($correctionRequests->isEmpty())
                         <p>No correction requests yet.</p>
                     @else
-                        <div class="cutover-table-wrap" id="opening-correction-history"><table><thead><tr><th>Request</th><th>Type / reason</th><th>Requested by</th><th>Date requested</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+                        <div class="cutover-table-wrap" id="opening-correction-history"><table><thead><tr><th>Request</th><th>Type / reason</th><th>Amount (PHP)</th><th>Dates</th><th>Users</th><th>Final status</th><th>Actions</th></tr></thead><tbody>
                             @foreach ($correctionRequests as $request)
-                                <tr wire:key="opening-correction-step-{{ $request->id }}"><td>#{{ $request->id }}</td><td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br><small>{{ $request->reason }}</small></td><td>{{ $request->preparer?->username ?? 'Unavailable' }}</td><td>{{ $request->created_at->format('Y-m-d') }}</td><td><span class="correction-status is-{{ $request->status }}">{{ ucfirst(str_replace('_', ' ', $request->status)) }}</span></td><td><details><summary>View / actions</summary><p>{{ $request->reviewer?->username ?? 'Awaiting reviewer' }}@if ($request->journal) · {{ $request->journal->reference }}@endif</p>@if ($request->status === 'pending_review') @can('accounting.approve-opening-books')<label>Review note<textarea wire:model="correctionReviewNote" maxlength="4000"></textarea></label><button type="button" wire:click="approveOpeningCorrection({{ $request->id }})">Approve</button><button type="button" class="button-secondary" wire:click="rejectOpeningCorrection({{ $request->id }})">Reject</button>@endcan @elseif ($request->status === 'approved') @can('accounting.approve-opening-books')<button type="button" wire:click="postOpeningCorrection({{ $request->id }})">Post approved correction</button>@endcan @else {{ $request->review_note ?? ($request->journal?->reference ?? 'No further action') }} @endif</details></td></tr>
+                                <tr wire:key="opening-correction-step-{{ $request->id }}"><td>#{{ $request->id }}</td><td>{{ str_replace('_', ' ', ucfirst($request->correction_type)) }}<br><small>{{ $request->reason }}</small></td><td>{{ number_format($request->request_amount_cents / 100, 2) }}</td><td>Requested {{ $request->created_at?->format('Y-m-d H:i') }}<br>Reviewed {{ $request->reviewed_at?->format('Y-m-d H:i') ?? '—' }}<br>Posted {{ $request->posted_at?->format('Y-m-d H:i') ?? '—' }}</td><td>Requested by {{ $request->preparer?->username ?? 'Unavailable' }}<br>Reviewed by {{ $request->reviewer?->username ?? '—' }}<br>Posted by {{ $request->poster?->username ?? '—' }}</td><td><span class="correction-status is-{{ $request->status }}">{{ match ($request->status) { 'posted' => 'Posted', 'rejected' => 'Rejected', 'cancelled', 'canceled' => 'Cancelled', 'approved' => 'Approved · awaiting post', 'pending_review' => 'Pending review', default => ucfirst(str_replace('_', ' ', $request->status)) } }}</span></td><td><details><summary>View / actions</summary><p>{{ $request->reviewer?->username ?? 'Awaiting reviewer' }}@if ($request->journal) · {{ $request->journal->reference }}@endif</p>@if ($request->status === 'pending_review') @can('accounting.approve-opening-books')<label>Review note<textarea wire:model="correctionReviewNote" maxlength="4000"></textarea></label><button type="button" wire:click="approveOpeningCorrection({{ $request->id }})">Approve</button><button type="button" class="button-secondary" wire:click="rejectOpeningCorrection({{ $request->id }})">Reject</button>@endcan @elseif ($request->status === 'approved') @can('accounting.approve-opening-books')<button type="button" wire:click="postOpeningCorrection({{ $request->id }})">Post approved correction</button>@endcan @else {{ $request->review_note ?? ($request->journal?->reference ?? 'No further action') }} @endif</details></td></tr>
                             @endforeach
                         </tbody></table></div>
                     @endif
