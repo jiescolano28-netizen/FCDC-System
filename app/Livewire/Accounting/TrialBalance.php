@@ -33,7 +33,7 @@ class TrialBalance extends Component
             ->where('status', 'posted')->value('accounting_date');
         $cutoverDate = $cutover ? CarbonImmutable::parse($cutover, 'Asia/Manila')->toDateString() : null;
         $readiness = app(OpeningBooksService::class)->readiness();
-        $dateError = $this->dateRangeError();
+        $dateError = $this->dateRangeError($cutoverDate);
         $openingWarning = ! $cutoverDate || ! ($readiness['production_activated'] ?? false)
             ? 'Opening balances or cutover are incomplete. This report shows posted journal activity only; supplier and inventory reconciliation may still be pending.'
             : null;
@@ -59,6 +59,10 @@ class TrialBalance extends Component
                 ->join('accounting_journals', 'accounting_journals.id', '=', 'accounting_journal_lines.accounting_journal_id')
                 ->where('accounting_journals.book_key', 'FCDC')
                 ->where('accounting_journals.status', 'posted')
+                // The approved opening journal is the as-of cutover balance. Earlier
+                // source postings are already represented in that balance and must
+                // not be added to it a second time.
+                ->when($cutoverDate !== null, fn (Builder $query) => $query->whereDate('accounting_journals.accounting_date', '>=', $cutoverDate))
                 ->whereDate('accounting_journals.accounting_date', '<=', $this->toDate)
                 ->select(
                     'accounting_journal_lines.*',
@@ -179,7 +183,7 @@ class TrialBalance extends Component
         ])->layout('layouts.app', ['title' => 'Trial Balance']);
     }
 
-    private function dateRangeError(): ?string
+    private function dateRangeError(?string $cutoverDate = null): ?string
     {
         if (! CarbonImmutable::hasFormat($this->fromDate, 'Y-m-d') || ! CarbonImmutable::hasFormat($this->toDate, 'Y-m-d')) {
             return 'Choose a valid start and end date.';
@@ -188,6 +192,9 @@ class TrialBalance extends Component
         $to = CarbonImmutable::createFromFormat('!Y-m-d', $this->toDate, 'Asia/Manila');
         if (! $from || ! $to || $from->format('Y-m-d') !== $this->fromDate || $to->format('Y-m-d') !== $this->toDate || $from->gt($to)) {
             return 'Choose a valid inclusive date range.';
+        }
+        if ($cutoverDate !== null && $from->toDateString() < $cutoverDate) {
+            return 'Choose a start date on or after the approved accounting cutover.';
         }
         return null;
     }
