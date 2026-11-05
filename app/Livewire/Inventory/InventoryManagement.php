@@ -118,6 +118,16 @@ class InventoryManagement extends Component
 
         if ($id !== null) {
             $this->edit($id);
+        } elseif ($this->valuedPostingEnabled()) {
+            $this->qty = '0';
+        }
+        $firstReceiptQuantity = request()->query('receive_qty');
+        if ($id !== null && $this->valuedPostingEnabled()
+            && is_scalar($firstReceiptQuantity)
+            && is_numeric($firstReceiptQuantity)
+            && (float) $firstReceiptQuantity > 0
+            && (float) $firstReceiptQuantity === (float) (int) $firstReceiptQuantity) {
+            $this->stockQuantity = (string) (int) $firstReceiptQuantity;
         }
     }
 
@@ -155,12 +165,14 @@ class InventoryManagement extends Component
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [
-            'qty.multiple_of' => 'The opening quantity must be a whole number.',
+            'qty.multiple_of' => $this->valuedPostingEnabled()
+                ? 'The first receipt quantity must be a whole number.'
+                : 'The opening quantity must be a whole number.',
             'reorderLevel.multiple_of' => 'The low stock level must be a whole number.',
         ]);
-        if ($this->valuedPostingEnabled() && ! $this->editingId && (float) $validated['qty'] !== 0.0) {
-            throw ValidationException::withMessages(['qty' => 'New items after cutover must start at zero and receive stock through valued movements.']);
-        }
+        $wasCreating = $this->editingId === null;
+        $firstReceiptQuantity = (float) ($validated['qty'] ?? 0);
+        $valuedPostingEnabled = $this->valuedPostingEnabled();
         $item = $this->editingId ? Inventory::findOrFail($this->editingId) : new Inventory;
         $item->fill([
             'name' => $validated['name'],
@@ -174,10 +186,13 @@ class InventoryManagement extends Component
             'reorder_level' => $validated['reorderLevel'] === '' ? 10 : $validated['reorderLevel'],
             'description' => $validated['description'] ?? null,
         ]);
+        $item->default_receipt_unit_value = $this->valuedPostingEnabled()
+            ? $validated['unitCost']
+            : null;
         $item->inventory_batch_category_id = $validated['batchCategoryId'] ?: null;
 
         if (! $this->editingId) {
-            $item->qty = $validated['qty'];
+            $item->qty = $this->valuedPostingEnabled() ? '0' : $validated['qty'];
         }
 
         if ($this->image) {
@@ -188,6 +203,15 @@ class InventoryManagement extends Component
         $this->resetForm();
         $this->dispatch('inventory-saved');
         if ($this->formPage) {
+            if ($wasCreating && $valuedPostingEnabled && $firstReceiptQuantity > 0
+                && auth()->user()?->can('inventory.movements.record')) {
+                $this->redirectRoute('inventory.management.edit', [
+                    'id' => $item->id,
+                    'receive_qty' => (int) $firstReceiptQuantity,
+                ]);
+
+                return;
+            }
             $this->redirectRoute('inventory.management');
         }
 
@@ -208,6 +232,10 @@ class InventoryManagement extends Component
         $this->qty = '';
         $this->unit = $item->unit;
         $this->unitCost = $item->unit_cost;
+        if ($this->valuedPostingEnabled() && (float) $item->qty === 0.0 && $item->default_receipt_unit_value !== null) {
+            $this->unitCost = $item->default_receipt_unit_value;
+            $this->stockUnitValue = $item->default_receipt_unit_value;
+        }
         $this->sellingPrice = $item->selling_price ?? '';
         $this->reorderLevel = (string) (int) round((float) $item->reorder_level);
         $this->description = $item->description ?? '';

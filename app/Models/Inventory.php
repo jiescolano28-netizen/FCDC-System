@@ -35,6 +35,7 @@ class Inventory extends Model
         'qty',
         'unit',
         'unit_cost',
+        'default_receipt_unit_value',
         'selling_price',
         'tax_classification',
         'reorder_level',
@@ -46,6 +47,7 @@ class Inventory extends Model
     protected $casts = [
         'qty' => 'decimal:2',
         'unit_cost' => 'decimal:2',
+        'default_receipt_unit_value' => 'decimal:2',
         'selling_price' => 'decimal:2',
         'reorder_level' => 'decimal:2',
         'carrying_value_cents' => 'integer',

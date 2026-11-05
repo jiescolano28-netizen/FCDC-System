@@ -53,24 +53,26 @@
                 <div class="inventory-form-fields inventory-form-fields--stock">
                     @if (!$editingId)
                         <div class="inventory-form-field">
-                            <label for="qty">Opening quantity</label>
+                            <label for="qty">{{ $valuedPostingEnabled ? 'First receipt quantity' : 'Opening quantity' }}</label>
                             <input id="qty" type="number" min="0" step="1" wire:model="qty">
-                            <span class="muted">How many are on hand at the start.</span>
+                            <span class="muted">{{ $valuedPostingEnabled ? 'The item is created at zero, then this amount is prefilled for its first valued stock receipt.' : 'How many are on hand at the start.' }}</span>
                             @error('qty')
                                 <span class="error">{{ $message }}</span>
                             @enderror
                         </div>
                     @endif
                     <div class="inventory-form-field">
-                        <label for="unitCost">Unit cost{{ $valuedPostingEnabled ? ' · from valued stock schedule' : '' }}</label>
-                        <input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost"
-                            @readonly($valuedPostingEnabled)>
+                        <label for="unitCost">{{ $valuedPostingEnabled ? 'Unit cost for first receipt' : 'Unit cost' }}</label>
+                        <input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost">
+                        @if ($valuedPostingEnabled)
+                            <span class="muted">Enter this batch’s expected cost per unit. It will prefill the first valued stock receipt; inventory value is recorded when you post that receipt.</span>
+                        @endif
                         @error('unitCost')
                             <span class="error">{{ $message }}</span>
                         @enderror
                     </div>
                     <div class="inventory-form-field">
-                        <label for="sellingPrice">Selling price (optional)</label>
+                        <label for="sellingPrice">Selling price for this batch (optional)</label>
                         <input id="sellingPrice" type="number" min="0" step="0.01" wire:model="sellingPrice">
                         @error('sellingPrice')
                             <span class="error">{{ $message }}</span>
@@ -120,6 +122,9 @@
             </div>
         </form>
     </div>
+@endif
+@if ($editingId)
+    @include('livewire.inventory.stock-movements')
 @endif
 @if ($editingId)
     @include('livewire.inventory.stock-movements')
