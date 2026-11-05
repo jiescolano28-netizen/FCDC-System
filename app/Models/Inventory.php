@@ -35,7 +35,6 @@ class Inventory extends Model
         'qty',
         'unit',
         'unit_cost',
-        'default_receipt_unit_value',
         'selling_price',
         'tax_classification',
         'reorder_level',
@@ -47,7 +46,6 @@ class Inventory extends Model
     protected $casts = [
         'qty' => 'decimal:2',
         'unit_cost' => 'decimal:2',
-        'default_receipt_unit_value' => 'decimal:2',
         'selling_price' => 'decimal:2',
         'reorder_level' => 'decimal:2',
         'carrying_value_cents' => 'integer',
@@ -59,11 +57,7 @@ class Inventory extends Model
             $inventory->status ??= self::STATUS_ACTIVE;
             $inventory->code ??= 'TMP-'.Str::uuid();
             if (AccountingJournal::query()->where('source_type', 'opening')->where('source_id', 'FCDC')->where('status', 'posted')->exists()) {
-                if ((float) $inventory->qty !== 0.0) {
-                    throw new LogicException('New post-cutover inventory items must start with zero quantity.');
-                }
-                $inventory->unit_cost = '0.00';
-                $inventory->carrying_value_cents = 0;
+                $inventory->carrying_value_cents = (int) round((float) $inventory->qty * (float) $inventory->unit_cost * 100);
             }
         });
 

@@ -85,8 +85,14 @@ class RecordValuedStockMovement
                 throw ValidationException::withMessages(['effectiveDate' => 'Valued stock posting requires approved opening books and an effective date on or after cutover.']);
             }
             $openingLine = $schedule->lines->firstWhere('inventory_id', $item->id);
+            $openingBalanceMovement = StockMovement::query()
+                ->where('inventory_id', $item->id)
+                ->where('type', 'opening_balance')
+                ->orderBy('id')
+                ->first();
             if (! $openingLine) {
-                if ($item->created_at->timezone('Asia/Manila')->toDateString() < $opening->accounting_date->toDateString() || $this->quantityHundredths((string) $item->qty) !== 0) {
+                if ($item->created_at->timezone('Asia/Manila')->toDateString() < $opening->accounting_date->toDateString()
+                    || ($this->quantityHundredths((string) $item->qty) !== 0 && ! $openingBalanceMovement)) {
                     throw ValidationException::withMessages(['inventoryId' => 'This item has no approved opening valuation baseline.']);
                 }
             }
@@ -99,10 +105,12 @@ class RecordValuedStockMovement
             $quantityHundredths = $this->quantityHundredths($quantity);
             $previousQuantity = $latest
                 ? $this->quantityHundredths((string) $item->qty)
-                : $this->quantityHundredths((string) ($openingLine?->quantity ?? '0'));
+                : ($openingLine
+                    ? $this->quantityHundredths((string) $openingLine->quantity)
+                    : ($openingBalanceMovement ? $this->quantityHundredths((string) $item->qty) : 0));
             $previousValue = $latest
                 ? (int) $latest->carrying_value_after_cents
-                : (int) ($openingLine?->carrying_value_cents ?? 0);
+                : (int) ($openingLine?->carrying_value_cents ?? ($openingBalanceMovement ? $item->carrying_value_cents : 0));
 
             $isIncrease = $type === 'stock_in';
             $delta = $type === 'adjustment'

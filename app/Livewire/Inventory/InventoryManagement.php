@@ -15,6 +15,7 @@ use App\Services\Inventory\RecordValuedStockMovement;
 use App\Services\Inventory\ReverseStockMovement;
 use App\Support\AdministratorAccess;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
@@ -121,14 +122,6 @@ class InventoryManagement extends Component
         } elseif ($this->valuedPostingEnabled()) {
             $this->qty = '0';
         }
-        $firstReceiptQuantity = request()->query('receive_qty');
-        if ($id !== null && $this->valuedPostingEnabled()
-            && is_scalar($firstReceiptQuantity)
-            && is_numeric($firstReceiptQuantity)
-            && (float) $firstReceiptQuantity > 0
-            && (float) $firstReceiptQuantity === (float) (int) $firstReceiptQuantity) {
-            $this->stockQuantity = (string) (int) $firstReceiptQuantity;
-        }
     }
 
     public function save(): void
@@ -157,7 +150,7 @@ class InventoryManagement extends Component
                     $fail('Select an active batch category.');
                 },
             ],
-            'qty' => $this->editingId ? ['prohibited'] : ['required', 'numeric', 'min:0', 'multiple_of:1'],
+            'qty' => ['required', 'numeric', 'min:0', 'multiple_of:1'],
             'unit' => ['required', 'string', 'max:50'],
             'unitCost' => ['required', 'numeric', 'min:0'],
             'sellingPrice' => ['nullable', 'numeric', 'min:0'],
@@ -165,53 +158,77 @@ class InventoryManagement extends Component
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ], [
-            'qty.multiple_of' => $this->valuedPostingEnabled()
-                ? 'The first receipt quantity must be a whole number.'
-                : 'The opening quantity must be a whole number.',
+            'qty.multiple_of' => 'The quantity must be a whole number.',
             'reorderLevel.multiple_of' => 'The low stock level must be a whole number.',
         ]);
-        $wasCreating = $this->editingId === null;
-        $firstReceiptQuantity = (float) ($validated['qty'] ?? 0);
-        $valuedPostingEnabled = $this->valuedPostingEnabled();
         $item = $this->editingId ? Inventory::findOrFail($this->editingId) : new Inventory;
+        $previousQuantity = $this->editingId ? (float) $item->qty : null;
+        $quantityChanged = $this->editingId && $previousQuantity !== (float) $validated['qty'];
+        if ($quantityChanged) {
+            $this->authorizePermission('inventory.movements.record');
+        }
         $item->fill([
             'name' => $validated['name'],
             'category' => $validated['category'],
             'size_specification' => $validated['sizeSpecification'] ?: null,
             'unit' => $validated['unit'],
-            'unit_cost' => $this->valuedPostingEnabled()
-                ? ($this->editingId ? $item->unit_cost : '0.00')
+            'unit_cost' => $this->valuedPostingEnabled() && $this->editingId
+                ? $item->unit_cost
                 : $validated['unitCost'],
             'selling_price' => $validated['sellingPrice'] === '' ? null : $validated['sellingPrice'],
             'reorder_level' => $validated['reorderLevel'] === '' ? 10 : $validated['reorderLevel'],
             'description' => $validated['description'] ?? null,
         ]);
-        $item->default_receipt_unit_value = $this->valuedPostingEnabled()
-            ? $validated['unitCost']
-            : null;
         $item->inventory_batch_category_id = $validated['batchCategoryId'] ?: null;
 
         if (! $this->editingId) {
-            $item->qty = $this->valuedPostingEnabled() ? '0' : $validated['qty'];
+            $item->qty = $validated['qty'];
         }
 
         if ($this->image) {
             $item->image = $this->image->store('inventory', 'public');
         }
 
-        DB::transaction(fn () => $item->save());
-        $this->resetForm();
-        $this->dispatch('inventory-saved');
-        if ($this->formPage) {
-            if ($wasCreating && $valuedPostingEnabled && $firstReceiptQuantity > 0
-                && auth()->user()?->can('inventory.movements.record')) {
-                $this->redirectRoute('inventory.management.edit', [
-                    'id' => $item->id,
-                    'receive_qty' => (int) $firstReceiptQuantity,
-                ]);
+        DB::transaction(function () use ($item, $quantityChanged, $validated): void {
+            $item->save();
+
+            if (! $quantityChanged) {
+                return;
+            }
+
+            $effectiveDate = now('Asia/Manila')->toDateString();
+            $reference = 'INV-COUNT-'.$item->code.'-'.Str::upper(Str::random(8));
+            $notes = 'Quantity updated through Edit Inventory.';
+
+            if ($this->valuedPostingEnabled()) {
+                app(RecordValuedStockMovement::class)->handle(
+                    (int) $item->id,
+                    'adjustment',
+                    (string) $validated['qty'],
+                    'count_correction',
+                    $reference,
+                    $effectiveDate,
+                    (int) auth()->id(),
+                    (string) $item->unit_cost,
+                    $notes,
+                );
 
                 return;
             }
+
+            app(RecordStockAdjustment::class)->handle(
+                (int) $item->id,
+                (float) $validated['qty'],
+                'count_correction',
+                $notes,
+                $reference,
+                $effectiveDate,
+                (int) auth()->id(),
+            );
+        });
+        $this->resetForm();
+        $this->dispatch('inventory-saved');
+        if ($this->formPage) {
             $this->redirectRoute('inventory.management');
         }
 
@@ -229,13 +246,9 @@ class InventoryManagement extends Component
         $this->category = $item->category;
         $this->sizeSpecification = $item->size_specification ?? '';
         $this->batchCategoryId = (string) ($item->inventory_batch_category_id ?? '');
-        $this->qty = '';
+        $this->qty = (string) $item->qty;
         $this->unit = $item->unit;
         $this->unitCost = $item->unit_cost;
-        if ($this->valuedPostingEnabled() && (float) $item->qty === 0.0 && $item->default_receipt_unit_value !== null) {
-            $this->unitCost = $item->default_receipt_unit_value;
-            $this->stockUnitValue = $item->default_receipt_unit_value;
-        }
         $this->sellingPrice = $item->selling_price ?? '';
         $this->reorderLevel = (string) (int) round((float) $item->reorder_level);
         $this->description = $item->description ?? '';

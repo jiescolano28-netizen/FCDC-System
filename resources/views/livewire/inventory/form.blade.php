@@ -51,22 +51,23 @@
             <fieldset class="inventory-form-section">
                 <legend>Stock and pricing</legend>
                 <div class="inventory-form-fields inventory-form-fields--stock">
-                    @if (!$editingId)
-                        <div class="inventory-form-field">
-                            <label for="qty">{{ $valuedPostingEnabled ? 'First receipt quantity' : 'Opening quantity' }}</label>
+                    <div class="inventory-form-field">
+                        <label for="qty">Quantity{{ $editingId ? ' (on hand)' : '' }}</label>
+                        @if ($editingId)
+                            <input id="qty" type="number" min="0" step="1" wire:model="qty"
+                                @readonly(!auth()->user()->can('inventory.movements.record'))>
+                            <span class="muted">Saving a changed quantity records a stock adjustment.</span>
+                        @else
                             <input id="qty" type="number" min="0" step="1" wire:model="qty">
-                            <span class="muted">{{ $valuedPostingEnabled ? 'The item is created at zero, then this amount is prefilled for its first valued stock receipt.' : 'How many are on hand at the start.' }}</span>
+                            <span class="muted">{{ $valuedPostingEnabled ? 'Starting on-hand quantity for this inventory item.' : 'How many are on hand at the start.' }}</span>
                             @error('qty')
                                 <span class="error">{{ $message }}</span>
                             @enderror
-                        </div>
-                    @endif
-                    <div class="inventory-form-field">
-                        <label for="unitCost">{{ $valuedPostingEnabled ? 'Unit cost for first receipt' : 'Unit cost' }}</label>
-                        <input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost">
-                        @if ($valuedPostingEnabled)
-                            <span class="muted">Enter this batch’s expected cost per unit. It will prefill the first valued stock receipt; inventory value is recorded when you post that receipt.</span>
                         @endif
+                    </div>
+                    <div class="inventory-form-field">
+                        <label for="unitCost">Unit cost</label>
+                        <input id="unitCost" type="number" min="0" step="0.01" wire:model="unitCost">
                         @error('unitCost')
                             <span class="error">{{ $message }}</span>
                         @enderror
