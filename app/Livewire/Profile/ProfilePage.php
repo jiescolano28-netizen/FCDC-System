@@ -26,6 +26,8 @@ class ProfilePage extends Component
 
     public function mount(): void
     {
+        abort_unless(auth()->check(), 403);
+
         $this->username = auth()->user()->username;
     }
 
@@ -94,6 +96,8 @@ class ProfilePage extends Component
 
     public function render()
     {
+        abort_unless(auth()->check(), 403);
+
         $employee = auth()->user();
 
         return view('livewire.profile.profile-page', [
@@ -106,4 +110,3 @@ class ProfilePage extends Component
         ])->layout('layouts.app', ['title' => 'My profile']);
     }
 }
-

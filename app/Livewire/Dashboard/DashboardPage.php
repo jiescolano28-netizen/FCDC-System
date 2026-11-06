@@ -57,6 +57,8 @@ class DashboardPage extends Component
 
     public function render()
     {
+        abort_unless(auth()->user()?->can('dashboard.view'), 403);
+
         $today = CarbonImmutable::now('Asia/Manila');
         $start = $this->parseDate($this->fromDate) ?? $today->startOfMonth();
         $end = ($this->parseDate($this->toDate) ?? $today)->endOfDay();

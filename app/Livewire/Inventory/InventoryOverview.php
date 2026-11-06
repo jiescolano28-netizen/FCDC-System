@@ -13,6 +13,8 @@ class InventoryOverview extends Component
 
     public function render()
     {
+        abort_unless(auth()->user()?->can('inventory.view'), 403);
+
         $items = Inventory::query()->with('batchCategory')
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
