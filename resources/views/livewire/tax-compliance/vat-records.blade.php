@@ -183,6 +183,35 @@
                         </tbody>
                     </table>
                 </div>
+                <section class="vat-record-attachments" aria-labelledby="vat-record-attachments-heading">
+                    <h3 id="vat-record-attachments-heading">Supporting files</h3>
+                    @if ($attachmentStatus)
+                        <p role="status">{{ $attachmentStatus }}</p>
+                    @endif
+                    @if ($selectedRecord->attachments->isNotEmpty())
+                        <ul>
+                            @foreach ($selectedRecord->attachments as $attachment)
+                                <li wire:key="vat-record-attachment-{{ $attachment->id }}">
+                                    <span>{{ $attachment->original_name }}</span>
+                                    <small>{{ number_format($attachment->file_size / 1048576, 2) }} MB</small>
+                                    <button class="vat-detail-button" type="button" wire:click="downloadAttachment({{ $attachment->id }})">Download</button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="muted">No supporting files attached.</p>
+                    @endif
+                    <form wire:submit="saveAttachment">
+                        <label for="vat-record-attachment-file">Attach a supporting file (PDF, JPG, or PNG; max 10 MB)</label>
+                        <input id="vat-record-attachment-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                            wire:model="attachmentFile" wire:loading.attr="disabled" wire:target="attachmentFile">
+                        @error('attachmentFile') <span class="error">{{ $message }}</span> @enderror
+                        <button class="vat-detail-button" type="submit" wire:loading.attr="disabled" wire:target="attachmentFile,saveAttachment">
+                            <span wire:loading.remove wire:target="saveAttachment">Attach file</span>
+                            <span wire:loading wire:target="saveAttachment">Attaching…</span>
+                        </button>
+                    </form>
+                </section>
                 <footer><button class="vat-detail-button" type="button" wire:click="closeDetails">Close</button></footer>
             </section>
         </div>

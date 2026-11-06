@@ -64,14 +64,16 @@
             <p>Reporting period: <strong>{{ $periodLabel }}</strong> · {{ $startDate }} through {{ $endDate }}</p>
             <p>Reporting timezone: <strong>Asia/Manila</strong></p>
             <p>Generated: <time datetime="{{ $generatedAt->toIso8601String() }}">{{ $generatedAt->format('F j, Y g:i:s A P') }}</time></p>
-            <p>Coverage: recorded POS VAT activity only</p>
+            <p>Output VAT: recorded POS sales · Input VAT: Reworking Cost and Operating Cost records</p>
         </header>
 
-        <p class="tax-report-disclaimer">This report includes recorded POS sales only. It is not a complete official tax return and is not a submitted filing.</p>
+        <p class="tax-report-disclaimer">Output VAT uses recorded POS sales; input VAT combines saved Reworking Cost and Operating Cost records. This is not a complete official tax return or a submitted filing.</p>
 
         @include('livewire.tax-compliance.partials.summary-cards', [
             'summary' => $summary,
             'ariaLabel' => $periodLabel.' VAT report totals',
+            'inputVatLabel' => 'Total VAT Input',
+            'inputVatNote' => 'Combined from Reworking Cost and Operating Cost records',
         ])
 
         <section class="tax-report-breakdown" aria-labelledby="tax-report-monthly-heading">
@@ -189,7 +191,7 @@
         </section>
 
         @if ($summary['input_vat_record_count'] > 0)
-            <p class="tax-report-breakdown-note">Input VAT of {{ $money($summary['input_vat']) }} comes from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s). The VAT payable estimate is recorded output VAT less recorded input VAT; it is not a determination of final VAT liability.</p>
+            <p class="tax-report-breakdown-note">Total VAT Input of {{ $money($summary['input_vat']) }} combines Reworking Cost and Operating Cost records. The VAT payable estimate is recorded output VAT less total recorded input VAT; it is not a determination of final VAT liability.</p>
         @else
             <p class="tax-report-breakdown-note">Input VAT not captured. The VAT payable estimate is recorded output VAT only and does not establish that the company incurred no input VAT.</p>
         @endif
@@ -248,40 +250,42 @@
         <section class="tax-report-transactions" aria-labelledby="tax-report-input-vat-heading">
             <header>
                 <div>
-                    <h3 id="tax-report-input-vat-heading">Supporting reworking-cost input VAT records</h3>
-                    <p>{{ $summary['input_vat_record_count'] }} saved batch record(s) · input VAT {{ $money($summary['input_vat']) }}</p>
+                    <h3 id="tax-report-input-vat-heading">Supporting input VAT records</h3>
+                    <p>{{ $summary['input_vat_record_count'] }} saved record(s) · Total VAT Input {{ $money($summary['input_vat']) }}</p>
                 </div>
             </header>
             <div class="vat-table-wrap tax-report-table-wrap tax-report-screen-only">
                 <table>
                     <thead>
                         <tr>
-                            <th>Batch number</th>
-                            <th>Project</th>
-                            <th>Record date (Asia/Manila)</th>
+                            <th>Source</th>
+                            <th>Reference</th>
+                            <th>Project / category</th>
+                            <th>Record date</th>
                             <th>Description</th>
-                            <th class="numeric">Reworking cost</th>
+                            <th class="numeric">Recorded cost</th>
                             <th class="numeric">Input VAT</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($inputVatRecords as $record)
                             <tr wire:key="tax-report-input-{{ $record['source_key'] }}">
+                                <td>{{ $record['source_type'] }}</td>
                                 <td><strong>{{ $record['batch_number'] }}</strong></td>
                                 <td>{{ $record['project'] }}</td>
                                 <td>{{ $record['date'] }}</td>
                                 <td>{{ $record['description'] }}</td>
-                                <td class="numeric">{{ $money($record['total_reworking_cost']) }}</td>
+                                <td class="numeric">{{ $money($record['total_recorded_cost']) }}</td>
                                 <td class="numeric"><strong>{{ $money($record['input_vat']) }}</strong></td>
                             </tr>
                         @empty
-                            <tr><td class="vat-empty" colspan="6">No recorded input VAT from reworking cost records for this period.</td></tr>
+                            <tr><td class="vat-empty" colspan="7">No recorded input VAT for this period.</td></tr>
                         @endforelse
                     </tbody>
                     <tfoot>
                         <tr>
-                            <th colspan="4">Input VAT total</th>
-                            <th class="numeric">{{ $money($summary['input_vat_reworking_cost']) }}</th>
+                            <th colspan="5">Total VAT Input</th>
+                            <th class="numeric">{{ $money($summary['input_vat_recorded_cost']) }}</th>
                             <th class="numeric">{{ $money($summary['input_vat']) }}</th>
                         </tr>
                     </tfoot>
@@ -318,27 +322,28 @@
                 </tfoot>
             </table>
 
-            <h3>Matching reworking-cost input VAT records</h3>
+            <h3>Matching input VAT records</h3>
             <table>
                 <thead>
-                    <tr><th>Batch number</th><th>Project</th><th>Record date (Asia/Manila)</th><th>Description</th><th class="numeric">Reworking cost</th><th class="numeric">Input VAT</th></tr>
+                    <tr><th>Source</th><th>Reference</th><th>Project / category</th><th>Record date</th><th>Description</th><th class="numeric">Recorded cost</th><th class="numeric">Input VAT</th></tr>
                 </thead>
                 <tbody>
                     @forelse ($inputVatRecords as $record)
                         <tr>
+                            <td>{{ $record['source_type'] }}</td>
                             <td>{{ $record['batch_number'] }}</td>
                             <td>{{ $record['project'] }}</td>
                             <td>{{ $record['date'] }}</td>
                             <td>{{ $record['description'] }}</td>
-                            <td class="numeric">{{ $money($record['total_reworking_cost']) }}</td>
+                            <td class="numeric">{{ $money($record['total_recorded_cost']) }}</td>
                             <td class="numeric">{{ $money($record['input_vat']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="6">No recorded input VAT from reworking cost records for this period.</td></tr>
+                        <tr><td colspan="7">No recorded input VAT for this period.</td></tr>
                     @endforelse
                 </tbody>
                 <tfoot>
-                    <tr><th colspan="4">Input VAT total</th><th class="numeric">{{ $money($summary['input_vat_reworking_cost']) }}</th><th class="numeric">{{ $money($summary['input_vat']) }}</th></tr>
+                    <tr><th colspan="5">Total VAT Input</th><th class="numeric">{{ $money($summary['input_vat_recorded_cost']) }}</th><th class="numeric">{{ $money($summary['input_vat']) }}</th></tr>
                 </tfoot>
             </table>
         </div>

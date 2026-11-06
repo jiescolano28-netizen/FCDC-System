@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 class PosVatRecord extends Model
@@ -46,5 +47,10 @@ class PosVatRecord extends Model
     public function posTransaction(): BelongsTo
     {
         return $this->belongsTo(PosTransaction::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(PosVatRecordAttachment::class)->latest();
     }
 }

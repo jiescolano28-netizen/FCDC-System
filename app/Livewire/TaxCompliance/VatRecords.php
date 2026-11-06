@@ -4,15 +4,19 @@ namespace App\Livewire\TaxCompliance;
 
 use App\Models\PosTransaction;
 use App\Models\PosVatRecord;
+use App\Models\PosVatRecordAttachment;
 use App\Services\RecordedInputVat;
 use App\Services\RecordedVatSummary;
 use App\Support\TaxClassification;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class VatRecords extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -28,6 +32,10 @@ class VatRecords extends Component
     public string $endDate = '';
 
     public ?int $selectedRecordId = null;
+
+    public $attachmentFile = null;
+
+    public string $attachmentStatus = '';
 
     public function mount(): void
     {
@@ -80,12 +88,71 @@ class VatRecords extends Component
         $this->authorizePermission();
 
         $this->selectedRecordId = PosVatRecord::query()->whereKey($recordId)->value('id');
+        $this->attachmentStatus = '';
+        $this->attachmentFile = null;
+        $this->resetValidation();
     }
 
     public function closeDetails(): void
     {
         $this->authorizePermission();
         $this->selectedRecordId = null;
+        $this->attachmentStatus = '';
+        $this->attachmentFile = null;
+        $this->resetValidation();
+    }
+
+    public function updatedAttachmentFile(): void
+    {
+        $this->validateOnly('attachmentFile', [
+            'attachmentFile' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ]);
+    }
+
+    public function saveAttachment(): void
+    {
+        $this->authorizePermission();
+        abort_unless($this->selectedRecordId, 404);
+        $validated = $this->validate([
+            'attachmentFile' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ]);
+        $record = PosVatRecord::findOrFail($this->selectedRecordId);
+        $disk = 'local';
+        $path = $validated['attachmentFile']->store('tax/vat-records/'.$record->id, $disk);
+
+        try {
+            $record->attachments()->create([
+                'employee_id' => auth()->id(),
+                'disk' => $disk,
+                'path' => $path,
+                'original_name' => $validated['attachmentFile']->getClientOriginalName(),
+                'mime_type' => $validated['attachmentFile']->getMimeType()
+                    ?: $validated['attachmentFile']->getClientMimeType(),
+                'file_size' => (int) $validated['attachmentFile']->getSize(),
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk($disk)->delete($path);
+            throw $exception;
+        }
+
+        $this->reset('attachmentFile');
+        $this->resetValidation();
+        $this->attachmentStatus = 'Supporting file attached.';
+    }
+
+    public function downloadAttachment(int $attachmentId)
+    {
+        $this->authorizePermission();
+        abort_unless($this->selectedRecordId, 404);
+
+        $attachment = PosVatRecordAttachment::query()
+            ->where('pos_vat_record_id', $this->selectedRecordId)
+            ->findOrFail($attachmentId);
+        $disk = $attachment->disk ?: 'local';
+
+        abort_unless(Storage::disk($disk)->exists($attachment->path), 404);
+
+        return Storage::disk($disk)->download($attachment->path, $attachment->original_name);
     }
 
     public function render()
@@ -135,7 +202,7 @@ class VatRecords extends Component
             'records' => $records,
             'recordCount' => $records->total(),
             'selectedRecord' => $this->selectedRecordId
-                ? PosVatRecord::query()->with('posTransaction.lines')->find($this->selectedRecordId)
+                ? PosVatRecord::query()->with(['posTransaction.lines', 'attachments.employee'])->find($this->selectedRecordId)
                 : null,
             'inputVatRecords' => $inputVatRecords,
             'inputVatSummary' => $inputVatSummary,

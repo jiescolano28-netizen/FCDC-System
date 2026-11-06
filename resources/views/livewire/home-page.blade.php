@@ -1081,7 +1081,7 @@
 
             <p>
                 Fabellon Construction and Development Corporation (FCDC)
-                is a medium-sized enterprise in the construction industry.
+                is a enterprise in the construction industry.
             </p>
 
             <p>

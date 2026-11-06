@@ -614,6 +614,15 @@
 .vat-detail-modal dt { color: var(--slate-500); }
 .vat-detail-modal dd { margin: 0; font-weight: 600; text-align: right; }
 .vat-detail-modal footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+.vat-record-attachments { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--slate-100); }
+.vat-record-attachments h3 { margin: 0 0 10px; font-size: 14px; }
+.vat-record-attachments ul { display: grid; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+.vat-record-attachments li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--slate-100); border-radius: 7px; }
+.vat-record-attachments li span { flex: 1; overflow-wrap: anywhere; font-size: 12px; }
+.vat-record-attachments li small { color: var(--slate-500); }
+.vat-record-attachments form { display: grid; justify-items: start; gap: 9px; }
+.vat-record-attachments form label { font-size: 12px; font-weight: 600; }
+.vat-record-attachments form input[type="file"] { max-width: 100%; font-size: 12px; }
 
 @media (max-width: 700px) {
     .vat-record-filters { grid-template-columns: minmax(0, 1fr); }
