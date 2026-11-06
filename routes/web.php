@@ -41,9 +41,6 @@ use App\Livewire\TaxCompliance\VatReturnPreparation;
 use App\Livewire\TaxCompliance\VatSummary;
 use Illuminate\Support\Facades\Route;
 
-// HOMEPAGE
-Route::get('/', HomePage::class)->name('home');
-
 // LOGIN
 Route::get('/login', [LoginController::class, 'showLogin'])
     ->name('login');
@@ -65,10 +62,12 @@ Route::post('/reset-password', [EmployeePasswordResetController::class, 'store']
 
 // LOGOUT
 Route::post('/logout', [LoginController::class, 'logout'])
+    ->middleware('auth')
     ->name('logout');
 
 // Authenticated application
 Route::middleware('auth')->group(function () {
+    Route::get('/', HomePage::class)->name('home');
     Route::get('/profile', ProfilePage::class)->name('profile');
     Route::get('/dashboard', DashboardPage::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/dashboard/reports', ReportsPage::class)->middleware('permission:reports.view')->name('reports');
