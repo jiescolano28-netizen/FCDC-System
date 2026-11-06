@@ -26,12 +26,12 @@
         <p class="vat-summary-card-note">From completed POS sales</p>
     </article>
     <article class="dashboard-card vat-summary-card is-input">
-        <p class="dashboard-stat-label">Input VAT</p>
+        <p class="dashboard-stat-label">{{ $inputVatLabel ?? 'Input VAT' }}</p>
         <p class="dashboard-stat-value">{{ $money($summary['input_vat']) }}</p>
         <p class="vat-summary-card-note">
-            {{ $summary['input_vat_status'] === 'captured'
+            {{ $inputVatNote ?? ($summary['input_vat_status'] === 'captured'
                 ? $summary['input_vat_record_count'].' saved reworking-cost record(s)'
-                : 'Not captured' }}
+                : 'Not captured') }}
         </p>
     </article>
     <article class="dashboard-card vat-summary-card is-payable">

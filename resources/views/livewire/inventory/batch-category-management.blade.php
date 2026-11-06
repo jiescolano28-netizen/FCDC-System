@@ -179,18 +179,18 @@
                         <td>{{ $category->creator?->username ?? '—' }}</td>
                         <td>{{ $category->updater?->username ?? '—' }}</td>
                         <td>
-                            <div class="actions">
+                            <div class="actions inventory-row-actions">
                                 @if ($category->trashed())
                                     @can('inventory.delete')
-                                        <button class="secondary" type="button" wire:click="restore({{ $category->id }})">Restore</button>
+                                        <button class="secondary" type="button" aria-label="Restore {{ $category->name }}" title="Restore" wire:click="restore({{ $category->id }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8m0-5v5h5m4-1v5l3 2"/></svg></button>
                                     @endcan
                                 @else
-                                    <button class="secondary" type="button" wire:click="manageAttachments({{ $category->id }})">Attachments</button>
+                                    <button class="secondary" type="button" aria-label="Manage attachments for {{ $category->name }}" title="Attachments" wire:click="manageAttachments({{ $category->id }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 12.5 6.8-6.8a3 3 0 0 1 4.2 4.2l-9.2 9.2a5 5 0 0 1-7.1-7.1l9.2-9.2"/></svg></button>
                                     @can('inventory.update')
-                                        <button class="secondary" type="button" wire:click="edit({{ $category->id }})">Edit</button>
+                                        <button class="secondary" type="button" aria-label="Edit {{ $category->name }}" title="Edit" wire:click="edit({{ $category->id }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 16.5-.8 4.3 4.3-.8L20 7.5 16.5 4 4 16.5Zm10.8-10.8 3.5 3.5"/></svg></button>
                                     @endcan
                                     @can('inventory.delete')
-                                        <button class="danger" type="button" wire:click="delete({{ $category->id }})" wire:confirm="Delete {{ $category->name }}?">Delete</button>
+                                        <button class="danger" type="button" aria-label="Delete {{ $category->name }}" title="Delete" wire:click="delete({{ $category->id }})" wire:confirm="Delete {{ $category->name }}?"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v7m4-7v7M6 7l1 14h10l1-14M9 7V4h6v3"/></svg></button>
                                     @endcan
                                 @endif
                             </div>

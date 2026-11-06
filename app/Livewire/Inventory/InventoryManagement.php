@@ -30,6 +30,8 @@ class InventoryManagement extends Component
 
     public string $categoryFilter = '';
 
+    public string $batchFilter = '';
+
     public bool $advancedFiltersOpen = false;
 
     public bool $showDeleted = false;
@@ -499,6 +501,7 @@ class InventoryManagement extends Component
                 });
             })
             ->when($this->categoryFilter !== '', fn ($query) => $query->where('category', $this->categoryFilter))
+            ->when($this->batchFilter !== '', fn ($query) => $query->where('inventory_batch_category_id', $this->batchFilter))
             ->orderByDesc('id')
             ->get();
 

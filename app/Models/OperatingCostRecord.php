@@ -14,6 +14,7 @@ class OperatingCostRecord extends Model
         'expense_category',
         'description',
         'amount',
+        'input_vat',
         'payment_method',
         'attachment_path',
         'attachment_name',
@@ -25,6 +26,7 @@ class OperatingCostRecord extends Model
     protected $casts = [
         'expense_date' => 'date:Y-m-d',
         'amount' => 'decimal:2',
+        'input_vat' => 'decimal:2',
         'attachment_size' => 'integer',
     ];
 

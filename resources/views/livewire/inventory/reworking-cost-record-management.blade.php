@@ -228,13 +228,13 @@
                         </td>
                         @if ($hasActions)
                             <td>
-                                <div class="actions">
+                                <div class="actions inventory-row-actions">
                                     @can('inventory.update')
-                                        <button class="secondary" type="button" wire:click="edit({{ $record['id'] }})">Edit</button>
+                                        <button class="secondary" type="button" aria-label="Edit reworking cost record for batch {{ $record['batch_number'] }}" title="Edit" wire:click="edit({{ $record['id'] }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 16.5-.8 4.3 4.3-.8L20 7.5 16.5 4 4 16.5Zm10.8-10.8 3.5 3.5"/></svg></button>
                                     @endcan
                                     @can('inventory.delete')
-                                        <button class="danger" type="button" wire:click="delete({{ $record['id'] }})"
-                                            wire:confirm="Delete this reworking cost record? This cannot be undone.">Delete</button>
+                                        <button class="danger" type="button" aria-label="Delete reworking cost record for batch {{ $record['batch_number'] }}" title="Delete" wire:click="delete({{ $record['id'] }})"
+                                            wire:confirm="Delete this reworking cost record? This cannot be undone."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v7m4-7v7M6 7l1 14h10l1-14M9 7V4h6v3"/></svg></button>
                                     @endcan
                                 </div>
                             </td>

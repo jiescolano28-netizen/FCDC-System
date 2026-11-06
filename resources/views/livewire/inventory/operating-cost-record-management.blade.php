@@ -2,7 +2,7 @@
     <header class="columns" style="justify-content:space-between; margin-bottom:18px;">
         <div>
             <h1 id="operating-cost-heading">Operating Cost Record</h1>
-            <p class="muted">Record batch reworking costs, including the input VAT used by VAT Compliance, and day-to-day operating expenses.</p>
+            <p class="muted">Record batch operating costs and day-to-day operating expenses. These records are kept separate from Reworking Cost Records.</p>
             <p class="muted">These registers support cost monitoring only; they do not post entries to the Accounting module.</p>
         </div>
         <div class="actions">
@@ -22,7 +22,7 @@
             wire:click="setTab('batch')"
             aria-selected="{{ $activeTab === 'batch' ? 'true' : 'false' }}"
         >
-            Batch / Reworking Cost
+            Batch Operating Costs
         </button>
         <button
             class="operating-cost-tab {{ $activeTab === 'expenses' ? 'is-active' : '' }}"
@@ -37,13 +37,13 @@
 
     <div
         role="tabpanel"
-        aria-label="Batch and reworking cost records"
+        aria-label="Batch operating cost records"
         @if ($activeTab !== 'batch') style="display:none" @endif
     >
         <div class="columns" style="justify-content:space-between; margin-bottom:12px;">
             <div>
-                <h2 class="operating-cost-section-title">Batch / Reworking Cost</h2>
-                <p class="muted">Track cleaning, repair, and preparation costs for each demolition material batch. Saved input VAT here is the source used by the VAT Compliance module.</p>
+                <h2 class="operating-cost-section-title">Batch Operating Costs</h2>
+                <p class="muted">Track operating costs for each demolition material batch. Input VAT saved here remains with this module and is not included in VAT Records.</p>
             </div>
             <div class="actions">
                 @can('inventory.create')
@@ -52,16 +52,16 @@
             </div>
         </div>
 
-        <div class="operating-cost-summary" aria-label="Batch reworking cost summary">
+        <div class="operating-cost-summary" aria-label="Batch operating cost summary">
             <article class="panel operating-cost-stat">
                 <span class="operating-cost-stat-label">Recorded batches</span>
                 <strong class="operating-cost-stat-value">{{ $batchSummary['count'] }}</strong>
-                <span class="operating-cost-stat-note">Batch reworking cost records</span>
+                <span class="operating-cost-stat-note">Batch operating cost records</span>
             </article>
             <article class="panel operating-cost-stat">
-                <span class="operating-cost-stat-label">Total reworking cost</span>
+                <span class="operating-cost-stat-label">Total operating cost</span>
                 <strong class="operating-cost-stat-value">₱{{ number_format($batchSummary['total'], 2) }}</strong>
-                <span class="operating-cost-stat-note">Cleaning, repair, and preparation</span>
+                <span class="operating-cost-stat-note">Operating costs for material batches</span>
             </article>
             <article class="panel operating-cost-stat">
                 <span class="operating-cost-stat-label">Input VAT</span>
@@ -71,7 +71,7 @@
             <article class="panel operating-cost-stat">
                 <span class="operating-cost-stat-label">Total including VAT</span>
                 <strong class="operating-cost-stat-value">₱{{ number_format($batchSummary['total_with_vat'], 2) }}</strong>
-                <span class="operating-cost-stat-note">Reworking cost plus recorded VAT</span>
+                <span class="operating-cost-stat-note">Operating cost plus recorded VAT</span>
             </article>
         </div>
 
@@ -89,8 +89,8 @@
             >
                 <div class="employee-modal-header">
                     <div>
-                        <h2 id="operating-cost-batch-modal-title">{{ $batchEditingId ? 'Edit batch reworking cost record' : 'New batch reworking cost record' }}</h2>
-                        <p class="muted">Link cleaning, repair, or preparation costs to a demolition project and batch.</p>
+                    <h2 id="operating-cost-batch-modal-title">{{ $batchEditingId ? 'Edit batch operating cost record' : 'New batch operating cost record' }}</h2>
+                <p class="muted">Record operating costs for a demolition project and batch.</p>
                     </div>
                     <button class="secondary" type="button" x-on:click="$el.closest('dialog').close()" aria-label="Close dialog">×</button>
                 </div>
@@ -128,15 +128,15 @@
                         </div>
 
                         <div class="inventory-form-field">
-                            <label for="operating-cost-batch-cost">Total reworking cost (PHP)</label>
-                            <input id="operating-cost-batch-cost" type="number" min="0" step="0.01" wire:model.live.debounce.300ms="totalReworkingCost">
-                            @error('totalReworkingCost') <span class="error">{{ $message }}</span> @enderror
+                            <label for="operating-cost-batch-cost">Total operating cost (PHP)</label>
+                            <input id="operating-cost-batch-cost" type="number" min="0" step="0.01" wire:model.live.debounce.300ms="totalOperatingCost">
+                            @error('totalOperatingCost') <span class="error">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="inventory-form-field">
                             <label for="operating-cost-batch-input-vat">Input VAT (PHP)</label>
                             <input id="operating-cost-batch-input-vat" type="number" min="0" step="0.01" wire:model.live.debounce.300ms="inputVat">
-                            <span class="operating-cost-hint">Enter the VAT amount shown on the supporting document. This feeds VAT Compliance.</span>
+                            <span class="operating-cost-hint">Enter the VAT amount shown on the supporting document. It stays with this record and does not feed VAT Records.</span>
                             @error('inputVat') <span class="error">{{ $message }}</span> @enderror
                         </div>
 
@@ -161,7 +161,7 @@
 
                         <p class="operating-cost-form-total">
                             <span>Total including VAT</span>
-                            <strong>₱{{ number_format((float) ($totalReworkingCost ?: 0) + (float) ($inputVat ?: 0), 2) }}</strong>
+                            <strong>₱{{ number_format((float) ($totalOperatingCost ?: 0) + (float) ($inputVat ?: 0), 2) }}</strong>
                         </p>
 
                         <div class="inventory-form-field operating-cost-field-wide">
@@ -226,7 +226,7 @@
                         <th scope="col">Batch number</th>
                         <th scope="col">Date</th>
                         <th scope="col">Description</th>
-                        <th scope="col" class="numeric">Total reworking cost</th>
+                        <th scope="col" class="numeric">Total operating cost</th>
                         <th scope="col" class="numeric">Input VAT</th>
                         <th scope="col">Payment method</th>
                         <th scope="col">Supporting document</th>
@@ -242,7 +242,7 @@
                             <td><span class="status">{{ $record['batch_number'] }}</span></td>
                             <td>{{ \Illuminate\Support\Carbon::parse($record['date'])->format('M j, Y') }}</td>
                             <td><span class="operating-cost-description" title="{{ $record['description'] }}">{{ $record['description'] }}</span></td>
-                            <td class="numeric">₱{{ number_format((float) $record['total_reworking_cost'], 2) }}</td>
+                            <td class="numeric">₱{{ number_format((float) $record['total_operating_cost'], 2) }}</td>
                             <td class="numeric">₱{{ number_format((float) $record['input_vat'], 2) }}</td>
                             <td>{{ $record['payment_method'] ?: 'Not recorded' }}</td>
                             <td>
@@ -269,7 +269,7 @@
                                         @endcan
                                         @can('inventory.delete')
                                             <button class="danger" type="button" wire:click="deleteBatch({{ $record['id'] }})"
-                                                wire:confirm="Delete this batch reworking cost record? This cannot be undone.">Delete</button>
+                                                wire:confirm="Delete this batch operating cost record? This cannot be undone.">Delete</button>
                                         @endcan
                                     </div>
                                 </td>
@@ -279,8 +279,8 @@
                         <tr>
                             <td colspan="{{ $hasBatchActions ? 9 : 8 }}">
                                 <div class="operating-cost-empty">
-                                    <strong>No batch reworking cost records found.</strong>
-                                    <span>Record cleaning, repair, or preparation costs to monitor each batch's actual material cost and input VAT.</span>
+                                    <strong>No batch operating cost records found.</strong>
+                                    <span>Add operating cost records for material batches.</span>
                                 </div>
                             </td>
                         </tr>
@@ -298,7 +298,7 @@
         <div class="columns" style="justify-content:space-between; margin-bottom:12px;">
             <div>
                 <h2 class="operating-cost-section-title">Operating Expenses</h2>
-                <p class="muted">Record and monitor the day-to-day operating expenses of the business. Validated records post a balanced journal automatically once approved accounting accounts are configured. These entries do not change the input VAT totals in VAT Compliance.</p>
+                <p class="muted">Record day-to-day operating expenses and the input VAT shown on their supporting documents. Input VAT totals appear in VAT Summary; posted journal amounts remain based on the recorded expense amount.</p>
             </div>
             <div class="actions">
                 @can('inventory.create')
@@ -307,7 +307,7 @@
             </div>
         </div>
 
-        <div class="operating-cost-summary" aria-label="Operating cost summary">
+        <div class="operating-cost-summary operating-cost-summary--expenses" aria-label="Operating cost summary">
             <article class="panel operating-cost-stat">
                 <span class="operating-cost-stat-label">Expense records</span>
                 <strong class="operating-cost-stat-value">{{ $summary['count'] }}</strong>
@@ -322,6 +322,11 @@
                 <span class="operating-cost-stat-label">This month</span>
                 <strong class="operating-cost-stat-value">₱{{ number_format($summary['month'], 2) }}</strong>
                 <span class="operating-cost-stat-note">{{ now('Asia/Manila')->format('F Y') }}</span>
+            </article>
+            <article class="panel operating-cost-stat">
+                <span class="operating-cost-stat-label">Input VAT</span>
+                <strong class="operating-cost-stat-value">₱{{ number_format($summary['input_vat'], 2) }}</strong>
+                <span class="operating-cost-stat-note">From saved operating expense records</span>
             </article>
             <article class="panel operating-cost-stat">
                 <span class="operating-cost-stat-label">With receipts</span>
@@ -387,6 +392,13 @@
                             <label for="operating-cost-amount">Amount (PHP)</label>
                             <input id="operating-cost-amount" type="number" min="0.01" step="0.01" wire:model.live.debounce.300ms="amount">
                             @error('amount') <span class="error">{{ $message }}</span> @enderror
+                        </div>
+
+                        <div class="inventory-form-field">
+                            <label for="operating-cost-input-vat">Input VAT (PHP)</label>
+                            <input id="operating-cost-input-vat" type="number" min="0" step="0.01" wire:model.live.debounce.300ms="expenseInputVat">
+                            <span class="operating-cost-hint">Enter the input VAT shown on the receipt or invoice. This amount is included in VAT Summary.</span>
+                            @error('expenseInputVat') <span class="error">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="inventory-form-field operating-cost-field-wide">
@@ -477,6 +489,7 @@
                         <th scope="col">Expense category</th>
                         <th scope="col">Description</th>
                         <th scope="col" class="numeric">Amount</th>
+                        <th scope="col" class="numeric">Input VAT</th>
                         <th scope="col">Payment method</th>
                         <th scope="col">Accounting</th>
                         <th scope="col">Receipt</th>
@@ -494,6 +507,7 @@
                             <td><span class="status">{{ $record->expense_category }}</span></td>
                             <td><span class="operating-cost-description" title="{{ $record->description }}">{{ $record->description }}</span></td>
                             <td class="numeric">₱{{ number_format((float) $record->amount, 2) }}</td>
+                            <td class="numeric">₱{{ number_format((float) $record->input_vat, 2) }}</td>
                             <td>{{ $record->payment_method }}</td>
                             <td>
                                 @php($postedJournal = $postedJournals->get((string) $record->id))
@@ -532,7 +546,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $hasActions ? 9 : 8 }}">
+                            <td colspan="{{ $hasActions ? 10 : 9 }}">
                                 <div class="operating-cost-empty">
                                     <strong>No operating cost records found.</strong>
                                     <span>Add an expense record to keep track of the business's day-to-day operating costs.</span>

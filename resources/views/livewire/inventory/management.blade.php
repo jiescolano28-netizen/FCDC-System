@@ -26,8 +26,8 @@
             aria-controls="inventory-advanced-filters"
         >
             Advanced filters
-            @if ($categoryFilter !== '')
-                <span class="inventory-filter-count">1 active</span>
+            @if ($categoryFilter !== '' || $batchFilter !== '')
+                <span class="inventory-filter-count">{{ (int) ($categoryFilter !== '') + (int) ($batchFilter !== '') }} active</span>
             @endif
         </button>
         @if ($advancedFiltersOpen)
@@ -38,6 +38,15 @@
                         <option value="">All categories</option>
                         @foreach ($categories as $category)
                             <option value="{{ $category }}">{{ $category }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="batchFilter">Batch</label>
+                    <select id="batchFilter" wire:model.live="batchFilter">
+                        <option value="">All batches</option>
+                        @foreach ($batchCategories as $batchCategory)
+                            <option value="{{ $batchCategory->id }}">{{ $batchCategory->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -98,22 +107,22 @@
                         <td>
                             <div class="actions inventory-row-actions">
                                 @if ($item->trashed())
-                                    <button class="secondary" type="button" wire:click="showHistory({{ $item->id }})">{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}</button>
+                                    <button class="secondary" type="button" aria-label="{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }} for {{ $item->name }}" title="{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}" wire:click="showHistory({{ $item->id }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8m0-5v5h5m4-1v5l3 2"/></svg></button>
                                     @if ($isAdministrator)
-                                        <button class="secondary" type="button" wire:click="restore({{ $item->id }})" wire:confirm="Restore {{ $item->name }} to the inventory list?">Restore</button>
+                                        <button class="secondary" type="button" aria-label="Restore {{ $item->name }}" title="Restore" wire:click="restore({{ $item->id }})" wire:confirm="Restore {{ $item->name }} to the inventory list?"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8m0-5v5h5m4-1v5l3 2"/></svg></button>
                                     @endif
                                 @else
-                                    <button class="secondary" type="button" wire:click="showHistory({{ $item->id }})">{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}</button>
+                                    <button class="secondary" type="button" aria-label="{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }} for {{ $item->name }}" title="{{ $historyItemId === $item->id ? 'Hide history' : 'View history' }}" wire:click="showHistory({{ $item->id }})"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8m0-5v5h5m4-1v5l3 2"/></svg></button>
                                     @can('inventory.update')
-                                        <a class="secondary" href="{{ route('inventory.management.edit', $item->id) }}">Edit</a>
+                                        <a class="secondary" href="{{ route('inventory.management.edit', $item->id) }}" aria-label="Edit {{ $item->name }}" title="Edit"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 16.5-.8 4.3 4.3-.8L20 7.5 16.5 4 4 16.5Zm10.8-10.8 3.5 3.5"/></svg></a>
                                     @endcan
                                     @if ($isAdministrator)
                                         @if ($item->status === 'active')
-                                            <button class="danger" type="button" wire:click="deactivate({{ $item->id }})" wire:confirm="Deactivate {{ $item->name }}? You can reactivate it later.">Deactivate</button>
+                                            <button class="danger" type="button" aria-label="Deactivate {{ $item->name }}" title="Deactivate" wire:click="deactivate({{ $item->id }})" wire:confirm="Deactivate {{ $item->name }}? You can reactivate it later."><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
                                         @else
-                                            <button class="secondary" type="button" wire:click="reactivate({{ $item->id }})" wire:confirm="Reactivate {{ $item->name }}?">Reactivate</button>
+                                            <button class="secondary" type="button" aria-label="Reactivate {{ $item->name }}" title="Reactivate" wire:click="reactivate({{ $item->id }})" wire:confirm="Reactivate {{ $item->name }}?"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg></button>
                                         @endif
-                                        <button class="danger" type="button" wire:click="delete({{ $item->id }})" wire:confirm="Delete {{ $item->name }}? It will be removed from the inventory list; its stock history is kept and it can be restored.">Delete</button>
+                                        <button class="danger" type="button" aria-label="Delete {{ $item->name }}" title="Delete" wire:click="delete({{ $item->id }})" wire:confirm="Delete {{ $item->name }}? It will be removed from the inventory list; its stock history is kept and it can be restored."><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v7m4-7v7M6 7l1 14h10l1-14M9 7V4h6v3"/></svg></button>
                                     @endif
                                 @endif
                             </div>

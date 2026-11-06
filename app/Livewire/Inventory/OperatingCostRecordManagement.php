@@ -6,7 +6,7 @@ use App\Models\AccountingAccount;
 use App\Models\AccountingJournal;
 use App\Models\DemolitionProject;
 use App\Models\OperatingCostRecord;
-use App\Models\ReworkingCostRecord;
+use App\Models\OperatingCostBatchRecord;
 use App\Services\Accounting\JournalSourcePostingService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,13 +24,10 @@ use Throwable;
 /**
  * Operating Cost Record module.
  *
- * The module keeps the original batch reworking-cost register, including the
- * input VAT that the VAT compliance screens read, and adds a register of
- * day-to-day operating expenses. Batch records continue to be mirrored to the
- * source-keyed reworking table so the saved input VAT remains available to
- * VAT Records, VAT Summary, VAT Report, and VAT Return Preparation. These
- * registers do not post journals themselves; approved source journals are
- * generated from Journal Entry.
+ * The module keeps its batch operating costs and day-to-day operating expenses
+ * in storage separate from Reworking Cost Records. These registers do not
+ * post journals themselves; approved source journals are generated from
+ * Journal Entry.
  */
 class OperatingCostRecordManagement extends Component
 {
@@ -61,10 +58,9 @@ class OperatingCostRecordManagement extends Component
     public const ATTACHMENT_DIRECTORY = 'inventory/operating-cost-records';
 
     /**
-     * Session key used by the batch register. The VAT compliance module also
-     * reads this key, so it must stay aligned with RecordedInputVat.
+     * Session key reserved for this module's own batch operating cost records.
      */
-    public const SESSION_KEY_PREFIX = 'demo.reworking-cost-records.employee.';
+    public const SESSION_KEY_PREFIX = 'demo.operating-cost-batch-records.employee.';
 
     public string $activeTab = 'batch';
 
@@ -83,7 +79,7 @@ class OperatingCostRecordManagement extends Component
 
     public string $batchDescription = '';
 
-    public string $totalReworkingCost = '';
+    public string $totalOperatingCost = '';
 
     public string $inputVat = '0.00';
 
@@ -120,6 +116,8 @@ class OperatingCostRecordManagement extends Component
     public string $expenseDescription = '';
 
     public string $amount = '';
+
+    public string $expenseInputVat = '0.00';
 
     public string $paymentMethod = '';
 
@@ -181,7 +179,7 @@ class OperatingCostRecordManagement extends Component
         $this->batchNumber = $record['batch_number'];
         $this->batchDate = $record['date'];
         $this->batchDescription = $record['description'];
-        $this->totalReworkingCost = $record['total_reworking_cost'];
+        $this->totalOperatingCost = $record['total_operating_cost'];
         $this->inputVat = $record['input_vat'];
         $this->batchPaymentMethod = $record['payment_method'] ?? '';
         $this->existingBatchAttachment = $record['attachment'] ?? null;
@@ -231,7 +229,7 @@ class OperatingCostRecordManagement extends Component
             'batch_number' => trim($validated['batchNumber']),
             'date' => $validated['batchDate'],
             'description' => trim($validated['batchDescription']),
-            'total_reworking_cost' => number_format((float) $validated['totalReworkingCost'], 2, '.', ''),
+            'total_operating_cost' => number_format((float) $validated['totalOperatingCost'], 2, '.', ''),
             'input_vat' => number_format((float) ($validated['inputVat'] ?? 0), 2, '.', ''),
             'payment_method' => trim((string) ($validated['batchPaymentMethod'] ?? '')) ?: null,
             'attachment' => $attachment,
@@ -251,8 +249,8 @@ class OperatingCostRecordManagement extends Component
         $this->persistBatchRecord($record);
         $this->resetBatchForm();
         $this->statusMessage = $wasEditing
-            ? 'Batch reworking cost record updated.'
-            : 'Batch reworking cost record added.';
+            ? 'Batch operating cost record updated.'
+            : 'Batch operating cost record added.';
         $this->dispatch('operating-cost-batch-form-close');
     }
 
@@ -269,7 +267,7 @@ class OperatingCostRecordManagement extends Component
             $this->dispatch('operating-cost-batch-form-close');
         }
 
-        $this->statusMessage = 'Batch reworking cost record deleted.';
+        $this->statusMessage = 'Batch operating cost record deleted.';
     }
 
     public function updatedBatchAttachmentFile(): void
@@ -287,7 +285,7 @@ class OperatingCostRecordManagement extends Component
             'projectName',
             'batchNumber',
             'batchDescription',
-            'totalReworkingCost',
+            'totalOperatingCost',
             'batchPaymentMethod',
             'batchAttachmentFile',
             'existingBatchAttachment',
@@ -319,6 +317,7 @@ class OperatingCostRecordManagement extends Component
         $this->expenseCategory = $record->expense_category;
         $this->expenseDescription = $record->description;
         $this->amount = number_format((float) $record->amount, 2, '.', '');
+        $this->expenseInputVat = number_format((float) $record->input_vat, 2, '.', '');
         $this->paymentMethod = $record->payment_method;
         $this->existingAttachment = $record->attachment_path
             ? [
@@ -374,6 +373,7 @@ class OperatingCostRecordManagement extends Component
                     'expense_category' => $validated['expenseCategory'],
                     'description' => trim($validated['expenseDescription']),
                     'amount' => number_format((float) $validated['amount'], 2, '.', ''),
+                    'input_vat' => number_format((float) ($validated['expenseInputVat'] ?? 0), 2, '.', ''),
                     'payment_method' => trim($validated['paymentMethod']),
                 ];
 
@@ -464,6 +464,7 @@ class OperatingCostRecordManagement extends Component
             || $record->expense_category !== $validated['expenseCategory']
             || $record->description !== trim($validated['expenseDescription'])
             || (string) $record->amount !== number_format((float) $validated['amount'], 2, '.', '')
+            || (string) $record->input_vat !== number_format((float) ($validated['expenseInputVat'] ?? 0), 2, '.', '')
             || $record->payment_method !== trim($validated['paymentMethod']);
     }
 
@@ -528,6 +529,7 @@ class OperatingCostRecordManagement extends Component
             'expenseCategory',
             'expenseDescription',
             'amount',
+            'expenseInputVat',
             'paymentMethod',
             'attachmentFile',
             'existingAttachment',
@@ -563,7 +565,7 @@ class OperatingCostRecordManagement extends Component
 
         $batchSummary = [
             'count' => $batchRecords->count(),
-            'total' => $batchRecords->sum(fn (array $record): float => (float) $record['total_reworking_cost']),
+            'total' => $batchRecords->sum(fn (array $record): float => (float) $record['total_operating_cost']),
             'vat' => $batchRecords->sum(fn (array $record): float => (float) $record['input_vat']),
         ];
         $batchSummary['total_with_vat'] = $batchSummary['total'] + $batchSummary['vat'];
@@ -590,11 +592,18 @@ class OperatingCostRecordManagement extends Component
             ->get()
             ->keyBy('source_id');
 
-        $allRecords = OperatingCostRecord::query()->get(['amount', 'attachment_path', 'expense_date']);
+        $hasExpenseInputVat = Schema::hasColumn('operating_cost_records', 'input_vat');
+        $allRecords = OperatingCostRecord::query()->get([
+            'amount',
+            ...($hasExpenseInputVat ? ['input_vat'] : []),
+            'attachment_path',
+            'expense_date',
+        ]);
 
         $summary = [
             'count' => $allRecords->count(),
             'total' => (float) $allRecords->sum('amount'),
+            'input_vat' => $hasExpenseInputVat ? (float) $allRecords->sum('input_vat') : 0.0,
             'month' => (float) $allRecords
                 ->filter(fn (OperatingCostRecord $record): bool => $record->expense_date?->isSameMonth(now('Asia/Manila')))
                 ->sum('amount'),
@@ -622,7 +631,7 @@ class OperatingCostRecordManagement extends Component
             'batchNumber' => ['required', 'string', 'max:100'],
             'batchDate' => ['required', 'date'],
             'batchDescription' => ['required', 'string', 'max:2000'],
-            'totalReworkingCost' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
+            'totalOperatingCost' => ['required', 'numeric', 'min:0', 'decimal:0,2'],
             'inputVat' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             'batchPaymentMethod' => ['nullable', 'string', 'max:100'],
             'batchAttachmentFile' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
@@ -648,18 +657,18 @@ class OperatingCostRecordManagement extends Component
             'expenseCategory' => ['required', 'string', Rule::in(self::EXPENSE_CATEGORIES)],
             'expenseDescription' => ['required', 'string', 'max:2000'],
             'amount' => ['required', 'numeric', 'min:0.01', 'decimal:0,2'],
+            'expenseInputVat' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             'paymentMethod' => ['required', 'string', 'max:100'],
             'attachmentFile' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
 
     /**
-     * Saved batch records for the signed-in employee.
+     * Saved batch operating cost records for the signed-in employee.
      *
-     * The source-keyed table is the durable copy used by VAT compliance. The
-     * session copy is retained for records created before the table existed
-     * and for the same-request interface state. Merging by source record id
-     * keeps both copies from being shown twice.
+     * The dedicated table is authoritative. Session data is only a fallback
+     * for records saved before the table existed; merging by source id keeps
+     * the same record from appearing twice.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -696,23 +705,23 @@ class OperatingCostRecordManagement extends Component
         }
 
         try {
-            if (! Schema::hasTable('reworking_cost_records')) {
+            if (! Schema::hasTable('operating_cost_batch_records')) {
                 return collect();
             }
 
-            return ReworkingCostRecord::query()
+            return OperatingCostBatchRecord::query()
                 ->where('employee_id', $employeeId)
                 ->orderBy('record_date')
                 ->orderBy('id')
                 ->get()
-                ->map(fn (ReworkingCostRecord $record): array => [
+                ->map(fn (OperatingCostBatchRecord $record): array => [
                     'id' => (int) $record->source_record_id,
                     'project_id' => $record->project_id,
                     'project' => $record->project_name,
                     'batch_number' => $record->batch_number,
                     'date' => $record->record_date->format('Y-m-d'),
                     'description' => $record->description,
-                    'total_reworking_cost' => (string) $record->total_reworking_cost,
+                    'total_operating_cost' => (string) $record->total_operating_cost,
                     'input_vat' => (string) $record->input_vat,
                     'payment_method' => $record->payment_method,
                     'attachment' => $record->attachment,
@@ -777,8 +786,7 @@ class OperatingCostRecordManagement extends Component
     }
 
     /**
-     * Mirror a saved batch record to the source-keyed table used by the VAT
-     * compliance module. updateOrCreate keeps edits duplicate-free.
+     * Persist this module's batch operating cost record independently.
      *
      * @param  array<string, mixed>  $record
      */
@@ -791,7 +799,7 @@ class OperatingCostRecordManagement extends Component
         }
 
         try {
-            ReworkingCostRecord::query()->updateOrCreate(
+            OperatingCostBatchRecord::query()->updateOrCreate(
                 [
                     'employee_id' => $employeeId,
                     'source_record_id' => $record['id'],
@@ -802,7 +810,7 @@ class OperatingCostRecordManagement extends Component
                     'batch_number' => $record['batch_number'],
                     'record_date' => $record['date'],
                     'description' => $record['description'],
-                    'total_reworking_cost' => $record['total_reworking_cost'],
+                    'total_operating_cost' => $record['total_operating_cost'],
                     'input_vat' => $record['input_vat'],
                     'payment_method' => $record['payment_method'] ?? null,
                     'attachment' => $record['attachment'] ?? null,
@@ -822,7 +830,7 @@ class OperatingCostRecordManagement extends Component
         }
 
         try {
-            ReworkingCostRecord::query()
+            OperatingCostBatchRecord::query()
                 ->where('employee_id', $employeeId)
                 ->where('source_record_id', $id)
                 ->delete();

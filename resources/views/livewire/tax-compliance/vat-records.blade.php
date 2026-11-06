@@ -6,7 +6,12 @@
             <h1 id="vat-records-heading">VAT Records</h1>
             <p class="page-subtitle">Recorded POS sales and reworking-cost input VAT · dates shown in Asia/Manila.</p>
         </div>
-        <span class="vat-rate-badge">POS output VAT · recorded input VAT</span>
+        <div class="vat-page-heading-actions">
+            @can('inventory.create')
+                <a class="vat-secondary-button" href="{{ route('inventory.reworking-cost-records') }}">Add reworking cost record</a>
+            @endcan
+            <span class="vat-rate-badge">POS output VAT · recorded input VAT</span>
+        </div>
     </header>
 
     <section class="vat-filter-panel" aria-label="Filter recorded VAT records">
@@ -99,7 +104,7 @@
         <header>
             <div>
                 <h2 id="vat-input-record-table-heading">Recorded input VAT</h2>
-                <p>Input VAT copied from saved Reworking Cost Records for the selected dates. One row represents one saved batch record.</p>
+                <p>Input VAT from saved Reworking Cost Records appears here automatically when its record date falls within the selected dates. One row represents one saved batch record.</p>
             </div>
             <span class="vat-record-count">{{ $inputVatSummary['record_count'] }} input VAT records</span>
         </header>

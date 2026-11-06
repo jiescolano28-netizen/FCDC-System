@@ -48,6 +48,8 @@
     @include('livewire.tax-compliance.partials.summary-cards', [
         'summary' => $summary,
         'ariaLabel' => $periodLabel.' recorded VAT totals',
+        'inputVatLabel' => 'Total Input VAT',
+        'inputVatNote' => 'Combined from Reworking Cost and Operating Cost records',
     ])
 
     <section class="dashboard-card vat-summary-context" aria-labelledby="vat-summary-context-heading">
@@ -56,11 +58,11 @@
             <span class="vat-record-count">Total sales including VAT: {{ $money($summary['total_sales']) }}</span>
         </div>
         @if ($summary['input_vat_record_count'] > 0)
-            <p class="dashboard-chart-note">Input VAT of {{ $money($summary['input_vat']) }} comes from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s) for {{ $summary['input_vat_batch_count'] }} batch(es). Deductions applied: {{ $money($summary['deductions_applied']) }}. This is a POS-plus-reworking preparation estimate, not a final company VAT liability.</p>
-            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Input VAT status: Captured from saved Reworking Cost Records.</p>
+            <p class="dashboard-chart-note">Total input VAT of {{ $money($summary['input_vat']) }} combines {{ $money($summary['input_vat_reworking']) }} from Reworking Cost Records and {{ $money($summary['input_vat_operating_cost']) }} from Operating Cost batch and expense records. Deductions applied: {{ $money($summary['deductions_applied']) }}. This is a preparation estimate, not a final company VAT liability.</p>
+            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Operating batch input VAT: {{ $money($summary['input_vat_operating_batch']) }} · Operating expense input VAT: {{ $money($summary['input_vat_operating_expenses']) }} · Input VAT status: Captured from the available records.</p>
         @else
             <p class="dashboard-chart-note">Input VAT not captured. Deductions applied: {{ $money($summary['deductions_applied']) }}. This does not establish that the company incurred no input VAT.</p>
-            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Input VAT status: Not captured.</p>
+            <p class="dashboard-chart-note">Reworking cost total: {{ $money($summary['input_vat_reworking_cost']) }} · Operating batch input VAT: {{ $money($summary['input_vat_operating_batch']) }} · Operating expense input VAT: {{ $money($summary['input_vat_operating_expenses']) }} · Input VAT status: Not captured.</p>
         @endif
         <p class="dashboard-chart-note">Output VAT is the sum of saved record amounts. Checkout-level rounding can differ from applying 12% once to the aggregate taxable sales.</p>
         @if ($summary['record_count'] === 0)

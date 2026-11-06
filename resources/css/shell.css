@@ -117,7 +117,8 @@
 .inventory-page button.secondary, .inventory-page button.danger { padding: 7px 10px; border: 1px solid #d3dcd3; border-radius: 6px; background: #fff; cursor: pointer; }
 .inventory-page button.danger { color: #b91c1c; }
 .inventory-page .inventory-row-actions { align-items: center; gap: 6px; flex-wrap: nowrap; }
-.inventory-page .inventory-row-actions a.secondary, .inventory-page .inventory-row-actions button.secondary, .inventory-page .inventory-row-actions button.danger { display: inline-flex; min-width: 0; min-height: 36px; align-items: center; justify-content: center; padding: 6px 8px; border: 1px solid; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 650; line-height: 1.2; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.inventory-page .inventory-row-actions a.secondary, .inventory-page .inventory-row-actions button.secondary, .inventory-page .inventory-row-actions button.danger { display: inline-flex; width: 32px; min-width: 32px; height: 32px; min-height: 32px; align-items: center; justify-content: center; padding: 5px; border: 1px solid; border-radius: 6px; font: inherit; text-decoration: none; cursor: pointer; }
+.inventory-page .inventory-row-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 .inventory-page .inventory-row-actions a.secondary { border-color: var(--emerald-900); color: #fff; background: var(--emerald-900); }
 .inventory-page .inventory-row-actions a.secondary:hover { border-color: var(--emerald-800); color: #fff; background: var(--emerald-800); }
 .inventory-page .inventory-row-actions button.danger { border-color: #d8958e; color: #9b3731; background: #fff5f4; }
@@ -188,7 +189,7 @@
 .inventory-page .inventory-filter-toggle:hover { border-color: var(--emerald-700); color: var(--emerald-800); background: var(--emerald-50); }
 .inventory-page .inventory-filter-toggle:focus-visible { outline: 2px solid var(--emerald-700); outline-offset: 2px; }
 .inventory-page .inventory-filter-count { padding: 2px 7px; border-radius: 999px; color: var(--emerald-800); background: var(--emerald-100); font-size: 11px; }
-.inventory-page .inventory-advanced-filters { flex: 0 0 100%; padding-top: 14px; border-top: 1px solid #edf1ed; }
+.inventory-page .inventory-advanced-filters { display: flex; flex: 0 0 100%; flex-wrap: wrap; gap: 12px; padding-top: 14px; border-top: 1px solid #edf1ed; }
 .inventory-page .inventory-advanced-filters > div { width: min(100%, 260px); }
 .inventory-page .inventory-advanced-filters select { min-height: 40px; }
 .inventory-page .inventory-deleted-toggle { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #e5e9e5; border-radius: 8px; color: var(--slate-700); font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -226,6 +227,7 @@
 .inventory-page .reworking-cost-empty span { color: var(--slate-500); font-size: 12px; }
 
 .inventory-page .operating-cost-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.inventory-page .operating-cost-summary--expenses { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .inventory-page .operating-cost-stat { display: grid; gap: 5px; margin: 0; padding: 16px 18px; }
 .inventory-page .operating-cost-stat-label { color: var(--slate-500); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .inventory-page .operating-cost-stat-value { color: var(--slate-900); font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.25; overflow-wrap: anywhere; }
@@ -266,6 +268,7 @@
 @media (max-width: 1000px) {
     .inventory-page .reworking-cost-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .inventory-page .operating-cost-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inventory-page .operating-cost-summary--expenses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
@@ -274,6 +277,7 @@
     .inventory-page .reworking-cost-field-wide,
     .inventory-page .reworking-cost-form-total { grid-column: auto; }
     .inventory-page .operating-cost-summary { grid-template-columns: minmax(0, 1fr); }
+    .inventory-page .operating-cost-summary--expenses { grid-template-columns: minmax(0, 1fr); }
     .inventory-page .operating-cost-form .inventory-form-fields { grid-template-columns: minmax(0, 1fr); }
     .inventory-page .operating-cost-field-wide,
     .inventory-page .operating-cost-form-total { grid-column: auto; }
@@ -535,6 +539,7 @@
 .vat-page { max-width: 1440px; margin: 0 auto; }
 .vat-page h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .vat-page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.vat-page-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .vat-rate-badge, .vat-period-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px; color: var(--emerald-800); background: var(--emerald-100); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .vat-filter-panel { margin-bottom: 16px; padding: 16px; border: 1px solid var(--emerald-100); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 3%); }
 .vat-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 12px; }
