@@ -5,10 +5,10 @@ namespace App\Services;
 /**
  * Computes the BIR Form 2550Q VAT return items used by the preparation page.
  *
- * POS output VAT and Reworking Cost Record input VAT come from the same saved
- * records as the rest of the VAT compliance module. The remaining 2550Q items
- * are adjustments that must be entered by the preparer because they are not in
- * the POS or inventory source records.
+ * POS output VAT and Item 50 purchases/input VAT from Reworking Cost and
+ * Operating Cost records come from saved source records. The remaining 2550Q
+ * items are adjustments that must be entered by the preparer because they are
+ * not in the POS or operating cost source records.
  */
 class BirVatReturnComputation
 {

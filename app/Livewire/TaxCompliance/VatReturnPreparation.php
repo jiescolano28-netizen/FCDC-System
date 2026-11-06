@@ -3,11 +3,14 @@
 namespace App\Livewire\TaxCompliance;
 
 use App\Models\PosVatRecord;
+use App\Models\OperatingCostBatchRecord;
+use App\Models\OperatingCostRecord;
 use App\Models\VatReturnAdjustment;
 use App\Services\BirVatReturnComputation;
 use App\Services\RecordedVatSummary;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -192,7 +195,7 @@ class VatReturnPreparation extends Component
             fputcsv($output, ['Reporting period', 'Q'.$quarter.' '.$year]);
             fputcsv($output, ['Reporting timezone', 'Asia/Manila']);
             fputcsv($output, ['Generated at', $generatedAt->format('Y-m-d H:i:s P')]);
-            fputcsv($output, ['Scope', 'Recorded POS sales only for output VAT, plus saved Reworking Cost Record input VAT and manual 2550Q adjustments']);
+            fputcsv($output, ['Scope', 'Recorded POS sales for output VAT, Reworking Cost and Operating Cost records for Item 50, plus manual 2550Q adjustments']);
             fputcsv($output, ['Status', 'Preparation only; this worksheet does not submit the return to the BIR and is not an official Form 2550Q, complete official return, or submitted filing']);
             fputcsv($output, []);
             fputcsv($output, ['Part II - Sales and output VAT']);
@@ -220,8 +223,10 @@ class VatReturnPreparation extends Component
             fputcsv($output, ['Item 41B - Presumptive input tax', $items['item_41b_presumptive_input_tax']]);
             fputcsv($output, ['Item 42B - Other input tax', $items['item_42b_other_input_tax']]);
             fputcsv($output, ['Item 43B - Total prior/other input tax', $items['item_43b_total_prior_input_tax']]);
-            fputcsv($output, ['Reworking cost total (reworking cost records)', $summary['input_vat_reworking_cost']]);
-            fputcsv($output, ['Input VAT on reworking cost records', $summary['input_vat']]);
+            fputcsv($output, ['Current purchases - Reworking Cost Records', $summary['input_vat_reworking_purchase']]);
+            fputcsv($output, ['Current purchases - Operating Cost records', $summary['input_vat_operating_purchase']]);
+            fputcsv($output, ['Input VAT - Reworking Cost Records', $summary['input_vat_reworking']]);
+            fputcsv($output, ['Input VAT - Operating Cost records', $summary['input_vat_operating_cost']]);
             fputcsv($output, ['Item 50A - Total current purchases', $items['item_50a_total_current_purchases']]);
             fputcsv($output, ['Item 50B - Total current input tax', $items['item_50b_total_current_input_tax']]);
             fputcsv($output, ['Item 51 - Total available input tax', $items['item_51b_total_available_input_tax']]);
@@ -247,21 +252,22 @@ class VatReturnPreparation extends Component
             fputcsv($output, []);
 
             if ($inputVatRecords->isNotEmpty()) {
-                fputcsv($output, ['Input VAT records from reworking cost records']);
-                fputcsv($output, ['Batch number', 'Project', 'Record date (Asia/Manila)', 'Description', 'Reworking cost', 'Input VAT']);
+                fputcsv($output, ['Item 50 input VAT records from Reworking Cost and Operating Cost modules']);
+                fputcsv($output, ['Source', 'Reference', 'Project / category', 'Record date', 'Description', 'Recorded purchase', 'Input VAT']);
 
                 foreach ($inputVatRecords as $record) {
                     fputcsv($output, [
+                        $record['source_type'],
                         $record['batch_number'],
                         $record['project'],
                         $record['date'],
                         $record['description'],
-                        $record['total_reworking_cost'],
+                        $record['total_recorded_cost'],
                         $record['input_vat'],
                     ]);
                 }
 
-                fputcsv($output, ['Input VAT total', $summary['input_vat']]);
+                fputcsv($output, ['Item 50B total input tax', $summary['input_vat']]);
             }
 
             fclose($output);
@@ -300,7 +306,40 @@ class VatReturnPreparation extends Component
 
     private function summary(): array
     {
-        return app(RecordedVatSummary::class)->forQuarter($this->selectedYear, $this->selectedQuarter);
+        $summary = app(RecordedVatSummary::class)->forQuarter($this->selectedYear, $this->selectedQuarter);
+        [$start, $end] = $this->quarterDateRange();
+        $operatingRecords = $this->operatingInputVatRecordsForRange($start, $end);
+        $operatingVatCents = 0;
+        $operatingPurchaseCents = 0;
+
+        foreach ($operatingRecords as $record) {
+            $operatingVatCents += (int) round((float) $record['input_vat'] * 100);
+            $operatingPurchaseCents += (int) round((float) $record['total_recorded_cost'] * 100);
+        }
+
+        $reworkingVatCents = (int) round((float) $summary['input_vat'] * 100);
+        $reworkingPurchaseCents = (int) round((float) $summary['input_vat_reworking_cost'] * 100);
+        $totalVatCents = $reworkingVatCents + $operatingVatCents;
+        $summary['input_vat_reworking'] = number_format($reworkingVatCents / 100, 2, '.', '');
+        $summary['input_vat_operating_cost'] = number_format($operatingVatCents / 100, 2, '.', '');
+        $summary['input_vat_reworking_purchase'] = number_format($reworkingPurchaseCents / 100, 2, '.', '');
+        $summary['input_vat_operating_purchase'] = number_format($operatingPurchaseCents / 100, 2, '.', '');
+        $summary['input_vat'] = number_format($totalVatCents / 100, 2, '.', '');
+        $summary['input_vat_reworking_cost'] = number_format(
+            ((int) round((float) $summary['input_vat_reworking_cost'] * 100) + $operatingPurchaseCents) / 100,
+            2,
+            '.',
+            '',
+        );
+        $summary['input_vat_record_count'] += $operatingRecords->count();
+        $summary['input_vat_batch_count'] += $operatingRecords
+            ->where('source_type', 'Operating Cost Batch')
+            ->pluck('batch_number')
+            ->unique()
+            ->count();
+        $summary['input_vat_status'] = $summary['input_vat_record_count'] > 0 ? 'captured' : 'not captured';
+
+        return $summary;
     }
 
     private function items(array $summary): array
@@ -319,7 +358,65 @@ class VatReturnPreparation extends Component
     {
         [$start, $end] = $this->quarterDateRange();
 
-        return app(RecordedVatSummary::class)->inputVatRecordsForDateRange($start, $end);
+        $reworkingRecords = app(RecordedVatSummary::class)
+            ->inputVatRecordsForDateRange($start, $end)
+            ->map(fn (array $record): array => [
+                ...$record,
+                'source_type' => 'Reworking Cost',
+                'total_recorded_cost' => $record['total_reworking_cost'],
+            ]);
+
+        return $reworkingRecords
+            ->concat($this->operatingInputVatRecordsForRange($start, $end))
+            ->sortBy(fn (array $record): string => $record['date'].'-'.$record['source_key'])
+            ->values();
+    }
+
+    private function operatingInputVatRecordsForRange(string $start, string $end): Collection
+    {
+        $records = collect();
+
+        if (Schema::hasTable('operating_cost_batch_records')) {
+            $records = $records->concat(
+                OperatingCostBatchRecord::query()
+                    ->whereBetween('record_date', [$start, $end])
+                    ->orderBy('record_date')
+                    ->orderBy('id')
+                    ->get()
+                    ->map(fn (OperatingCostBatchRecord $record): array => [
+                        'source_key' => 'operating-batch:'.$record->id,
+                        'source_type' => 'Operating Cost Batch',
+                        'batch_number' => $record->batch_number,
+                        'project' => $record->project_name,
+                        'date' => $record->record_date->format('Y-m-d'),
+                        'description' => $record->description,
+                        'total_recorded_cost' => (string) $record->total_operating_cost,
+                        'input_vat' => (string) $record->input_vat,
+                    ]),
+            );
+        }
+
+        if (Schema::hasTable('operating_cost_records') && Schema::hasColumn('operating_cost_records', 'input_vat')) {
+            $records = $records->concat(
+                OperatingCostRecord::query()
+                    ->whereBetween('expense_date', [$start, $end])
+                    ->orderBy('expense_date')
+                    ->orderBy('id')
+                    ->get()
+                    ->map(fn (OperatingCostRecord $record): array => [
+                        'source_key' => 'operating-expense:'.$record->id,
+                        'source_type' => 'Operating Cost Expense',
+                        'batch_number' => $record->reference_number,
+                        'project' => $record->expense_category,
+                        'date' => $record->expense_date->format('Y-m-d'),
+                        'description' => $record->description,
+                        'total_recorded_cost' => (string) $record->amount,
+                        'input_vat' => (string) $record->input_vat,
+                    ]),
+            );
+        }
+
+        return $records->values();
     }
 
     private function adjustmentRecord(): ?VatReturnAdjustment
@@ -393,6 +490,28 @@ class VatReturnPreparation extends Component
         if ($inputVatBounds !== null) {
             $earliestYear = min($earliestYear, CarbonImmutable::parse($inputVatBounds[0], 'Asia/Manila')->year);
             $latestYear = max($latestYear, CarbonImmutable::parse($inputVatBounds[1], 'Asia/Manila')->year);
+        }
+
+        $operatingDates = collect();
+        if (Schema::hasTable('operating_cost_batch_records')) {
+            $batchBounds = OperatingCostBatchRecord::query()
+                ->selectRaw('MIN(record_date) as earliest, MAX(record_date) as latest')
+                ->first();
+            if ($batchBounds->earliest) {
+                $operatingDates->push($batchBounds->earliest, $batchBounds->latest);
+            }
+        }
+        if (Schema::hasTable('operating_cost_records') && Schema::hasColumn('operating_cost_records', 'input_vat')) {
+            $expenseBounds = OperatingCostRecord::query()
+                ->selectRaw('MIN(expense_date) as earliest, MAX(expense_date) as latest')
+                ->first();
+            if ($expenseBounds->earliest) {
+                $operatingDates->push($expenseBounds->earliest, $expenseBounds->latest);
+            }
+        }
+        if ($operatingDates->isNotEmpty()) {
+            $earliestYear = min($earliestYear, CarbonImmutable::parse($operatingDates->min(), 'Asia/Manila')->year);
+            $latestYear = max($latestYear, CarbonImmutable::parse($operatingDates->max(), 'Asia/Manila')->year);
         }
 
         return array_reverse(range(min($earliestYear, $nowYear - 10), max($latestYear, $nowYear)));

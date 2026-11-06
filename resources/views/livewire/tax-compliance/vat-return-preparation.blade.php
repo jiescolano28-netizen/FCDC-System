@@ -71,7 +71,7 @@
                         <tr><td>Return being prepared</td><td>BIR Form 2550Q — Quarterly VAT Return (preparation worksheet)</td></tr>
                         <tr><td>Period covered</td><td>{{ $periodLabel }}</td></tr>
                         <tr><td>Reporting timezone</td><td>Asia/Manila</td></tr>
-                        <tr><td>Scope</td><td>Completed POS sales, saved Reworking Cost Record input VAT, and manual 2550Q adjustments</td></tr>
+                        <tr><td>Scope</td><td>Completed POS sales, saved Reworking Cost and Operating Cost records for Item 50, and manual 2550Q adjustments</td></tr>
                         <tr><td>Filing status</td><td><strong>Preparation only — not submitted to the BIR</strong></td></tr>
                     </tbody>
                 </table>
@@ -183,7 +183,7 @@
                                 Others (Specify)
                                 <input class="vat-return-text-input @error('otherInputTaxDescription') is-invalid @enderror" type="text" wire:model.live.debounce.400ms="otherInputTaxDescription" maxlength="255" placeholder="Description of other input tax" aria-label="Item 42B other input tax description">
                                 <span class="vat-return-print-value vat-return-print-description">{{ $otherInputTaxDescription ?: '—' }}</span>
-                                <span class="vat-return-item-note">Use this for input tax not captured by the Reworking Cost Records or other manual tax information.</span>
+                                <span class="vat-return-item-note">Use this for input tax not captured by Reworking Cost or Operating Cost records or other manual tax information.</span>
                             </td>
                             <td class="numeric"><input class="vat-return-amount-input @error('otherInputTax') is-invalid @enderror" type="text" inputmode="decimal" wire:model.live.debounce.400ms="otherInputTax" aria-label="Item 42B other input tax"><span class="vat-return-print-value">{{ $money($items['item_42b_other_input_tax']) }}</span></td>
                         </tr>
@@ -210,19 +210,31 @@
                     <tbody>
                         <tr>
                             <td>50A</td>
-                            <td>Reworking cost total <span class="vat-return-source">Inventory · Reworking Cost Records</span></td>
-                            <td class="numeric">50A · {{ $money($items['item_50a_total_current_purchases']) }}</td>
+                            <td>Reworking Cost Record purchases</td>
+                            <td class="numeric">{{ $money($summary['input_vat_reworking_purchase']) }}</td>
+                            <td class="numeric">—</td>
+                        </tr>
+                        <tr>
+                            <td>50A</td>
+                            <td>Operating Cost purchases</td>
+                            <td class="numeric">{{ $money($summary['input_vat_operating_purchase']) }}</td>
                             <td class="numeric">—</td>
                         </tr>
                         <tr>
                             <td>50B</td>
-                            <td>Input VAT on reworking cost records <span class="vat-return-source">Inventory · Reworking Cost Records</span></td>
+                            <td>Input VAT from Reworking Cost Records</td>
                             <td class="numeric">—</td>
-                            <td class="numeric">50B · {{ $money($items['item_50b_total_current_input_tax']) }}</td>
+                            <td class="numeric">{{ $money($summary['input_vat_reworking']) }}</td>
+                        </tr>
+                        <tr>
+                            <td>50B</td>
+                            <td>Input VAT from Operating Cost records</td>
+                            <td class="numeric">—</td>
+                            <td class="numeric">{{ $money($summary['input_vat_operating_cost']) }}</td>
                         </tr>
                         <tr class="vat-return-total-row">
                             <td>50</td>
-                            <td><strong>Total Current Purchases and Input Tax</strong><br><span class="vat-return-item-note">Read-only totals from saved Reworking Cost Records for this quarter</span></td>
+                            <td><strong>Total Current Purchases and Input Tax</strong><br><span class="vat-return-item-note">Saved Reworking Cost and Operating Cost records are included automatically when dated within this quarter</span></td>
                             <td class="numeric"><strong>{{ $money($items['item_50a_total_current_purchases']) }}</strong></td>
                             <td class="numeric"><strong>{{ $money($items['item_50b_total_current_input_tax']) }}</strong></td>
                         </tr>
@@ -236,9 +248,9 @@
                 </table>
             </div>
             @if ($summary['input_vat_record_count'] > 0)
-                <p class="vat-return-note">Input VAT of {{ $money($summary['input_vat']) }} is copied from {{ $summary['input_vat_record_count'] }} saved Reworking Cost Record(s) for {{ $summary['input_vat_batch_count'] }} batch(es) dated within this quarter. It does not mean every company input VAT is captured.</p>
+                <p class="vat-return-note">Input VAT of {{ $money($summary['input_vat']) }} combines {{ $money($summary['input_vat_reworking']) }} from Reworking Cost Records and {{ $money($summary['input_vat_operating_cost']) }} from Operating Cost records dated within this quarter. It does not mean every company input VAT is captured.</p>
             @else
-                <p class="vat-return-note">Input VAT not captured from Reworking Cost Records for this quarter; Item 50B is {{ $money($items['item_50b_total_current_input_tax']) }}. Use Items 38–42 for applicable prior, transitional, presumptive, or other input tax.</p>
+                <p class="vat-return-note">Input VAT not captured from Reworking Cost or Operating Cost records for this quarter; Item 50B is {{ $money($items['item_50b_total_current_input_tax']) }}. Use Items 38–42 for applicable prior, transitional, presumptive, or other input tax.</p>
             @endif
 
             <h4 class="vat-return-subheading">Deductions from input tax (Items 52–60)</h4>
@@ -379,30 +391,31 @@
         <header>
             <div>
                 <h2 id="vat-return-input-records-heading">{{ $periodLabel }} supporting input VAT records</h2>
-                <p>Saved Reworking Cost Records for this calendar quarter. Item 50 source records are read-only.</p>
+                <p>Saved Reworking Cost and Operating Cost records for this calendar quarter. Item 50 source records are read-only.</p>
             </div>
             <span class="vat-record-count">{{ $summary['input_vat_record_count'] }} input VAT records</span>
         </header>
         <div class="vat-table-wrap">
             <table>
-                <thead><tr><th>Batch number</th><th>Project</th><th>Record date (Asia/Manila)</th><th>Description</th><th class="numeric">Reworking cost</th><th class="numeric">Input VAT</th></tr></thead>
+                <thead><tr><th>Source</th><th>Reference</th><th>Project / category</th><th>Record date</th><th>Description</th><th class="numeric">Recorded purchase</th><th class="numeric">Input VAT</th></tr></thead>
                 <tbody>
                     @forelse ($inputVatRecords as $record)
                         <tr wire:key="vat-preparation-input-{{ $record['source_key'] }}">
+                            <td>{{ $record['source_type'] }}</td>
                             <td><strong>{{ $record['batch_number'] }}</strong></td>
                             <td>{{ $record['project'] }}</td>
                             <td>{{ $record['date'] }}</td>
                             <td>{{ $record['description'] }}</td>
-                            <td class="numeric">{{ $money($record['total_reworking_cost']) }}</td>
+                            <td class="numeric">{{ $money($record['total_recorded_cost']) }}</td>
                             <td class="numeric"><strong>{{ $money($record['input_vat']) }}</strong></td>
                         </tr>
                     @empty
-                        <tr><td class="vat-empty" colspan="6">No recorded input VAT from reworking cost records for this period.</td></tr>
+                        <tr><td class="vat-empty" colspan="7">No current purchase or input VAT records for this period.</td></tr>
                     @endforelse
                 </tbody>
                 <tfoot>
                     <tr>
-                        <th colspan="4">Reworking cost total / Input VAT total</th>
+                        <th colspan="5">Current purchases total / Input VAT total</th>
                         <th class="numeric">{{ $money($summary['input_vat_reworking_cost']) }}</th>
                         <th class="numeric">{{ $money($summary['input_vat']) }}</th>
                     </tr>
